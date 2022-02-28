@@ -1,0 +1,6 @@
+[submodule "SCITE"]
+	path = SCITE
+	url = git@github.com:cbg-ethz/SCITE.git
+[submodule "infSCITE"]
+	path = infSCITE
+	url = git@github.com:cbg-ethz/infSCITE.git
