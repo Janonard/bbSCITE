@@ -1,0 +1,10 @@
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.bbl
+*.blg
+*.out
+*.pdf
+*.toc
+!UPB_CS_Template_Guide.pdf
