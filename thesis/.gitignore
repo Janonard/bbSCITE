@@ -5,6 +5,6 @@
 *.bbl
 *.blg
 *.out
-*.pdf
 *.toc
-!UPB_CS_Template_Guide.pdf
+*.synctex.gz
+thesis.pdf

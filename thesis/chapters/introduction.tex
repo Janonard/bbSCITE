@@ -1,38 +1,9 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-This is the documentation of the \ac{template}.
-In this chapter, you find everything you need to know to get started with your
-thesis --- or at least the \LaTeX{} side of it. 
-The other chapters of this document provide you with further details of the
-template.
-Besides a full documentation of the document class file that \ac{template}
-uses and the auxiliary files \ac{template} supplies, we also provide you with
-a short guide on certain aspects of \LaTeX{}, and particularly the \LaTeX{}
-packages that \ac{template} loads by default.
-However, it is assumed that you know some \LaTeX{} already.
-If you are unfamiliar with \LaTeX{} you should consult a proper introduction
-first, for example the \LaTeX{} guide by Oetiker \etal{} \cite{LatexGuide}.
 
+\section{Description of the Algorithm}
 
-\paragraph{Organization}
-In the remainder of this chapter, we discuss how to
-\hyperref[sec:introduction:start]{get started} with the \ac{template} template,
-and what \hyperref[sec:introduction:folders]{directory structure} the template
-provides and assumes.
+Both the \ac{scite} algorithm and it's improvement $\infty$\ac{scite} use a similar scheme: First, they either propose a new tree by modifying the previous one, or they propose new error rates. Then, they compute the likelihood of the tree and error rates, using different models. If the new tree or error rates are more likely to be correct than the previous one, these are accepted as the new, best values. This operation is then repeated multiple times and also restarted from random values. The final tree and error rates are the best ones found over all repetitions.
 
-In Chapter~\ref{ch:class_file}, we provide a documentation of the
-\emph{upb\_cs\_thesis} document class provided by the \ac{template} template.
-The template loads a number of \LaTeX{} packages by default.
-Chapter~\ref{ch:packages} provides an overview.
-
-Chapter~\ref{ch:guide} provides a guide to both beginners and experts on
-aspects of packages that \ac{template} loads by default for you to use.
-Particularly, the chapter discusses some style aspects of good writing,
-references, including bibliographic references, graphics, and tables.
-Finally, in Chapter~\ref{ch:makefiles}, we provide a documentation of and
-troubleshooting guide for the \emph{Makefiles} that come with this template.
-
-
-\input{chapters/introduction/start}
-\input{chapters/introduction/folder_structure}
+The only difference between \ac{scite} and $\infty$\ac{scite} is their likelihood model. Since $\infty$\ac{scite} can therefore be seen as a variation or modification of \ac{scite}, I will only mention \ac{scite} from now on.
