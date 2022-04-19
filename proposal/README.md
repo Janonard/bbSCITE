@@ -1,0 +1,1 @@
+This proposal was based on the [proposal template of the research group codes and kryptography](https://git.cs.uni-paderborn.de/cuk/doctemplates/-/tree/master/proposal)
