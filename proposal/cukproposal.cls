@@ -14,8 +14,8 @@
 \else
 	\RequirePackage[english]{babel}
 \fi
-\RequirePackage[T1]{fontenc}
 \RequirePackage[utf8]{inputenc}
+\RequirePackage[T1]{fontenc}
 \RequirePackage{lmodern}
 
 % Some older versions of MiKTeX are still missing the scrlayer-scrpage package ... -.-'

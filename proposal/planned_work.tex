@@ -1,0 +1,69 @@
+\section{Goals and Planned Work}
+
+With the algorithms introduced, we can formulate our goals:
+\begin{itemize}
+    \item Implementing \ac{SCITE} using \acp{FPGA}, targeting Intel Stratix 10 GX 2800 \acp{FPGA}, using Intel oneAPI/DPC++.
+    \begin{itemize}
+        \item More Markov Chain steps per second than reference implementations.
+        \item Results of comparable likelihood to the original implementations.
+        \item (Optional) More Markov Chain steps per second than Ernst et al. \cite{ernst2020Performance}.
+        \item (Optional) Support \ac{infSCITE}'s likelihood model as a template argument to the design.
+    \end{itemize}
+    \item Developing benchmarking and validation tools for our and reference implementations.
+    \begin{itemize}
+        \item Including a performance model for our implementation.
+        \item Developing statistical hypothesis tests for the performance model and output quality.
+    \end{itemize}
+\end{itemize}
+
+Implementationwise, the complete iteration of proposing a change and evaluating it should be implemented as one continuous, perfectly pipelined block. If this is the case, a new iteration can be issued every clock cycle and multiple blocks can be chained after another, producing one long pipeline that finishes one step for every block in the chain ever clock cycle. There are however multiple possible challenges: The biggest challenge may be the tree traversals: Both the tree modifications and the likelihood computations require knowledge of which are a node's ancestors and descendants. This has to be computed by traversing the tree and while it's runtime is bounded by the tree size, the usual runtime is much lower. However, dynamic runtimes might interfer with loop pipelining, which is one of the core sources of an \ac{FPGA}'s performance.
+
+Next, there are random draws required in multiple different positions in the algorithm. The original implementation uses a single \ac{RNG} for the entirety of the algorithm, which makes every draw uncorrelated to the next. There are different ways to deliver randomness to the \ac{FPGA}. One option may be to precompute random numbers on the Host, store them in a buffer and let the FPGA load them from memory. However, we expect that memory throughput might become a bottleneck for the design and it might be therefore useful to put the \ac{RNG} on the \ac{FPGA}. One option for this might be the Mersenne Twister by Matsumoto and Nishimura \cite{matsumoto1998mersenne}, which is in widely use and \ac{FPGA}-based implementations have been shown to outperform CPU and GPU implementations \cite{tian2009mersenne}. It is therefore a good candidate as a random number source for our implementation. However, it might also be better to implement independend twisters for the different draws in order to reduce dependencies among different parts of the design. Identical twisters with different seeds are however known to produce corelated values. This has been remedied by Matsumoto and Nishimura by providing a \textit{Dynamic Creation} framework \cite{matsumoto2000dynamic} that takes, among others, a twister ID and produces parameter sets for different, independent twister instances, but we don't know if this can be implemented efficiently.
+
+Lastly, there are a lot of exponential and logarithmic functions in the likelihood computation. These are very resource intensive on \acp{FPGA} and we should try to reduce their use as much as possible.
+
+\todo[inline]{\cite{bozgan_2019} has implemented a \ac{FPGA} design for general \acp{MCMC}.}
+
+\begin{figure}
+    % Modified from https://git.cs.uni-paderborn.de/syssec/templates/exposee
+    \begin{ganttchart}
+        [today=0, %"TODAY" vertical line
+        x unit=0.5cm, %extend sheets to 1cm
+        ]{1}{18}
+        \gantttitle[title label node/.append style={below left=7pt and -3pt}]{WEEKS:\quad1}{1}
+        \gantttitlelist{2,...,18}{1} \\
+        \ganttgroup{Initial Implementation}{1}{4} \\
+        \ganttgroup{Verification \& Benchmarking}{2}{6} \\
+        \ganttgroup{Optimization}{5}{13} \\
+        \ganttgroup{Writing \& Proofreading}{13}{18}
+    \end{ganttchart}
+    \centering
+    \caption{Worst-Case work schedule}
+    \label{fig:worstschedule}
+\end{figure}
+
+The first task will be an initial implementation of the algorithm with Intel oneAPI. This implementation may be naive and therefore possibly inefficient, but it should be functional and correct. Next, we will need to set up the verification and benchmarking system to establish the baseline of the initial FPGA implementation and the reference implementation. It is unlikely that the design will produce exactly the same results as the reference implementation. We will therefore need to design and setup up a statistical system to verify the quality of the results. Once the foundations are established, we can begin to optimize. There is not much sense in planning this task since it heavily depends on the bottlenecks at hand, but it will probably result in repeated iterations of profiling, identification of bottlenecks, research in existing solutions, implementating existing or original ideas and analysing the changes. We will write-up the findings from all analysis stages, which will aid use in the last phase: Writing the thesis and proofreading it. There, we will describe which performance we could achieve, which bottlenecks we have encountered and how we have resolved them, and how templating aided uses in the process.
+
+According to the regulations, the workload of the thesis is supposed to contain nine weeks of full time labor, which is equivalent to 18 weeks of half time labor. The deadline for handing the thesis in is five months, which is approximately equivalent to 21 to 22 weeks and leaves a buffer of three to four weeks. We assume that the initial implementation will take approximately four weeks since the original source code is rather voluminous, but it may be as little as two weeks if it proofs to be simpler. Benchmarking will be rather easy with our experience in profiling oneAPI FPGA designs, but since ew have no experience in statistical verification, we can not actually make a good prediction for the required time. For writing the thesis, other students have quoted approximately four to six weeks of half-time work for thesis writing and proofreading, which leaves approximately nine to thirteen weeks between the initial implementation and writing the thesis for optimization. The resulting worst-case work schedule is visualized in figure \ref{fig:worstschedule}. Lastly, we plan to use the following structure for the thesis:
+
+\begin{itemize}
+    \item Introduction
+    \begin{itemize}
+        \item Motivation
+        \item Problem Formulation
+        \item Algorithm Introduction
+        \item Related Work
+    \end{itemize}
+    \item Implementation
+    \begin{itemize}
+        \item Notable Bottlenecks and Solutions
+        \item Verification \& Benchmarking Framework
+    \end{itemize}
+    \item Results
+    \begin{itemize}
+        \item Quality
+        \item Performance
+        \item Impact of C++ Templating
+    \end{itemize}
+    \item Conclusion
+\end{itemize}
