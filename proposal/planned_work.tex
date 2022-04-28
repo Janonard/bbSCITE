@@ -1,26 +1,24 @@
 \section{Goals and Planned Work}
 
-With the algorithm introduced, we can formulate our goals:
+With the algorithm introduced and possible performance problems identified, we can formulate our goals: We plan to implement \ac{SCITE} for the Intel Stratix 10 GX 2800 \acp{FPGA} of the Noctua supercomputers at the Paderborn University using the Intel oneAPI/DPC++/SYCL toolchain, since we have the most experience with this target and toolchain. We want to maximize the number of markov chain steps executed per second, what we call henceforth call throughput, while still producing results of similar likelihood to the original reference implementation. We want to achieve at least as much throughput as the original reference implementation and if possible, we also want to achieve more throughput than the implementation of Ernst et al. \cite{ernst2020Performance}. This is however an optional goal since there is a possibility that we encounter optimization problems that can not be resolved in time and since we do not have access to the implementation or its performance figures yet. We also want to develop benchmarking and result validation tools for our implementation. This requires a performance model that can accurately predict and explain the runtime of the design given the input dimensions and performance parameters, as well as a hypothesis test framework to check whether our implementation's quality matches those of the reference implementation. Lastly, we also want to try to identify the changes required to adapt our implementation to \ac{infSCITE} and to evaluate whether it is feasible. However, this is also an optional goal since it is not essential to our main goal of performance engineering. This is a summary of our goals:
+
 \begin{itemize}
-    \item Implementing \ac{SCITE} efficiently for \acp{FPGA}.
+    \item Implement \ac{SCITE} for \acp{FPGA}
     \begin{itemize}
-        \item Targeting the Intel Stratix 10 GX 2800 \acp{FPGA} of the Noctua supercomputers at the Paderborn University.
-        \item Using Intel oneAPI++/DPC++/SYCL.
-        \item Maximal Markov Chain steps per second (Throughput).
-        \item At least as much throughput as the original reference implementation.
-        \item Results of comparable likelihood to the original reference implementation.
-        \item (Optional) More throughput than Ernst et al. \cite{ernst2020Performance}.
+        \item Maximize throughput
+        \item Produce solutions of similar likelihood as the original reference implementation
+        \item Achieve at least as much throughput as the original reference implementation
+        \item (Optional) Achieve more throughput than the implementation by Ernst et al. \cite{ernst2020Performance}.
     \end{itemize}
-    \item Developing benchmarking and validation tools for our and reference implementations.
+    \item Develop benchmarking and validation tools
     \begin{itemize}
-        \item Including a performance model for our implementation.
-        \item Developing statistical hypothesis tests for the performance model and output quality.
+        \item Develop a performance model for runtime prediction and explanation
+        \item Develop a hypothesis test framework for the result quality
     \end{itemize}
+    \item (Optional) Identify and evaluate changes required for \ac{infSCITE} adaptation
 \end{itemize}
 
-The goal of performing better than Ernst et al. is optional because of two reasons: On one hand, \ac{FPGA} design development is a delicate process and we might encounter big problems that may not be solvable in time. On the other hand however, we do not have access to Ernst's implementation or its performance figures yet. We are trying to gain access to it, but if we are unable to do so, we can not check whether we have achieved this goal. However, we intend to create models for our design's performance. This means that even if we can not meet our performance goals, we can still point out where the bottlenecks are and how the work may be continued. We will target the system and use the tools stated above simply because this is what is available to us and it is what have the most experience with. Lastly, we will also need tools to verify the likelihood of the results. Producing the exact same results as the references may impose unnecessary restrictions to the design and therefore, we need the freedom to produce different solutions of comparable likelihood.
-
-The first task will be an initial implementation of the algorithm with Intel oneAPI. This implementation may be naive and therefore possibly inefficient, but it should be functional and correct. Parallel to that, we will need to set up the verification and benchmarking system to establish the baseline of the initial FPGA implementation and the reference implementation. Once the foundations are established, we can begin to optimize. There is not much sense in planning this task since it heavily depends on the bottlenecks at hand, but it will probably result in repeated iterations of profiling, identification of bottlenecks, research in existing solutions, implementating existing or original ideas and analysing the changes. We will write-up the findings from all analysis stages, which will aid use in the last phase: Writing the thesis and proofreading it. There, we will describe what performance we could achieve, which bottlenecks we have encountered and how we have resolved them. More precisely, we plan to use the following structure for the thesis:
+In order to fullfil these goals, we will start with an initial implementation of the algorithm. This implementation may be naive and therefore possibly inefficient, but it should be functional and correct. Parallel to that, we will start to set up the verification and benchmarking system to establish the baseline of the initial FPGA implementation and the reference implementation. Once the foundations are established, we can begin to optimize. There is not much sense in planning this task since it heavily depends on the bottlenecks at hand, but it will probably result in repeated iterations of profiling, identification of bottlenecks, research in existing solutions, implementing existing or original ideas and analyzing the changes. We will write-up the findings from all analysis stages, which will aid use in the last phase: Writing the thesis and proofreading it. There, we will describe what performance we could achieve, which bottlenecks we have encountered, how we have resolved them, and how our decisions have affected the adaptability to \ac{infSCITE}. More precisely, we plan to use the following structure for the thesis:
 
 \begin{itemize}
     \item Introduction
@@ -32,6 +30,7 @@ The first task will be an initial implementation of the algorithm with Intel one
     \item Implementation
     \begin{itemize}
         \item Notable Bottlenecks and Solutions
+        \item Adaptability of \ac{infSCITE}
         \item Verification \& Benchmarking Framework
     \end{itemize}
     \item Results
