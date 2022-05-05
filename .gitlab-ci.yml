@@ -1,0 +1,6 @@
+build-proposal:
+  stage: build
+  image: "texlive/texlive:latest"
+  script:
+    - "cd proposal"
+    - "latexmk --pdf proposal"
