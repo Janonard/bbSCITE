@@ -4,3 +4,5 @@ build-proposal:
   script:
     - "cd proposal"
     - "latexmk --pdf proposal"
+  tags:
+    - shared
