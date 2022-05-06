@@ -12,3 +12,14 @@ build-documents:
     - "thesis/thesis.pdf"
   tags:
     - shared
+
+simple-test:
+  stage: build
+  image: "alpine:latest"
+  script:
+    - "echo 'Hallo Welt!' > test.txt"
+  artifacts:
+    path:
+    - "test.txt"
+  tags:
+    - shared
