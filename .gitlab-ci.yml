@@ -1,6 +1,8 @@
 build-proposal:
   stage: build
   image: "texlive/texlive:latest"
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p short"
   script:
     - "cd proposal"
     - "latexmk --pdf proposal"
