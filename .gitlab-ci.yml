@@ -3,4 +3,4 @@ build-proposal:
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p short"
   script:
-    - "echo 'Hello World'
+    - "echo 'Hello World'"
