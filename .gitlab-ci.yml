@@ -4,5 +4,3 @@ build-proposal:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p short"
   script:
     - "echo 'Hello World'"
-  tags:
-    - mt-no-sla
