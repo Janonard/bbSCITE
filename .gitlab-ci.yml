@@ -1,8 +1,14 @@
-build-proposal:
+build-documents:
   stage: build
   image: "texlive/texlive:latest"
   script:
     - "cd proposal"
     - "latexmk --pdf proposal"
+    - "cd ../thesis"
+    - "latexmk --pdf thesis"
+  artifacts:
+    paths:
+    - "proposal/proposal.pdf"
+    - "thesis/thesis.pdf"
   tags:
     - shared
