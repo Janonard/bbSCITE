@@ -11,10 +11,10 @@ PV build_test_tree() {
    * 0 1 2 3
    */
   PV pv(4);
-  REQUIRE(pv[0] == PV::root);
-  REQUIRE(pv[1] == PV::root);
-  REQUIRE(pv[2] == PV::root);
-  REQUIRE(pv[3] == PV::root);
+  REQUIRE(pv[0] >= pv.get_n_nodes());
+  REQUIRE(pv[1] >= pv.get_n_nodes());
+  REQUIRE(pv[2] >= pv.get_n_nodes());
+  REQUIRE(pv[3] >= pv.get_n_nodes());
 
   /*
    * Actual testing tree:
@@ -25,11 +25,11 @@ PV build_test_tree() {
    */
   pv.move_subtree(0, 2);
   pv.move_subtree(1, 2);
-  
+
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
-  REQUIRE(pv[2] == PV::root);
-  REQUIRE(pv[3] == PV::root);
+  REQUIRE(pv[2] >= pv.get_n_nodes());
+  REQUIRE(pv[3] >= pv.get_n_nodes());
 
   return pv;
 }
@@ -58,6 +58,30 @@ TEST_CASE("ParentVector: Ancestry Queries", "[ParentVector]") {
   REQUIRE(pv.is_descendant(3, 3));
 }
 
+TEST_CASE("ParentVector::from_pruefer_code", "[ParentVector]") {
+  // Pruefer Code for a complete binary tree with four levels.
+  std::vector<PV::uindex_node_t> pruefer_code = {8,  8,  9,  9,  10, 10, 11,
+                                                 11, 12, 12, 13, 13, 14};
+
+  PV pv(14);
+  pv.from_pruefer_code(pruefer_code);
+
+  REQUIRE(pv[0] == 8);
+  REQUIRE(pv[1] == 8);
+  REQUIRE(pv[2] == 9);
+  REQUIRE(pv[3] == 9);
+  REQUIRE(pv[4] == 10);
+  REQUIRE(pv[5] == 10);
+  REQUIRE(pv[6] == 11);
+  REQUIRE(pv[7] == 11);
+  REQUIRE(pv[8] == 12);
+  REQUIRE(pv[9] == 12);
+  REQUIRE(pv[10] == 13);
+  REQUIRE(pv[11] == 13);
+  REQUIRE(pv[12] >= 14);
+  REQUIRE(pv[13] >= 14);
+}
+
 TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
   PV pv = build_test_tree();
 
@@ -73,8 +97,8 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
    */
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
-  REQUIRE(pv[2] == PV::root);
-  REQUIRE(pv[3] == PV::root);
+  REQUIRE(pv[2] >= pv.get_n_nodes());
+  REQUIRE(pv[3] >= pv.get_n_nodes());
 
   // Swap of unrelated nodes
   pv.swap_nodes(2, 3);
@@ -88,8 +112,8 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
    */
   REQUIRE(pv[0] == 3);
   REQUIRE(pv[1] == 3);
-  REQUIRE(pv[2] == PV::root);
-  REQUIRE(pv[3] == PV::root);
+  REQUIRE(pv[2] >= pv.get_n_nodes());
+  REQUIRE(pv[3] >= pv.get_n_nodes());
 
   // Swap of parent and child
   pv.swap_nodes(0, 3);
@@ -101,8 +125,8 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
    * ┌0┐2
    * 3 1
    */
-  REQUIRE(pv[0] == PV::root);
+  REQUIRE(pv[0] >= pv.get_n_nodes());
   REQUIRE(pv[1] == 0);
-  REQUIRE(pv[2] == PV::root);
+  REQUIRE(pv[2] >= pv.get_n_nodes());
   REQUIRE(pv[3] == 0);
 }
