@@ -12,3 +12,16 @@ build-documents:
     - "thesis/thesis.pdf"
   tags:
     - shared
+
+build-tests:
+  stage: build
+  image: "intel/oneapi-basekit:devel-ubuntu18.04"
+  script:
+    - "source /opt/intel/oneapi/setvars.sh"
+    - "mkdir build"
+    - "cd build"
+    - "cmake .."
+    - "make -j$(nproc) test"
+    - "./test/test"
+  tags:
+    - shared
