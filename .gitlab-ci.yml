@@ -1,5 +1,6 @@
 build-documents:
-  only: main
+  only:
+    - main
   stage: build
   image: "texlive/texlive:latest"
   script:
@@ -15,7 +16,8 @@ build-documents:
     - shared
 
 build-tests:
-  only: main
+  only:
+    - main
   stage: build
   script:
     - "ml intel/oneAPI devel/CMake"
