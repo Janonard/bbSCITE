@@ -61,7 +61,7 @@ public:
     }
   }
 
-  void move_node(uindex_node_t node_i, uindex_node_t new_parent_i) {
+  void move_subtree(uindex_node_t node_i, uindex_node_t new_parent_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(!is_descendant(new_parent_i, node_i));
 #endif

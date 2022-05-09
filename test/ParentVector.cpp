@@ -23,8 +23,8 @@ PV build_test_tree() {
    * ┌2┐3
    * 0 1
    */
-  pv.move_node(0, 2);
-  pv.move_node(1, 2);
+  pv.move_subtree(0, 2);
+  pv.move_subtree(1, 2);
   
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
