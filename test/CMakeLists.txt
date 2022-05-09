@@ -8,7 +8,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-set(TEST_SOURCES ParentVector.cpp StackVector.cpp)
+set(TEST_SOURCES ParentVector.cpp)
 
 add_executable(test ${TEST_SOURCES})
 
