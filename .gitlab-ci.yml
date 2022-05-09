@@ -1,4 +1,5 @@
 build-documents:
+  only: main
   stage: build
   image: "texlive/texlive:latest"
   script:
@@ -14,14 +15,16 @@ build-documents:
     - shared
 
 build-tests:
+  only: main
   stage: build
-  image: "intel/oneapi-basekit:devel-ubuntu18.04"
   script:
-    - "source /opt/intel/oneapi/setvars.sh"
+    - "ml intel/oneAPI devel/CMake"
     - "mkdir build"
     - "cd build"
     - "cmake .."
     - "make -j$(nproc) test"
     - "./test/test"
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p short --time=00:05:00"
   tags:
-    - shared
+    - noctua
