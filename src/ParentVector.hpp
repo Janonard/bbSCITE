@@ -1,6 +1,7 @@
 #include <array>
 #include <bit>
 #include <cstdint>
+#include <random>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
 #include <unordered_map>
 #include <vector>
@@ -8,11 +9,21 @@
 namespace ffSCITE {
 template <uint64_t max_n_nodes> class ParentVector {
 public:
-  static constexpr uint64_t n_node_bits = std::bit_width(max_n_nodes);
+  static constexpr uint64_t n_node_bits = std::bit_width(max_n_nodes + 1);
   using uindex_node_t = ac_int<n_node_bits, false>;
 
+  ParentVector() : parent(), n_nodes(max_n_nodes) {
+    for (uindex_node_t i = 0; i < max_n_nodes; i++) {
+      parent[i] = max_n_nodes;
+    }
+  }
+  ParentVector(ParentVector const &other) = default;
+  ParentVector &operator=(ParentVector const &other) = default;
+
   ParentVector(uindex_node_t n_nodes) : parent(), n_nodes(n_nodes) {
+#if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
+#endif
 
     for (uindex_node_t i = 0; i < max_n_nodes; i++) {
       parent[i] = max_n_nodes;
@@ -30,7 +41,7 @@ public:
 
     // Compute the (resulting) degrees of every node.
     std::vector<uindex_node_t> degree;
-    for (uindex_node_t i = 0; i <= n_nodes; i++) {
+    for (uindex_node_t i = 0; i < n_nodes + 1; i++) {
       degree.push_back(1);
     }
     for (uindex_node_t i = 0; i < pruefer_code.size(); i++) {
@@ -53,7 +64,7 @@ public:
     // never been assigned.
     uindex_node_t u = 0, v = 0;
     bool u_found = false;
-    for (uindex_node_t i = 0; i <= n_nodes; i++) {
+    for (uindex_node_t i = 0; i < n_nodes + 1; i++) {
       if (degree[i] == 1) {
         if (!u_found) {
           u = i;
@@ -68,10 +79,14 @@ public:
   }
 
   template <typename RNG> void randomize(RNG &rng) {
+    static_assert(std::numeric_limits<unsigned long>::max() >= max_n_nodes);
+
+    std::uniform_int_distribution<unsigned long> int_distribution(0, n_nodes);
+
     // Generate a pruefer code for the tree.
     std::vector<uindex_node_t> pruefer_code;
     for (uindex_node_t i = 0; i < n_nodes - 1; i++) {
-      pruefer_code.push_back(rng() % (n_nodes + 1));
+      pruefer_code.push_back(int_distribution(rng));
     }
 
     from_pruefer_code(pruefer_code);

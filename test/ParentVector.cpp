@@ -1,7 +1,7 @@
 #include <ParentVector.hpp>
 #include <catch2/catch_all.hpp>
 
-using PV = ffSCITE::ParentVector<16>;
+using PV = ffSCITE::ParentVector<15>;
 
 PV build_test_tree() {
   /*
