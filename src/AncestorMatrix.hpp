@@ -1,3 +1,4 @@
+#pragma once
 #include "ParentVector.hpp"
 
 namespace ffSCITE {
@@ -32,31 +33,48 @@ public:
         ancestor[anc][i] = true;
         anc = parent_vector[anc];
       }
-
-      // lastly, also mark the root as our ancestor.
-      ancestor[n_nodes][i] = true;
     }
-
-    // Set the ancestry of the root
-    for (uindex_node_t j = 0; j < max_n_nodes; j++) {
-      ancestor[j][n_nodes] = false;
-    }
-    ancestor[n_nodes][n_nodes] = true;
   }
 
   bool is_ancestor(uindex_node_t node_a_i, uindex_node_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < n_nodes + 1 && node_b_i < n_nodes + 1);
 #endif
-    return ancestor[node_a_i][node_b_i];
+    if (node_a_i >= n_nodes) {
+      return true;
+    } else if (node_b_i >= n_nodes) {
+      return false;
+    } else {
+      return ancestor[node_a_i][node_b_i];
+    }
   }
 
   std::array<bool, max_n_nodes> get_descendants(uindex_node_t node_i) const {
-    return ancestor[node_i];
+    std::array<bool, max_n_nodes> descendants;
+    for (uindex_node_t i = 0; i < n_nodes; i++) {
+      descendants[i] = (node_i >= n_nodes) || ancestor[node_i][i];
+    }
+    return descendants;
   }
 
+  uindex_node_t get_n_descendants(uindex_node_t node_i) const {
+    if (node_i >= n_nodes) {
+      return n_nodes + 1;
+    } else {
+      uindex_node_t n_descendants = 0;
+      for (uindex_node_t i = 0; i < n_nodes; i++) {
+        if (ancestor[node_i][i]) {
+          n_descendants++;
+        }
+      }
+      return n_descendants;
+    }
+  }
+
+  uindex_node_t get_n_nodes() const { return n_nodes; }
+
 private:
-  std::array<std::array<bool, max_n_nodes + 1>, max_n_nodes + 1> ancestor;
+  std::array<std::array<bool, max_n_nodes>, max_n_nodes> ancestor;
   uindex_node_t n_nodes;
 };
 } // namespace ffSCITE

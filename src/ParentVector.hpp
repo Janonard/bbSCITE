@@ -1,3 +1,4 @@
+#pragma once
 #include <array>
 #include <bit>
 #include <cstdint>
@@ -170,6 +171,13 @@ public:
     }
 
     return traversal;
+  }
+
+  void swap_subtrees(uindex_node_t node_a_i, uindex_node_t node_b_i) {
+#if __SYCL_DEVICE_ONLY__ == 0
+    assert(!is_descendant(node_a_i, node_b_i) && !is_descendant(node_b_i, node_a_i));
+#endif
+    std::swap(parent[node_a_i], parent[node_b_i]);
   }
 
 private:

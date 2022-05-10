@@ -1,3 +1,4 @@
+#pragma once
 #include "ParentVector.hpp"
 
 namespace ffSCITE {

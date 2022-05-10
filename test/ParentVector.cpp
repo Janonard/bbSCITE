@@ -146,3 +146,43 @@ TEST_CASE("ParentVector::calc_breadth_first_traversal", "[ParentVector]") {
   REQUIRE(traversal[2] == 0);
   REQUIRE(traversal[3] == 1);
 }
+
+TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
+  PV pv(7);
+
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
+
+  REQUIRE(pv[0] == 2);
+  REQUIRE(pv[1] == 2);
+  REQUIRE(pv[2] == 5);
+  REQUIRE(pv[3] == 5);
+  REQUIRE(pv[4] == 6);
+  REQUIRE(pv[5] >= 7);
+  REQUIRE(pv[6] >= 7);
+
+  /*
+   * Resulting tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌2┐
+   * ┌6 3 0 1
+   * 4
+   */
+  pv.swap_subtrees(2, 6);
+
+  REQUIRE(pv[0] == 2);
+  REQUIRE(pv[1] == 2);
+  REQUIRE(pv[2] >= 7);
+  REQUIRE(pv[3] == 5);
+  REQUIRE(pv[4] == 6);
+  REQUIRE(pv[5] >= 7);
+  REQUIRE(pv[6] == 5);
+}
