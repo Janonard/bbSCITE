@@ -59,7 +59,13 @@ TEST_CASE("ParentVector: Ancestry Queries", "[ParentVector]") {
 }
 
 TEST_CASE("ParentVector::from_pruefer_code", "[ParentVector]") {
-  // Pruefer Code for a complete binary tree with four levels.
+  // Construct a simple, binary tree with three levels and 15 nodes (14 without
+  // root):
+  //
+  //     ┌--14--┐
+  //  ┌-12┐    ┌13-┐
+  // ┌8┐ ┌9┐ ┌10┐ ┌11┐
+  // 0 1 2 3 4  5 6  7
   std::vector<PV::uindex_node_t> pruefer_code = {8,  8,  9,  9,  10, 10, 11,
                                                  11, 12, 12, 13, 13, 14};
 
@@ -129,4 +135,14 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
   REQUIRE(pv[1] == 0);
   REQUIRE(pv[2] >= pv.get_n_nodes());
   REQUIRE(pv[3] == 0);
+}
+
+TEST_CASE("ParentVector::calc_breadth_first_traversal", "[ParentVector]") {
+  PV pv = build_test_tree();
+
+  auto traversal = pv.calc_breadth_first_traversal();
+  REQUIRE(traversal[0] == 2);
+  REQUIRE(traversal[1] == 3);
+  REQUIRE(traversal[2] == 0);
+  REQUIRE(traversal[3] == 1);
 }

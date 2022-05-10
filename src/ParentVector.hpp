@@ -146,6 +146,32 @@ public:
     parent[node_i] = new_parent_i;
   }
 
+  std::array<uindex_node_t, max_n_nodes> calc_breadth_first_traversal() const {
+    std::array<uindex_node_t, max_n_nodes> traversal;
+    uindex_node_t back_of_buffer = 0;
+
+    // Initialize with nodes connected to root, as the root will not be included
+    // in the traversal
+    for (uindex_node_t j = 0; j < n_nodes; j++) {
+      if (parent[j] >= n_nodes) {
+        traversal[back_of_buffer] = j;
+        back_of_buffer++;
+      }
+    }
+
+    // Now, follow the node's edges to fill the traversal.
+    for (uindex_node_t traversal_i = 0; traversal_i < n_nodes; traversal_i++) {
+      for (uindex_node_t j = 0; j < n_nodes; j++) {
+        if (parent[j] == traversal[traversal_i]) {
+          traversal[back_of_buffer] = j;
+          back_of_buffer++;
+        }
+      }
+    }
+
+    return traversal;
+  }
+
 private:
   std::array<uindex_node_t, max_n_nodes> parent;
   uindex_node_t n_nodes;
