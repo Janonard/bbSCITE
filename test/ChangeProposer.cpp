@@ -1,21 +1,68 @@
 #include "ChangeProposer.hpp"
+#include <boost/math/special_functions/binomial.hpp>
 #include <catch2/catch_all.hpp>
+#include <map>
 #include <set>
 
 using namespace ffSCITE;
 
-TEST_CASE("ChangeProposer::sample_nodepair (correctness)", "[ChangeProposer]") {
-  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
+constexpr unsigned int n_iterations = 1024;
 
-  for (uint64_t i = 0; i < 128; i++) {
+TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
+  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
+  using uindex_node_t = ChangeProposer<7, std::mt19937>::uindex_node_t;
+
+  std::map<std::array<uindex_node_t, 2>, unsigned int> sampled_nodes;
+
+  for (uint64_t i = 0; i < n_iterations; i++) {
     auto pair = proposer.sample_nodepair(7);
     REQUIRE(pair[0] < 7);
     REQUIRE(pair[1] < 7);
     REQUIRE(pair[0] != pair[1]);
+
+    if (pair[0] > pair[1]) {
+      std::swap(pair[0], pair[1]);
+    }
+
+    if (sampled_nodes.contains(pair)) {
+      sampled_nodes[pair] += 1;
+    } else {
+      sampled_nodes[pair] = 1;
+    }
   }
+
+  // We want to test that the samples are uniformly distributed among all
+  // possible node pairs, i.e. subsets of the nodesets with a cardinality of
+  // two. We therefore view `sample_nodepair` as a random variable that samples
+  // from all those subsets. Our null-hypothesis is that this random variable is
+  // uniformly distributed and we test this hypothesis with a chi-squared-test.
+  double t = 0;
+  double n_pairs = 21; // = 7 over 2
+  for (uindex_node_t i = 0; i < 7; i++) {
+    for (uindex_node_t j = i + 1; j < 7; j++) {
+      double n_occurrences;
+      if (sampled_nodes.contains({i, j})) {
+        n_occurrences = sampled_nodes[{i, j}];
+      } else {
+        n_occurrences = 0.0;
+      }
+
+      double numerator = n_occurrences - n_iterations / n_pairs;
+      numerator *= numerator;
+      double denominator = n_iterations / n_pairs;
+      t += numerator / denominator;
+    }
+  }
+
+  // There are 21 pairs and we pick an error probability of 0.05, so we
+  // need to compare with the 0.95 quantile of chi squared with 20 degrees of
+  // freedom. Source:
+  // https://de.wikibooks.org/wiki/Statistik:_Tabelle_der_Chi-Quadrat-Verteilung
+  const double chi_squared_quantile = 31.41;
+  REQUIRE(t < chi_squared_quantile);
 }
 
-TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant (correctness)",
+TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
           "[ChangeProposer]") {
   ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
 
@@ -31,29 +78,58 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant (correctness)",
   pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
   AncestorMatrix<7> am(pv);
 
-  std::set<unsigned int> descendants_of_five = {0, 1, 2, 3, 5};
-  std::set<unsigned int> descendants_of_six = {4, 6};
+  // We count how often each descendant of five is picked to run a hypthesis
+  // test.
+  std::map<unsigned int, unsigned int> sampled_nodes_for_five;
+  sampled_nodes_for_five[0] = 0;
+  sampled_nodes_for_five[1] = 0;
+  sampled_nodes_for_five[2] = 0;
+  sampled_nodes_for_five[3] = 0;
+  sampled_nodes_for_five[5] = 0;
 
-  for (uint64_t i = 0; i < 128; i++) {
+  for (uint64_t i = 0; i < n_iterations; i++) {
     auto sampled_node =
         proposer.sample_descendant_or_nondescendant(am, 5, true);
-    REQUIRE(descendants_of_five.contains(sampled_node));
+    REQUIRE(am.is_ancestor(5, sampled_node));
+    sampled_nodes_for_five[sampled_node]++;
 
     sampled_node = proposer.sample_descendant_or_nondescendant(am, 5, false);
-    REQUIRE(!descendants_of_five.contains(sampled_node));
+    REQUIRE(!am.is_ancestor(5, sampled_node));
 
     sampled_node = proposer.sample_descendant_or_nondescendant(am, 6, true);
-    REQUIRE(descendants_of_six.contains(sampled_node));
+    REQUIRE(am.is_ancestor(6, sampled_node));
 
     sampled_node = proposer.sample_descendant_or_nondescendant(am, 6, false);
-    REQUIRE(!descendants_of_six.contains(sampled_node));
+    REQUIRE(!am.is_ancestor(6, sampled_node));
   }
+
+  // We want to test that the samples are uniformly distributed among all
+  // descendants of five. We therefore view `sample_descendant_or_nondescendant`
+  // as a random variable that samples from the descendants of a node. Our
+  // null-hypothesis is that X_v is uniformly distributed, i.e. \forall w \in
+  // Desc(v): P(X_v = w) = (|Desc(v)|)^{-1} and we test this hypothesis with a
+  // chi-squared-test.
+  double t = 0;
+  const double n_descendants = am.get_n_descendants(5);
+  for (std::pair<unsigned int, unsigned int> pair : sampled_nodes_for_five) {
+    double numerator = (pair.second - n_iterations / n_descendants);
+    numerator *= numerator;
+    double denominator = n_iterations / n_descendants;
+    t += numerator / denominator;
+  }
+
+  // There are five descendants and we pick an error probability of 0.05, so we
+  // need to compare with the 0.95 quantile of chi squared with four degrees of
+  // freedom. Source:
+  // https://de.wikibooks.org/wiki/Statistik:_Tabelle_der_Chi-Quadrat-Verteilung
+  const double chi_squared_quantile = 9.49;
+  REQUIRE(t < chi_squared_quantile);
 }
 
-TEST_CASE("ChangeProposer::change_beta (correctness)", "[ChangeProposer]") {
+TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
   ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
 
-  for (uint64_t i = 0; i < 128; i++) {
+  for (uint64_t i = 0; i < n_iterations; i++) {
     double sampled_beta = proposer.change_beta(0.0);
     REQUIRE(sampled_beta >= 0.0);
     REQUIRE(sampled_beta <= 1.0);
@@ -68,8 +144,7 @@ TEST_CASE("ChangeProposer::change_beta (correctness)", "[ChangeProposer]") {
   }
 }
 
-TEST_CASE("ChangeProposer::prune_and_reattach (correctness)",
-          "[ChangeProposer]") {
+TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
   ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
 
   /*
@@ -84,7 +159,7 @@ TEST_CASE("ChangeProposer::prune_and_reattach (correctness)",
   pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
   AncestorMatrix<7> am(pv);
 
-  for (uint64_t i = 0; i < 128; i++) {
+  for (uint64_t i = 0; i < n_iterations; i++) {
     ParentVector<7> pv_copy(pv);
     unsigned int moved_node_i = proposer.prune_and_reattach(pv_copy, am);
 
@@ -105,7 +180,7 @@ TEST_CASE("ChangeProposer::prune_and_reattach (correctness)",
   }
 }
 
-TEST_CASE("ChangeProposer::swap_subtrees (correctness)", "[ChangeProposer]") {
+TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
   ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
 
   /*
@@ -120,7 +195,7 @@ TEST_CASE("ChangeProposer::swap_subtrees (correctness)", "[ChangeProposer]") {
   pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
   AncestorMatrix<7> am(pv);
 
-  for (uint64_t i = 0; i < 128; i++) {
+  for (uint64_t i = 0; i < n_iterations; i++) {
     ParentVector<7> pv_copy(pv);
     double neighborhood_correction = 1.0;
     auto swapped_subtrees =
@@ -141,8 +216,9 @@ TEST_CASE("ChangeProposer::swap_subtrees (correctness)", "[ChangeProposer]") {
 
       REQUIRE(pv_copy[node_a_i] == pv[node_b_i]);
       REQUIRE(am.is_ancestor(node_a_i, pv_copy[node_b_i]));
-      REQUIRE(neighborhood_correction == double(am.get_n_descendants(node_a_i)) /
-          double(am.get_n_descendants(node_b_i)));
+      REQUIRE(neighborhood_correction ==
+              double(am.get_n_descendants(node_a_i)) /
+                  double(am.get_n_descendants(node_b_i)));
     } else {
       REQUIRE(pv_copy[node_a_i] == pv[node_b_i]);
       REQUIRE(pv_copy[node_b_i] == pv[node_a_i]);
