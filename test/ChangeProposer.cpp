@@ -1,4 +1,5 @@
 #include "ChangeProposer.hpp"
+#include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/special_functions/binomial.hpp>
 #include <catch2/catch_all.hpp>
 #include <map>
@@ -7,17 +8,20 @@
 using namespace ffSCITE;
 
 constexpr unsigned int n_iterations = 1024;
+constexpr double alpha = 0.05;
 
 TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
-  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
-  using uindex_node_t = ChangeProposer<7, std::mt19937>::uindex_node_t;
+  constexpr uint64_t n_nodes = 7;
+
+  ChangeProposer<n_nodes, std::mt19937> proposer((std::mt19937()));
+  using uindex_node_t = ChangeProposer<n_nodes, std::mt19937>::uindex_node_t;
 
   std::map<std::array<uindex_node_t, 2>, unsigned int> sampled_nodes;
 
   for (uint64_t i = 0; i < n_iterations; i++) {
     auto pair = proposer.sample_nodepair(7);
-    REQUIRE(pair[0] < 7);
-    REQUIRE(pair[1] < 7);
+    REQUIRE(pair[0] < n_nodes);
+    REQUIRE(pair[1] < n_nodes);
     REQUIRE(pair[0] != pair[1]);
 
     if (pair[0] > pair[1]) {
@@ -37,9 +41,9 @@ TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
   // from all those subsets. Our null-hypothesis is that this random variable is
   // uniformly distributed and we test this hypothesis with a chi-squared-test.
   double t = 0;
-  double n_pairs = 21; // = 7 over 2
-  for (uindex_node_t i = 0; i < 7; i++) {
-    for (uindex_node_t j = i + 1; j < 7; j++) {
+  double n_pairs = boost::math::binomial_coefficient<double>(n_nodes, 2);
+  for (uindex_node_t i = 0; i < n_nodes; i++) {
+    for (uindex_node_t j = i + 1; j < n_nodes; j++) {
       double n_occurrences;
       if (sampled_nodes.contains({i, j})) {
         n_occurrences = sampled_nodes[{i, j}];
@@ -54,17 +58,14 @@ TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
     }
   }
 
-  // There are 21 pairs and we pick an error probability of 0.05, so we
-  // need to compare with the 0.95 quantile of chi squared with 20 degrees of
-  // freedom. Source:
-  // https://de.wikibooks.org/wiki/Statistik:_Tabelle_der_Chi-Quadrat-Verteilung
-  const double chi_squared_quantile = 31.41;
-  REQUIRE(t < chi_squared_quantile);
+  boost::math::chi_squared chi_squared_dist(n_pairs - 1);
+  REQUIRE(t < quantile(chi_squared_dist, 1 - alpha));
 }
 
 TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
           "[ChangeProposer]") {
-  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
+  constexpr uint64_t n_nodes = 7;
+  ChangeProposer<n_nodes, std::mt19937> proposer((std::mt19937()));
 
   /*
    * Original tree:
@@ -74,9 +75,9 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
    * ┌2┐3 4
    * 0 1
    */
-  ParentVector<7> pv(7);
+  ParentVector<n_nodes> pv(n_nodes);
   pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
-  AncestorMatrix<7> am(pv);
+  AncestorMatrix<n_nodes> am(pv);
 
   // We count how often each descendant of five is picked to run a hypthesis
   // test.
@@ -118,12 +119,8 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
     t += numerator / denominator;
   }
 
-  // There are five descendants and we pick an error probability of 0.05, so we
-  // need to compare with the 0.95 quantile of chi squared with four degrees of
-  // freedom. Source:
-  // https://de.wikibooks.org/wiki/Statistik:_Tabelle_der_Chi-Quadrat-Verteilung
-  const double chi_squared_quantile = 9.49;
-  REQUIRE(t < chi_squared_quantile);
+  boost::math::chi_squared chi_squared_dist(5 - 1);
+  REQUIRE(t < quantile(chi_squared_dist, 1 - alpha));
 }
 
 TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
