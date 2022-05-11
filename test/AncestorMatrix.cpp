@@ -10,8 +10,7 @@ AM create_test_ancestor_matrix() {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  PV pv(6);
-  pv.from_pruefer_code({4, 4, 5, 5, 6});
+  PV pv = PV::from_pruefer_code({4, 4, 5, 5, 6});
   AM ancestor_matrix(pv);
   return ancestor_matrix;
 }

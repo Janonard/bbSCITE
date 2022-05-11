@@ -75,8 +75,7 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
    * ┌2┐3 4
    * 0 1
    */
-  ParentVector<n_nodes> pv(n_nodes);
-  pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
+  auto pv = ParentVector<n_nodes>::from_pruefer_code({2, 2, 5, 5, 6, 7});
   AncestorMatrix<n_nodes> am(pv);
 
   // We count how often each descendant of five is picked to run a hypthesis
@@ -152,8 +151,7 @@ TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  ParentVector<7> pv(7);
-  pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
+  auto pv = ParentVector<7>::from_pruefer_code({2, 2, 5, 5, 6, 7});
   AncestorMatrix<7> am(pv);
 
   for (uint64_t i = 0; i < n_iterations; i++) {
@@ -188,8 +186,7 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  ParentVector<7> pv(7);
-  pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
+  auto pv = ParentVector<7>::from_pruefer_code({2, 2, 5, 5, 6, 7});
   AncestorMatrix<7> am(pv);
 
   for (uint64_t i = 0; i < n_iterations; i++) {

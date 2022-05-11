@@ -69,8 +69,7 @@ TEST_CASE("ParentVector::from_pruefer_code", "[ParentVector]") {
   std::vector<PV::uindex_node_t> pruefer_code = {8,  8,  9,  9,  10, 10, 11,
                                                  11, 12, 12, 13, 13, 14};
 
-  PV pv(14);
-  pv.from_pruefer_code(pruefer_code);
+  PV pv = PV::from_pruefer_code(pruefer_code);
 
   REQUIRE(pv[0] == 8);
   REQUIRE(pv[1] == 8);
@@ -148,8 +147,6 @@ TEST_CASE("ParentVector::calc_breadth_first_traversal", "[ParentVector]") {
 }
 
 TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
-  PV pv(7);
-
   /*
    * Original tree:
    *
@@ -158,7 +155,7 @@ TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
    * ┌2┐3 4
    * 0 1
    */
-  pv.from_pruefer_code({2, 2, 5, 5, 6, 7});
+  PV pv = PV::from_pruefer_code({2, 2, 5, 5, 6, 7});
 
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
