@@ -4,10 +4,43 @@
 #include <random>
 
 namespace ffSCITE {
+/**
+ * \brief Engine to propose random changes to a chain's state.
+ *
+ * It uses a URNG to propose a change to a tree presented to it. The individual
+ * types of changes are exposed as public methods to ease testing, but users
+ * should only use the \ref ChangeProposer::propose_change method.
+ *
+ * \tparam max_n_nodes The maximal number of genome positions in a mutation
+ * tree. \tparam RNG The URNG to retrieve random numbers for the changes from.
+ */
 template <uint64_t max_n_nodes, typename RNG> class ChangeProposer {
 public:
+  /**
+   * \brief Shorthand for the mutation tree node index type.
+   */
   using uindex_node_t = typename ParentVector<max_n_nodes>::uindex_node_t;
 
+  /**
+   * \brief Initialize the change proposer with user-defined parameters.
+   *
+   * The parameters `prob_beta_change`, `prob_prune_n_reattach`, and
+   * `prob_swap_nodes` describe how often which types of changes are proposed.
+   * The probability of the fourth move type, the swapping of two subtrees, is
+   * implied by the residual probabilty that the three parameters leave.
+   * Therefore, the sum of these three parameters has to be less than 1.0 and
+   * this is asserted if the constructor is not compiled for a SYCL device.
+   *
+   * \param rng The URNG instance that is used to sample changes.
+   * \param prob_beta_change The probability that a proposed change changes the
+   * beta error rate.
+   * \param prob_prune_n_reattach The probability that a
+   * proposed change prunes and reattaches a subtree of the mutation tree.
+   * \param prob_swap_nodes The probability that a proposed change swap two
+   * nodes in the mutation tree.
+   * \param beta_jump_sd The standard derivation of
+   * the beta error changes.
+   */
   ChangeProposer(RNG rng, double prob_beta_change, double prob_prune_n_reattach,
                  double prob_swap_nodes, double beta_jump_sd)
       : rng(rng), prob_beta_change(prob_beta_change),
@@ -18,10 +51,18 @@ public:
 #endif
   }
 
+  /**
+   * \brief Initialize the change proposer with default parameters.
+   *
+   * \param rng The URNG instance that is used to sample changes.
+   */
   ChangeProposer(RNG rng)
       : rng(rng), prob_beta_change(0.55), prob_prune_n_reattach(0.5),
         prob_swap_nodes(0.5), beta_jump_sd(0.1) {}
 
+  /**
+   * \brief The different move types that the proposer may propose.
+   */
   enum class MoveType {
     ChangeBeta,
     PruneReattach,
@@ -29,6 +70,11 @@ public:
     SwapSubtrees,
   };
 
+  /**
+   * \brief Sample one of the possible moves with the defined distribution.
+   *
+   * \return A random move.
+   */
   MoveType sample_move() {
     double change_type_draw = std::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
@@ -43,6 +89,17 @@ public:
     }
   }
 
+  /**
+   * \brief Sample two distinct nodes.
+   *
+   * Let V be the set of nodes in the mutation tree and r be the root of the
+   * tree. Then, this method can be viewed as a uniformly distributed random
+   * variable that samples from {p ⊆ (V \ {r}) | |p| = 2}. However, the order of
+   * these two nodes are not guaranteed: The first node may have a lower or
+   * higher index than the second node.
+   *
+   * \return Two random nodes
+   */
   std::array<uindex_node_t, 2> sample_nodepair(uindex_node_t n_nodes) {
     std::array<uindex_node_t, 2> sampled_nodes;
     sampled_nodes[0] =
@@ -55,6 +112,23 @@ public:
     return sampled_nodes;
   }
 
+  /**
+   * \brief Sample from one of a node's descendants or nondescendants.
+   *
+   * Let V be the set of nodes in the mutation tree, r be the root of the tree,
+   * and i the parameter node. Then, this method can be viewed as a uniformly
+   * distributed random variable that samples from {v ∈ (V \ {r}) | i \leadsto
+   * v} if `sample_descendants` is true, or from {v ∈ (V \ {r}) | i \not\leadsto
+   * v} if `sample_descendants` is false.
+   *
+   * \param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * \param node_i The node from who's descendants or nondescendants this method
+   * samples.
+   * \param sample_descandent True iff the method is supposed to sample
+   * from the nodes descendants. Otherwise, it will sample from the node's
+   * nondescendants.
+   * \return One of the nodes descendants or nondescendants.
+   */
   uindex_node_t sample_descendant_or_nondescendant(
       AncestorMatrix<max_n_nodes> const &ancestor_matrix, uindex_node_t node_i,
       bool sample_descendant) {
@@ -98,6 +172,12 @@ public:
     return sampled_node_i;
   }
 
+  /**
+   * \brief Propose a new beta error rate.
+   *
+   * \param old_beta The old beta error rate.
+   * \return The newly proposed beta error rate.
+   */
   double change_beta(double old_beta) {
     double new_beta =
         old_beta + std::normal_distribution<double>(0, beta_jump_sd)(rng);
@@ -110,6 +190,17 @@ public:
     return new_beta;
   }
 
+  /**
+   * \brief Propose a prune-and-reattach move.
+   *
+   * This method picks a node in the mutation tree, detaches it from it's
+   * current parent and attaches to another node (which may not be a descendant
+   * of the moved node). Note that this modifies the referenced parent vector.
+   *
+   * \param parent_vector The parent vector to modify.
+   * \param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * \return The index of the the moved node.
+   */
   uindex_node_t
   prune_and_reattach(ParentVector<max_n_nodes> &parent_vector,
                      AncestorMatrix<max_n_nodes> const &ancestor_matrix) {
@@ -127,6 +218,15 @@ public:
     return node_to_move_i;
   }
 
+  /**
+   * \brief Propose a swap-nodes move.
+   *
+   * This method picks two nodes in the mutation tree and swaps their labels.
+   * The structure will remain the same, just two nodes are swapped.
+   *
+   * \param parent_vector The parent vector to modify.
+   * \return The indices of the swapped nodes.
+   */
   std::array<uindex_node_t, 2>
   swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
     std::array<uindex_node_t, 2> nodes_to_swap =
@@ -135,6 +235,23 @@ public:
     return nodes_to_swap;
   }
 
+  /**
+   * \brief Propose a swap-subtrees move.
+   *
+   * This method picks two nodes in the mutation tree and swaps their complete
+   * subtrees. If these nodes are not ancestors of each other, this involves
+   * only swapping the parent vector entries. However, if of the sampled nodes i
+   * and j the node i is an ancestor of the node j, then the method samples one
+   * of the descendants j and attaches i to instead of the parent of j.
+   *
+   * If the sampled nodes are related, the neighborhood correction factor is set
+   * accordingly, otherwise it is set to 1.0.
+   *
+   * \param parent_vector The parent vector to modify.
+   * \param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * \param out_neighborhood_correction Output: Neighborhood correction factor.
+   * \return The two swapped/moved nodes.
+   */
   std::array<uindex_node_t, 2>
   swap_subtrees(ParentVector<max_n_nodes> &parent_vector,
                 AncestorMatrix<max_n_nodes> const &ancestor_matrix,
@@ -182,6 +299,13 @@ public:
     return nodes_to_swap;
   }
 
+  /**
+   * \brief Propose a random change to the markov chain state.
+   *
+   * \param state The current state of the chain, which will be modified.
+   * \param out_neighborhood_correction Output: The neighborhood correction
+   * factor.
+   */
   void propose_change(ChainState<max_n_nodes> &state,
                       double &out_neighborhood_correction) {
     AncestorMatrix<max_n_nodes> ancestor_matrix(state.mutation_tree);
