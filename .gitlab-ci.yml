@@ -20,7 +20,7 @@ build-tests:
     - main
   stage: build
   script:
-    - "ml intel/oneAPI devel/CMake"
+    - "ml devel/Boost intel/oneAPI devel/CMake"
     - "mkdir build"
     - "cd build"
     - "cmake .."
