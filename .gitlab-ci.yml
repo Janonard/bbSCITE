@@ -25,7 +25,7 @@ build-tests:
     - "cd build"
     - "cmake .."
     - "make -j$(nproc) test"
-    - "./test/test"
+    - "./test/unit_test"
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p short --time=00:05:00"
   tags:
