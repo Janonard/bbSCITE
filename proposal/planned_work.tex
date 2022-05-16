@@ -6,7 +6,7 @@ With the algorithm introduced and possible performance problems identified, we c
     \begin{itemize}
         \item Implement \ac{SCITE} for \acp{FPGA}
         \begin{itemize}
-            \item Maximize throughput
+            \item Maximize throughput (number of markov chain steps executed per second)
             \item Produce solutions of similar likelihood as the original reference implementation
             \item Achieve at least as much throughput as the original reference implementation
             \item (Optional) Achieve more throughput than the implementation by Ernst et al. \cite{ernst2020Performance}.
@@ -20,11 +20,11 @@ With the algorithm introduced and possible performance problems identified, we c
     \end{itemize}
 
     \centering
-    \caption{Goals of the thesis}
+    \caption{Summary/Overview of the goals of the thesis}
     \label{fig:goals}
 \end{figure}
 
-In order to fullfil these goals, we will start with an initial implementation of the algorithm. This implementation may be naive and therefore possibly inefficient, but it should be functional and correct. Parallel to that, we will start to set up the verification and benchmarking system to establish the baseline of the initial FPGA implementation and the reference implementation. Once the foundations are established, we can begin to optimize. There is not much sense in planning this task since it heavily depends on the bottlenecks at hand, but it will probably result in repeated iterations of profiling, identification of bottlenecks, research in existing solutions, implementing existing or original ideas and analyzing the changes. We will write-up the findings from all analysis stages, which will aid use in the last phase: Writing the thesis and proofreading it. There, we will describe what performance we could achieve, which bottlenecks we have encountered, how we have resolved them, and how our decisions have affected the adaptability to \ac{infSCITE}. More precisely, we plan to use the structure in figure \refname{fig:thesisstructure} for the thesis:
+In order to fullfil these goals, we will start with an initial implementation of the algorithm. This implementation may be naive and therefore possibly inefficient, but it should be functional and correct. Parallel to that, we will start to set up the verification and benchmarking system to establish the baseline of the initial FPGA implementation and the reference implementation. Once the foundations are established, we can begin to optimize. There is not much sense in planning this task since it heavily depends on the bottlenecks at hand, but it will probably result in repeated iterations of profiling, identification of bottlenecks, research in existing solutions, implementing existing or original ideas and analyzing the changes. We will write-up the findings from all analysis stages, which will aid use in the last phase: Writing the thesis and proofreading it. There, we will describe what performance we could achieve, which bottlenecks we have encountered, how we have resolved them, and how our decisions have affected the adaptability to \ac{infSCITE}. More precisely, we plan to use the structure in Figure \ref{fig:thesisstructure} for the thesis.
 
 \begin{figure}
     \begin{itemize}
@@ -69,4 +69,4 @@ In order to fullfil these goals, we will start with an initial implementation of
     \label{fig:worstschedule}
 \end{figure}
 
-According to the regulations, the workload of the thesis is supposed to contain nine weeks of full time labor, which is equivalent to 18 weeks of half time labor. The deadline for handing the thesis in is five months, which is approximately equivalent to 21 to 22 weeks and leaves a buffer of three to four weeks. We assume that the initial implementation will take approximately four weeks, as we will need to rewrite the complete application due to its heavy use of dynamic memory in datastructures and the kernel code, as well as its imperative structure. Benchmarking will be rather easy with our experience in profiling oneAPI FPGA designs, but since we have no experience in statistical verification, we can not actually make a good prediction for the required time. For writing the thesis, other students have quoted approximately four to six weeks of half-time work for thesis writing and proofreading, which leaves approximately nine to thirteen weeks between the initial implementation and writing the thesis for optimization. The resulting worst-case work schedule is visualized in figure \ref{fig:worstschedule}.
+According to the regulations, the workload of the thesis is supposed to contain nine weeks of full time labor, which is equivalent to 18 weeks of half time labor. The deadline for handing the thesis in is five months, which is approximately equivalent to 21 to 22 weeks and leaves a buffer of three to four weeks. We assume that the initial implementation will take approximately four weeks, as we will need to rewrite the complete application due to its heavy use of dynamic memory in datastructures and the kernel code, as well as its imperative structure. Benchmarking will be rather easy with our experience in profiling oneAPI FPGA designs, but since we have no experience in statistical verification, we can not actually make a good prediction for the required time. For writing the thesis, other students have quoted approximately four to six weeks of half-time work for thesis writing and proofreading, which leaves approximately nine to thirteen weeks between the initial implementation and writing the thesis for optimization. The resulting worst-case work schedule is visualized in Figure \ref{fig:worstschedule}.
