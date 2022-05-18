@@ -130,9 +130,10 @@ public:
     AncestorMatrixImpl ancestor_matrix(state.mutation_tree);
     OccurrenceMatrix occurrences(0);
 
-    for (uindex_cell_t cell_i; cell_i < n_cells; cell_i++) {
+    for (uindex_cell_t cell_i = 0; cell_i < n_cells; cell_i++) {
       auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
       occurrences += std::get<1>(best_attachment);
+      std::cout << "Hello" << std::endl;
     }
 
     return std::exp(get_logscore_of_occurrences(occurrences));
