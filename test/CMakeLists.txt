@@ -10,7 +10,7 @@ FetchContent_MakeAvailable(Catch2)
 
 find_package(Boost 1.76.0 REQUIRED)
 
-set(UNIT_TEST_SOURCES AncestorMatrix.cpp ChangeProposer.cpp ParentVector.cpp)
+set(UNIT_TEST_SOURCES AncestorMatrix.cpp ChangeProposer.cpp ParentVector.cpp StateScorer.cpp)
 
 add_executable(unit_test ${UNIT_TEST_SOURCES})
 

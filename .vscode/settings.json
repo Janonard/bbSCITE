@@ -1,6 +1,8 @@
 {
     "cSpell.words": [
+        "logscore",
         "pruefer",
+        "SCITE",
         "sycl",
         "uindex"
     ],
@@ -64,6 +66,10 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
-    }
+        "variant": "cpp",
+        "strstream": "cpp",
+        "complex": "cpp",
+        "cfenv": "cpp"
+    },
+    "editor.tabSize": 2
 }
