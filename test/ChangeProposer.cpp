@@ -9,19 +9,32 @@ using namespace ffSCITE;
 
 constexpr unsigned int n_iterations = 1024;
 constexpr double alpha = 0.05;
+constexpr uint64_t n_genes = 7;
+constexpr uint64_t n_nodes = 8;
 
-TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
-  constexpr uint64_t n_nodes = 7;
+using ProposerImpl = ChangeProposer<n_genes, std::mt19937>;
+using uindex_node_t = ProposerImpl::uindex_node_t;
 
-  ChangeProposer<n_nodes, std::mt19937> proposer((std::mt19937()));
-  using uindex_node_t = ChangeProposer<n_nodes, std::mt19937>::uindex_node_t;
+ProposerImpl init_proposer() {
+  std::random_device seeder;
+
+  std::mt19937 twister;
+  twister.seed(seeder());
+
+  ChangeProposer<n_genes, std::mt19937> proposer(twister);
+
+  return proposer;
+}
+
+TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
+  auto proposer = init_proposer();
 
   std::map<std::array<uindex_node_t, 2>, unsigned int> sampled_nodes;
 
   for (uint64_t i = 0; i < n_iterations; i++) {
-    auto pair = proposer.sample_nodepair(7);
-    REQUIRE(pair[0] < n_nodes);
-    REQUIRE(pair[1] < n_nodes);
+    auto pair = proposer.sample_nonroot_nodepair(n_nodes);
+    REQUIRE(pair[0] < n_nodes - 1);
+    REQUIRE(pair[1] < n_nodes - 1);
     REQUIRE(pair[0] != pair[1]);
 
     if (pair[0] > pair[1]) {
@@ -37,13 +50,13 @@ TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
 
   // We want to test that the samples are uniformly distributed among all
   // possible node pairs, i.e. subsets of the nodesets with a cardinality of
-  // two. We therefore view `sample_nodepair` as a random variable that samples
+  // two. We therefore view `sample_nonroot_nodepair` as a random variable that samples
   // from all those subsets. Our null-hypothesis is that this random variable is
   // uniformly distributed and we test this hypothesis with a chi-squared-test.
   double t = 0;
-  double n_pairs = boost::math::binomial_coefficient<double>(n_nodes, 2);
-  for (uindex_node_t i = 0; i < n_nodes; i++) {
-    for (uindex_node_t j = i + 1; j < n_nodes; j++) {
+  double n_pairs = boost::math::binomial_coefficient<double>(n_nodes - 1, 2);
+  for (uindex_node_t i = 0; i < n_nodes - 1; i++) {
+    for (uindex_node_t j = i + 1; j < n_nodes - 1; j++) {
       double n_occurrences;
       if (sampled_nodes.contains({i, j})) {
         n_occurrences = sampled_nodes[{i, j}];
@@ -64,8 +77,7 @@ TEST_CASE("ChangeProposer::sample_nodepair", "[ChangeProposer]") {
 
 TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
           "[ChangeProposer]") {
-  constexpr uint64_t n_nodes = 7;
-  ChangeProposer<n_nodes, std::mt19937> proposer((std::mt19937()));
+  auto proposer = init_proposer();
 
   /*
    * Original tree:
@@ -89,18 +101,22 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
 
   for (uint64_t i = 0; i < n_iterations; i++) {
     auto sampled_node =
-        proposer.sample_descendant_or_nondescendant(am, 5, true);
+        proposer.sample_descendant_or_nondescendant(am, 5, true, false);
     REQUIRE(am.is_ancestor(5, sampled_node));
     sampled_nodes_for_five[sampled_node]++;
 
-    sampled_node = proposer.sample_descendant_or_nondescendant(am, 5, false);
+    sampled_node =
+        proposer.sample_descendant_or_nondescendant(am, 5, false, true);
     REQUIRE(!am.is_ancestor(5, sampled_node));
 
-    sampled_node = proposer.sample_descendant_or_nondescendant(am, 6, true);
+    sampled_node =
+        proposer.sample_descendant_or_nondescendant(am, 6, true, false);
     REQUIRE(am.is_ancestor(6, sampled_node));
 
-    sampled_node = proposer.sample_descendant_or_nondescendant(am, 6, false);
+    sampled_node =
+        proposer.sample_descendant_or_nondescendant(am, 6, false, false);
     REQUIRE(!am.is_ancestor(6, sampled_node));
+    REQUIRE(sampled_node != n_nodes - 1);
   }
 
   // We want to test that the samples are uniformly distributed among all
@@ -123,7 +139,7 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
 }
 
 TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
-  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
+  auto proposer = init_proposer();
 
   for (uint64_t i = 0; i < n_iterations; i++) {
     double sampled_beta = proposer.change_beta(0.0);
@@ -141,7 +157,7 @@ TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
 }
 
 TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
-  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
+  auto proposer = init_proposer();
 
   /*
    * Original tree:
@@ -151,15 +167,15 @@ TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  auto pv = ParentVector<7>::from_pruefer_code({2, 2, 5, 5, 6, 7});
-  AncestorMatrix<7> am(pv);
+  auto pv = ParentVector<n_nodes>::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  AncestorMatrix<n_nodes> am(pv);
 
   for (uint64_t i = 0; i < n_iterations; i++) {
-    ParentVector<7> pv_copy(pv);
+    ParentVector<n_nodes> pv_copy(pv);
     unsigned int moved_node_i = proposer.prune_and_reattach(pv_copy, am);
 
     // Simple sanity checks for the move.
-    REQUIRE(moved_node_i < 7);
+    REQUIRE(moved_node_i < n_nodes);
     REQUIRE(pv_copy[moved_node_i] != moved_node_i);
 
     // Check that the node has not been attached to one of it's previous
@@ -167,16 +183,16 @@ TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
     REQUIRE(!am.is_ancestor(moved_node_i, pv_copy[moved_node_i]));
 
     // Check that nothing else was changed.
-    for (uint64_t i = 0; i < 7; i++) {
-      if (i != moved_node_i) {
-        REQUIRE(pv_copy[i] == pv[i]);
+    for (uint64_t node_i = 0; node_i < n_nodes; node_i++) {
+      if (node_i != moved_node_i) {
+        REQUIRE(pv_copy[node_i] == pv[node_i]);
       }
     }
   }
 }
 
 TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
-  ChangeProposer<7, std::mt19937> proposer((std::mt19937()));
+  auto proposer = init_proposer();
 
   /*
    * Original tree:
@@ -186,11 +202,11 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  auto pv = ParentVector<7>::from_pruefer_code({2, 2, 5, 5, 6, 7});
-  AncestorMatrix<7> am(pv);
+  auto pv = ParentVector<n_nodes>::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  AncestorMatrix<n_nodes> am(pv);
 
   for (uint64_t i = 0; i < n_iterations; i++) {
-    ParentVector<7> pv_copy(pv);
+    ParentVector<n_nodes> pv_copy(pv);
     double neighborhood_correction = 1.0;
     auto swapped_subtrees =
         proposer.swap_subtrees(pv_copy, am, neighborhood_correction);
@@ -220,7 +236,7 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
     }
 
     // Check that nothing else was changed.
-    for (uint64_t i = 0; i < 7; i++) {
+    for (uint64_t i = 0; i < n_nodes; i++) {
       if (i != node_a_i && i != node_b_i) {
         REQUIRE(pv_copy[i] == pv[i]);
       }

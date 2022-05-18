@@ -8,11 +8,18 @@ namespace ffSCITE {
  * This is nothing more than a parent vector for the mutation tree, the beta
  * error rate, and some default operations.
  *
- * \tparam The maximal number of free, movable nodes in the mutation tree, i.e.
- * genome positions.
+ * \tparam The maximal number of genes in the dataset.
  */
-template <uint64_t max_n_nodes> struct ChainState {
+template <uint64_t max_n_genes> struct ChainState {
 public:
+  /**
+   * \brief The maximal number of nodes in a mutation tree.
+   *
+   * The mutation tree has a node for every gene that may mutate, but also an
+   * additional node that represents the totally unmutated state.
+   */
+  static constexpr uint64_t max_n_nodes = max_n_genes + 1;
+
   /**
    * \brief Shorthand for the parent vector type.
    */
@@ -23,9 +30,9 @@ public:
   using uindex_node_t = typename ParentVectorImpl::uindex_node_t;
 
   ChainState() : mutation_tree(), beta(0.0) {}
-  ChainState(ChainState<max_n_nodes> const &other) = default;
-  ChainState<max_n_nodes> &
-  operator=(ChainState<max_n_nodes> const &other) = default;
+  ChainState(ChainState<max_n_genes> const &other) = default;
+  ChainState<max_n_genes> &
+  operator=(ChainState<max_n_genes> const &other) = default;
 
   /**
    * \brief Initialize a new, random chain state.
@@ -35,12 +42,12 @@ public:
    *
    * \tparam RNG The URNG to use for mutation tree sampling.
    * \param rng The URNG instance to use.
-   * \param n_nodes The number of free, movable nodes in the tree, i.e. genome
-   * positions. \param beta_prior A prior estimate of the beta error rate.
+   * \param n_genes The number of genes in the dataset.
+   * \param beta_prior A prior estimate of the beta error rate.
    */
   template <typename RNG>
-  ChainState(RNG &rng, uindex_node_t n_nodes, double beta_prior)
-      : mutation_tree(ParentVectorImpl::sample_random_tree(rng, n_nodes)),
+  ChainState(RNG &rng, uindex_node_t n_genes, double beta_prior)
+      : mutation_tree(ParentVectorImpl::sample_random_tree(rng, n_genes + 1)),
         beta(beta_prior) {}
 
   /**

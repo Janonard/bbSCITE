@@ -10,11 +10,12 @@ PV build_test_tree() {
    * ┌-┌r┐-┐
    * 0 1 2 3
    */
-  PV pv(4);
-  REQUIRE(pv[0] >= pv.get_n_nodes());
-  REQUIRE(pv[1] >= pv.get_n_nodes());
-  REQUIRE(pv[2] >= pv.get_n_nodes());
-  REQUIRE(pv[3] >= pv.get_n_nodes());
+  PV pv(5);
+  REQUIRE(pv[0] == pv.get_root());
+  REQUIRE(pv[1] == pv.get_root());
+  REQUIRE(pv[2] == pv.get_root());
+  REQUIRE(pv[3] == pv.get_root());
+  REQUIRE(pv[4] == pv.get_root());
 
   /*
    * Actual testing tree:
@@ -28,8 +29,9 @@ PV build_test_tree() {
 
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
-  REQUIRE(pv[2] >= pv.get_n_nodes());
-  REQUIRE(pv[3] >= pv.get_n_nodes());
+  REQUIRE(pv[2] == pv.get_root());
+  REQUIRE(pv[3] == pv.get_root());
+  REQUIRE(pv[4] == pv.get_root());
 
   return pv;
 }
@@ -56,11 +58,15 @@ TEST_CASE("ParentVector: Ancestry Queries", "[ParentVector]") {
   REQUIRE(!pv.is_descendant(3, 1));
   REQUIRE(!pv.is_descendant(3, 2));
   REQUIRE(pv.is_descendant(3, 3));
+
+  REQUIRE(!pv.is_descendant(4, 0));
+  REQUIRE(!pv.is_descendant(4, 1));
+  REQUIRE(!pv.is_descendant(4, 2));
+  REQUIRE(!pv.is_descendant(4, 3));
 }
 
 TEST_CASE("ParentVector::from_pruefer_code", "[ParentVector]") {
-  // Construct a simple, binary tree with three levels and 15 nodes (14 without
-  // root):
+  // Construct a simple, binary tree with three levels and 15 nodes:
   //
   //     ┌--14--┐
   //  ┌-12┐    ┌13-┐
@@ -83,8 +89,9 @@ TEST_CASE("ParentVector::from_pruefer_code", "[ParentVector]") {
   REQUIRE(pv[9] == 12);
   REQUIRE(pv[10] == 13);
   REQUIRE(pv[11] == 13);
-  REQUIRE(pv[12] >= 14);
-  REQUIRE(pv[13] >= 14);
+  REQUIRE(pv[12] == pv.get_root());
+  REQUIRE(pv[13] == pv.get_root());
+  REQUIRE(pv[14] == pv.get_root());
 }
 
 TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
@@ -102,8 +109,9 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
    */
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
-  REQUIRE(pv[2] >= pv.get_n_nodes());
-  REQUIRE(pv[3] >= pv.get_n_nodes());
+  REQUIRE(pv[2] == pv.get_root());
+  REQUIRE(pv[3] == pv.get_root());
+  REQUIRE(pv[4] == pv.get_root());
 
   // Swap of unrelated nodes
   pv.swap_nodes(2, 3);
@@ -117,8 +125,9 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
    */
   REQUIRE(pv[0] == 3);
   REQUIRE(pv[1] == 3);
-  REQUIRE(pv[2] >= pv.get_n_nodes());
-  REQUIRE(pv[3] >= pv.get_n_nodes());
+  REQUIRE(pv[2] == pv.get_root());
+  REQUIRE(pv[3] == pv.get_root());
+  REQUIRE(pv[4] == pv.get_root());
 
   // Swap of parent and child
   pv.swap_nodes(0, 3);
@@ -130,20 +139,22 @@ TEST_CASE("ParentVector::swap_nodes", "[ParentVector]") {
    * ┌0┐2
    * 3 1
    */
-  REQUIRE(pv[0] >= pv.get_n_nodes());
+  REQUIRE(pv[0] == pv.get_root());
   REQUIRE(pv[1] == 0);
-  REQUIRE(pv[2] >= pv.get_n_nodes());
+  REQUIRE(pv[2] == pv.get_root());
   REQUIRE(pv[3] == 0);
+  REQUIRE(pv[4] == pv.get_root());
 }
 
 TEST_CASE("ParentVector::calc_breadth_first_traversal", "[ParentVector]") {
   PV pv = build_test_tree();
 
   auto traversal = pv.calc_breadth_first_traversal();
-  REQUIRE(traversal[0] == 2);
-  REQUIRE(traversal[1] == 3);
-  REQUIRE(traversal[2] == 0);
-  REQUIRE(traversal[3] == 1);
+  REQUIRE(traversal[0] == 4);
+  REQUIRE(traversal[1] == 2);
+  REQUIRE(traversal[2] == 3);
+  REQUIRE(traversal[3] == 0);
+  REQUIRE(traversal[4] == 1);
 }
 
 TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
@@ -162,8 +173,9 @@ TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
   REQUIRE(pv[2] == 5);
   REQUIRE(pv[3] == 5);
   REQUIRE(pv[4] == 6);
-  REQUIRE(pv[5] >= 7);
-  REQUIRE(pv[6] >= 7);
+  REQUIRE(pv[5] == pv.get_root());
+  REQUIRE(pv[6] == pv.get_root());
+  REQUIRE(pv[7] == pv.get_root());
 
   /*
    * Resulting tree:
@@ -177,9 +189,10 @@ TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
 
   REQUIRE(pv[0] == 2);
   REQUIRE(pv[1] == 2);
-  REQUIRE(pv[2] >= 7);
+  REQUIRE(pv[2] == pv.get_root());
   REQUIRE(pv[3] == 5);
   REQUIRE(pv[4] == 6);
-  REQUIRE(pv[5] >= 7);
+  REQUIRE(pv[5] == pv.get_root());
   REQUIRE(pv[6] == 5);
+  REQUIRE(pv[7] == pv.get_root());
 }

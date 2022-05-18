@@ -11,15 +11,31 @@ namespace ffSCITE {
  * types of changes are exposed as public methods to ease testing, but users
  * should only use the \ref ChangeProposer::propose_change method.
  *
- * \tparam max_n_nodes The maximal number of genome positions in a mutation
- * tree. \tparam RNG The URNG to retrieve random numbers for the changes from.
+ * \tparam max_n_genes The maximal number of genes in the dataset.
+ * tree.
+ * \tparam RNG The URNG to retrieve random numbers for the changes from.
  */
-template <uint64_t max_n_nodes, typename RNG> class ChangeProposer {
+template <uint64_t max_n_genes, typename RNG> class ChangeProposer {
 public:
+  /**
+   * \brief Shorthand for the chain state type.
+   */
+  using ChainStateImpl = ChainState<max_n_genes>;
+
+  /**
+   * \brief Shorthand for the parent vector type.
+   */
+  using ParentVectorImpl = typename ChainStateImpl::ParentVectorImpl;
+
+  /**
+   * \brief Shorthand for the maximal number of nodes in the mutation tree.
+   */
+  static constexpr uint64_t max_n_nodes = ChainStateImpl::max_n_nodes;
+
   /**
    * \brief Shorthand for the mutation tree node index type.
    */
-  using uindex_node_t = typename ParentVector<max_n_nodes>::uindex_node_t;
+  using uindex_node_t = typename ChainStateImpl::uindex_node_t;
 
   /**
    * \brief Initialize the change proposer with user-defined parameters.
@@ -27,7 +43,7 @@ public:
    * The parameters `prob_beta_change`, `prob_prune_n_reattach`, and
    * `prob_swap_nodes` describe how often which types of changes are proposed.
    * The probability of the fourth move type, the swapping of two subtrees, is
-   * implied by the residual probabilty that the three parameters leave.
+   * implied by the residual probability that the three parameters leave.
    * Therefore, the sum of these three parameters has to be less than 1.0 and
    * this is asserted if the constructor is not compiled for a SYCL device.
    *
@@ -90,7 +106,7 @@ public:
   }
 
   /**
-   * \brief Sample two distinct nodes.
+   * \brief Sample two distinct non-root nodes.
    *
    * Let V be the set of nodes in the mutation tree and r be the root of the
    * tree. Then, this method can be viewed as a uniformly distributed random
@@ -100,12 +116,14 @@ public:
    *
    * \return Two random nodes
    */
-  std::array<uindex_node_t, 2> sample_nodepair(uindex_node_t n_nodes) {
+  std::array<uindex_node_t, 2> sample_nonroot_nodepair(uindex_node_t n_nodes) {
     std::array<uindex_node_t, 2> sampled_nodes;
+
+    // excluding n_nodes - 1, the root.
     sampled_nodes[0] =
-        std::uniform_int_distribution<uint64_t>(0, n_nodes - 1)(rng);
-    sampled_nodes[1] =
         std::uniform_int_distribution<uint64_t>(0, n_nodes - 2)(rng);
+    sampled_nodes[1] =
+        std::uniform_int_distribution<uint64_t>(0, n_nodes - 3)(rng);
     if (sampled_nodes[1] >= sampled_nodes[0]) {
       sampled_nodes[1]++;
     }
@@ -115,11 +133,11 @@ public:
   /**
    * \brief Sample from one of a node's descendants or nondescendants.
    *
-   * Let V be the set of nodes in the mutation tree, r be the root of the tree,
-   * and i the parameter node. Then, this method can be viewed as a uniformly
-   * distributed random variable that samples from {v ∈ (V \ {r}) | i \leadsto
-   * v} if `sample_descendants` is true, or from {v ∈ (V \ {r}) | i \not\leadsto
-   * v} if `sample_descendants` is false.
+   * Let V be the set of nodes in the mutation tree and i the parameter node.
+   * Then, this method can be viewed as a uniformly distributed random variable
+   * that samples from {v ∈ V | i \leadsto v} if `sample_descendants` is true,
+   * or from {v ∈ V | i \not\leadsto v} if `sample_descendants` is false. If
+   * `include_root` is false, the root is removed from the sampled set.
    *
    * \param ancestor_matrix The current ancestor matrix of the mutation tree.
    * \param node_i The node from who's descendants or nondescendants this method
@@ -131,7 +149,7 @@ public:
    */
   uindex_node_t sample_descendant_or_nondescendant(
       AncestorMatrix<max_n_nodes> const &ancestor_matrix, uindex_node_t node_i,
-      bool sample_descendant) {
+      bool sample_descendant, bool include_root) {
     std::array<bool, max_n_nodes> descendant =
         ancestor_matrix.get_descendants(node_i);
 
@@ -143,9 +161,11 @@ public:
       }
     }
 
-    // Count the (non)descendants
+    // Count the (non)descendants, excluding the root.
     uindex_node_t n_descendants = 0;
-    for (uindex_node_t i = 0; i < ancestor_matrix.get_n_nodes(); i++) {
+    uindex_node_t sum_upper_bound =
+        ancestor_matrix.get_n_nodes() - (include_root ? 0 : 1);
+    for (uindex_node_t i = 0; i < sum_upper_bound; i++) {
       if (descendant[i]) {
         n_descendants++;
       }
@@ -193,9 +213,10 @@ public:
   /**
    * \brief Propose a prune-and-reattach move.
    *
-   * This method picks a node in the mutation tree, detaches it from it's
-   * current parent and attaches to another node (which may not be a descendant
-   * of the moved node). Note that this modifies the referenced parent vector.
+   * This method picks a non-root node in the mutation tree, detaches it from
+   * it's current parent and attaches to another node (which may not be a
+   * descendant of the moved node). Note that this modifies the referenced
+   * parent vector.
    *
    * \param parent_vector The parent vector to modify.
    * \param ancestor_matrix The current ancestor matrix of the mutation tree.
@@ -206,11 +227,11 @@ public:
                      AncestorMatrix<max_n_nodes> const &ancestor_matrix) {
     // Pick a node to move.
     uindex_node_t node_to_move_i = std::uniform_int_distribution<uint64_t>(
-        0, parent_vector.get_n_nodes() - 1)(rng);
+        0, parent_vector.get_n_nodes() - 2)(rng);
 
-    // Sample one of the node's nondescendants.
+    // Sample one of the node's nondescendants, including the root.
     uindex_node_t new_parent_i = sample_descendant_or_nondescendant(
-        ancestor_matrix, node_to_move_i, false);
+        ancestor_matrix, node_to_move_i, false, true);
 
     // Move the node.
     parent_vector.move_subtree(node_to_move_i, new_parent_i);
@@ -221,8 +242,8 @@ public:
   /**
    * \brief Propose a swap-nodes move.
    *
-   * This method picks two nodes in the mutation tree and swaps their labels.
-   * The structure will remain the same, just two nodes are swapped.
+   * This method picks two non-root nodes in the mutation tree and swaps their
+   * labels. The structure will remain the same, just two nodes are swapped.
    *
    * \param parent_vector The parent vector to modify.
    * \return The indices of the swapped nodes.
@@ -230,7 +251,7 @@ public:
   std::array<uindex_node_t, 2>
   swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
     std::array<uindex_node_t, 2> nodes_to_swap =
-        sample_nodepair(parent_vector.get_n_nodes());
+        sample_nonroot_nodepair(parent_vector.get_n_nodes());
     parent_vector.swap_nodes(nodes_to_swap[0], nodes_to_swap[1]);
     return nodes_to_swap;
   }
@@ -238,11 +259,11 @@ public:
   /**
    * \brief Propose a swap-subtrees move.
    *
-   * This method picks two nodes in the mutation tree and swaps their complete
-   * subtrees. If these nodes are not ancestors of each other, this involves
-   * only swapping the parent vector entries. However, if of the sampled nodes i
-   * and j the node i is an ancestor of the node j, then the method samples one
-   * of the descendants j and attaches i to instead of the parent of j.
+   * This method picks two non-root nodes in the mutation tree and swaps their
+   * complete subtrees. If these nodes are not ancestors of each other, this
+   * involves only swapping the parent vector entries. However, if of the sampled
+   * nodes i and j the node i is an ancestor of the node j, then the method
+   * samples one of the descendants j and attaches i to instead of the parent of j.
    *
    * If the sampled nodes are related, the neighborhood correction factor is set
    * accordingly, otherwise it is set to 1.0.
@@ -258,7 +279,7 @@ public:
                 double &out_neighborhood_correction) {
 
     std::array<uindex_node_t, 2> nodes_to_swap =
-        sample_nodepair(parent_vector.get_n_nodes());
+        sample_nonroot_nodepair(parent_vector.get_n_nodes());
     uindex_node_t node_a_i = nodes_to_swap[0];
     uindex_node_t node_b_i = nodes_to_swap[1];
 
@@ -287,8 +308,8 @@ public:
           double(ancestor_matrix.get_n_descendants(node_b_i));
 
       // Sample one of node a's descendants.
-      uindex_node_t new_parent_i =
-          sample_descendant_or_nondescendant(ancestor_matrix, node_a_i, true);
+      uindex_node_t new_parent_i = sample_descendant_or_nondescendant(
+          ancestor_matrix, node_a_i, true, false);
 
       // Move node a next to node b.
       parent_vector.move_subtree(node_a_i, parent_vector[node_b_i]);
