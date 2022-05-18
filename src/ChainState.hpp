@@ -35,6 +35,14 @@ public:
   operator=(ChainState<max_n_genes> const &other) = default;
 
   /**
+   * \brief Initialize a chain state with the given mutation tree and beta error rate.
+   * 
+   * \param mutation_tree The mutation tree to use.
+   * \param beta The beta error rate to use.
+   */
+  ChainState(ParentVector<max_n_nodes> mutation_tree, double beta) : mutation_tree(mutation_tree), beta(beta) {}
+
+  /**
    * \brief Initialize a new, random chain state.
    *
    * The mutation tree will be sampled from a uniform distribution and the beta
