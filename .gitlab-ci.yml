@@ -20,7 +20,7 @@ build-tests:
     - main
   stage: build
   script:
-    - "ml devel/Boost devel/CMake compiler/GCC nalla_pcie intel/oneAPI"
+    - "ml devel/Boost devel/CMake nalla_pcie intel/oneAPI"
     - "mkdir build"
     - "cd build"
     - "cmake .."

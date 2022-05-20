@@ -35,12 +35,14 @@ public:
   operator=(ChainState<max_n_genes> const &other) = default;
 
   /**
-   * \brief Initialize a chain state with the given mutation tree and beta error rate.
-   * 
+   * \brief Initialize a chain state with the given mutation tree and beta error
+   * rate.
+   *
    * \param mutation_tree The mutation tree to use.
    * \param beta The beta error rate to use.
    */
-  ChainState(ParentVector<max_n_nodes> mutation_tree, double beta) : mutation_tree(mutation_tree), beta(beta) {}
+  ChainState(ParentVector<max_n_nodes> mutation_tree, double beta)
+      : mutation_tree(mutation_tree), beta(beta) {}
 
   /**
    * \brief Initialize a new, random chain state.
@@ -54,9 +56,12 @@ public:
    * \param beta_prior A prior estimate of the beta error rate.
    */
   template <typename RNG>
-  ChainState(RNG &rng, uindex_node_t n_genes, double beta_prior)
-      : mutation_tree(ParentVectorImpl::sample_random_tree(rng, n_genes + 1)),
-        beta(beta_prior) {}
+  static ChainState<max_n_genes> sample_random_state(RNG &rng, uindex_node_t n_genes,
+                                              double beta_prior) {
+    ParentVectorImpl mutation_tree =
+        ParentVectorImpl::sample_random_tree(rng, n_genes + 1);
+    return ChainState<max_n_genes>(mutation_tree, beta_prior);
+  }
 
   /**
    * \brief The (proposed) mutation tree.

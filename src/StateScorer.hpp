@@ -86,15 +86,17 @@ public:
    * positive)
    * \param prior_beta The initial assumption of the beta error rate
    * (false negative)
+   * \param prior_sd The assumed standard derivation of the beta error rate
    * \param n_cells The number of cells covered by the mutation
    * data matrix.
    * \param n_genes The number of genes covered by the mutation
    * data matrix.
    */
-  StateScorer(double prior_alpha, double prior_beta, uindex_cell_t n_cells,
-              uindex_node_t n_genes, MutationDataMatrix data)
-      : log_error_probabilities(), n_cells(n_cells), n_genes(n_genes),
-        data(data) {
+  StateScorer(double prior_alpha, double prior_beta, double prior_beta_sd,
+              uindex_cell_t n_cells, uindex_node_t n_genes,
+              MutationDataMatrix data)
+      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), n_cells(n_cells),
+        n_genes(n_genes), data(data) {
     // mutation not observed, not present
     log_error_probabilities[0][0] = std::log(1.0 - prior_alpha);
     // mutation observed, not present
@@ -107,6 +109,11 @@ public:
     log_error_probabilities[1][1] = std::log(1.0 - prior_beta);
     // missing data, mutation present
     log_error_probabilities[2][1] = std::log(1.0);
+
+    bpriora = ((1 - prior_beta) * std::pow(prior_beta, 2) /
+               std::pow(prior_beta_sd, 2)) -
+              prior_beta;
+    bpriorb = bpriora * ((1 / prior_beta) - 1);
   }
 
   /**
@@ -119,7 +126,7 @@ public:
    * \return The likelihood that the state represents the true mutation history
    * of the sequenced cells.
    */
-  double score_state(ChainStateImpl const &state) {
+  double logscore_state(ChainStateImpl const &state) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(state.mutation_tree.get_n_nodes() == n_genes + 1);
 #endif
@@ -135,7 +142,23 @@ public:
       occurrences += std::get<1>(best_attachment);
     }
 
-    return std::exp(get_logscore_of_occurrences(occurrences));
+    double tree_score = get_logscore_of_occurrences(occurrences);
+    double beta_score = logscore_beta(state.beta);
+    return tree_score + beta_score;
+  }
+
+  /**
+   * \brief Compute the likelihood of the beta error rate being correct.
+   *
+   * This is based on the a-priori assumption of the beta error rate and it's
+   * assumed standard derivation.
+   *
+   * \param beta The beta error rate to score.
+   */
+  double logscore_beta(double beta) {
+    return std::log(std::tgamma(bpriora + bpriorb)) +
+           (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
+           std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
   }
 
   /**
@@ -197,6 +220,7 @@ public:
 
 private:
   double log_error_probabilities[3][2];
+  double bpriora, bpriorb;
   uindex_node_t n_cells, n_genes;
   StaticMatrix<ac_int<2, false>, max_n_cells, max_n_genes> data;
 };

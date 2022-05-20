@@ -327,7 +327,7 @@ public:
    * \param out_neighborhood_correction Output: The neighborhood correction
    * factor.
    */
-  void propose_change(ChainState<max_n_nodes> &state,
+  void propose_change(ChainState<max_n_genes> &state,
                       double &out_neighborhood_correction) {
     AncestorMatrix<max_n_nodes> ancestor_matrix(state.mutation_tree);
     out_neighborhood_correction = 1.0;

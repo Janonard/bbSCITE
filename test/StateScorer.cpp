@@ -11,7 +11,7 @@ using ChainStateImpl = ScorerImpl::ChainStateImpl;
 using MutationDataMatrix = ScorerImpl::MutationDataMatrix;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 
-constexpr double alpha = 0.01, beta = 0.01;
+constexpr double alpha = 6.04e-5, beta = 0.4309, prior_sd = 0.1;
 
 struct StateScorerScenario {
   static StateScorerScenario build_scenario() {
@@ -49,7 +49,7 @@ struct StateScorerScenario {
     data[{3, 2}] = 0;
     data[{3, 3}] = 0;
 
-    ScorerImpl scorer(alpha, beta, n_cells, n_genes, data);
+    ScorerImpl scorer(alpha, beta, prior_sd, n_cells, n_genes, data);
 
     return StateScorerScenario{scorer, state};
   }
@@ -162,7 +162,8 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
 TEST_CASE("StateScorer::score_state", "[StateScorer]") {
   auto scenario = StateScorerScenario::build_scenario();
 
-  double score = scenario.scorer.score_state(scenario.state);
-  double true_score = std::pow(1.0 - alpha, 9.0) * std::pow(1.0 - beta, 3.0);
-  REQUIRE(score == true_score);
+  double score = scenario.scorer.logscore_state(scenario.state);
+  REQUIRE(std::isfinite(score));
+  bool is_not_nan = std::numeric_limits<double>::is_iec559 ? (score == score) : !std::isnan(score);
+  REQUIRE(is_not_nan); // NaN test
 }
