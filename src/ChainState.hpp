@@ -24,10 +24,6 @@ public:
    * \brief Shorthand for the parent vector type.
    */
   using ParentVectorImpl = ParentVector<max_n_nodes>;
-  /**
-   * \brief Shorthand for the parent vector's node index type.
-   */
-  using uindex_node_t = typename ParentVectorImpl::uindex_node_t;
 
   ChainState() : mutation_tree(), beta(0.0) {}
   ChainState(ChainState<max_n_genes> const &other) = default;
@@ -56,8 +52,8 @@ public:
    * \param beta_prior A prior estimate of the beta error rate.
    */
   template <typename RNG>
-  static ChainState<max_n_genes> sample_random_state(RNG &rng, uindex_node_t n_genes,
-                                              double beta_prior) {
+  static ChainState<max_n_genes> sample_random_state(RNG &rng, uint64_t n_genes,
+                                                     double beta_prior) {
     ParentVectorImpl mutation_tree =
         ParentVectorImpl::sample_random_tree(rng, n_genes + 1);
     return ChainState<max_n_genes>(mutation_tree, beta_prior);

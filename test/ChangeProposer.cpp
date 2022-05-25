@@ -13,7 +13,6 @@ constexpr uint64_t n_genes = 7;
 constexpr uint64_t n_nodes = 8;
 
 using ProposerImpl = ChangeProposer<n_genes, std::mt19937>;
-using uindex_node_t = ProposerImpl::uindex_node_t;
 
 ProposerImpl init_proposer() {
   std::random_device seeder;
@@ -29,7 +28,7 @@ ProposerImpl init_proposer() {
 TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
   auto proposer = init_proposer();
 
-  std::map<std::array<uindex_node_t, 2>, unsigned int> sampled_nodes;
+  std::map<std::array<uint64_t, 2>, unsigned int> sampled_nodes;
 
   for (uint64_t i = 0; i < n_iterations; i++) {
     auto pair = proposer.sample_nonroot_nodepair(n_nodes);
@@ -50,13 +49,14 @@ TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
 
   // We want to test that the samples are uniformly distributed among all
   // possible node pairs, i.e. subsets of the nodesets with a cardinality of
-  // two. We therefore view `sample_nonroot_nodepair` as a random variable that samples
-  // from all those subsets. Our null-hypothesis is that this random variable is
-  // uniformly distributed and we test this hypothesis with a chi-squared-test.
+  // two. We therefore view `sample_nonroot_nodepair` as a random variable that
+  // samples from all those subsets. Our null-hypothesis is that this random
+  // variable is uniformly distributed and we test this hypothesis with a
+  // chi-squared-test.
   double t = 0;
   double n_pairs = boost::math::binomial_coefficient<double>(n_nodes - 1, 2);
-  for (uindex_node_t i = 0; i < n_nodes - 1; i++) {
-    for (uindex_node_t j = i + 1; j < n_nodes - 1; j++) {
+  for (uint64_t i = 0; i < n_nodes - 1; i++) {
+    for (uint64_t j = i + 1; j < n_nodes - 1; j++) {
       double n_occurrences;
       if (sampled_nodes.contains({i, j})) {
         n_occurrences = sampled_nodes[{i, j}];

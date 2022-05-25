@@ -2,6 +2,7 @@
 #include "AncestorMatrix.hpp"
 #include "ChainState.hpp"
 #include "StaticMatrix.hpp"
+#include <sycl/ext/intel/ac_types/ac_int.hpp>
 
 namespace ffSCITE {
 /**
@@ -33,30 +34,6 @@ public:
    * \brief Shorthand for the ancestor matrix class in use.
    */
   using AncestorMatrixImpl = AncestorMatrix<max_n_genes + 1>;
-  /**
-   * \brief Shorthand for the node index type in use.
-   */
-  using uindex_node_t = typename ChainStateImpl::uindex_node_t;
-
-  /**
-   * \brief Width of the indices to address cells in the mutation data matrix.
-   */
-  static constexpr uint64_t n_cells_bits = std::bit_width(max_n_cells);
-  /**
-   * \brief Index type to address cells in the mutation data matrix.
-   */
-  using uindex_cell_t = ac_int<n_cells_bits, false>;
-
-  /**
-   * \brief Width of the indices to address combined cells and genes.
-   */
-  static constexpr uint64_t n_data_entry_bits =
-      std::bit_width(max_n_cells * max_n_genes);
-
-  /**
-   * \brief Index type to address combined cells and genes.
-   */
-  using uindex_data_entry_t = ac_int<n_data_entry_bits, false>;
 
   /**
    * \brief Data type of the entries in the mutation data matrix.
@@ -74,7 +51,7 @@ public:
   /**
    * \brief Shorthand for the occurrence matrix type.
    */
-  using OccurrenceMatrix = StaticMatrix<uindex_data_entry_t, 3, 2>;
+  using OccurrenceMatrix = StaticMatrix<uint64_t, 3, 2>;
 
   /**
    * \brief Initialize a new state scorer
@@ -93,8 +70,7 @@ public:
    * data matrix.
    */
   StateScorer(double prior_alpha, double prior_beta, double prior_beta_sd,
-              uindex_cell_t n_cells, uindex_node_t n_genes,
-              MutationDataMatrix data)
+              uint64_t n_cells, uint64_t n_genes, MutationDataMatrix data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), n_cells(n_cells),
         n_genes(n_genes), data(data) {
     // mutation not observed, not present
@@ -137,7 +113,7 @@ public:
     AncestorMatrixImpl ancestor_matrix(state.mutation_tree);
     OccurrenceMatrix occurrences(0);
 
-    for (uindex_cell_t cell_i = 0; cell_i < n_cells; cell_i++) {
+    for (uint64_t cell_i = 0; cell_i < n_cells; cell_i++) {
       auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
       occurrences += std::get<1>(best_attachment);
     }
@@ -171,17 +147,17 @@ public:
    * occurrences of the different likelihood types, and the log-likelihood that
    * the return attachment point is correct.
    */
-  std::tuple<uindex_node_t, OccurrenceMatrix, double>
-  get_best_attachment(uindex_cell_t cell_i, AncestorMatrixImpl mutation_tree) {
-    uindex_node_t best_attachment = mutation_tree.get_root();
+  std::tuple<uint64_t, OccurrenceMatrix, double>
+  get_best_attachment(uint64_t cell_i, AncestorMatrixImpl mutation_tree) {
+    uint64_t best_attachment = mutation_tree.get_root();
     OccurrenceMatrix best_attachment_occurrences(0);
     double best_attachment_logscore = -std::numeric_limits<double>::infinity();
 
-    for (uindex_node_t attachment_node_i = 0;
+    for (uint64_t attachment_node_i = 0;
          attachment_node_i < mutation_tree.get_n_nodes(); attachment_node_i++) {
       OccurrenceMatrix occurrences(0);
 
-      for (uindex_node_t gene_i = 0; gene_i < n_genes; gene_i++) {
+      for (uint64_t gene_i = 0; gene_i < n_genes; gene_i++) {
         uint64_t posterior = data[{cell_i, gene_i}];
         uint64_t prior =
             mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
@@ -221,7 +197,7 @@ public:
 private:
   double log_error_probabilities[3][2];
   double bpriora, bpriorb;
-  uindex_node_t n_cells, n_genes;
+  uint64_t n_cells, n_genes;
   StaticMatrix<ac_int<2, false>, max_n_cells, max_n_genes> data;
 };
 } // namespace ffSCITE
