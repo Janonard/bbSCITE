@@ -33,11 +33,6 @@ public:
   static constexpr uint64_t max_n_nodes = ChainStateImpl::max_n_nodes;
 
   /**
-   * \brief Shorthand for the mutation tree node index type.
-   */
-  using uindex_node_t = typename ChainStateImpl::uindex_node_t;
-
-  /**
    * \brief Initialize the change proposer with user-defined parameters.
    *
    * The parameters `prob_beta_change`, `prob_prune_n_reattach`, and
@@ -116,8 +111,8 @@ public:
    *
    * \return Two random nodes
    */
-  std::array<uindex_node_t, 2> sample_nonroot_nodepair(uindex_node_t n_nodes) {
-    std::array<uindex_node_t, 2> sampled_nodes;
+  std::array<uint64_t, 2> sample_nonroot_nodepair(uint64_t n_nodes) {
+    std::array<uint64_t, 2> sampled_nodes;
 
     // excluding n_nodes - 1, the root.
     sampled_nodes[0] =
@@ -147,8 +142,8 @@ public:
    * nondescendants.
    * \return One of the nodes descendants or nondescendants.
    */
-  uindex_node_t sample_descendant_or_nondescendant(
-      AncestorMatrix<max_n_nodes> const &ancestor_matrix, uindex_node_t node_i,
+  uint64_t sample_descendant_or_nondescendant(
+      AncestorMatrix<max_n_nodes> const &ancestor_matrix, uint64_t node_i,
       bool sample_descendant, bool include_root) {
     std::array<bool, max_n_nodes> descendant =
         ancestor_matrix.get_descendants(node_i);
@@ -156,16 +151,16 @@ public:
     // If we have to sample a nondescendant, we invert the bitvector and
     // continue as if we were to sample a descendant.
     if (!sample_descendant) {
-      for (uindex_node_t i = 0; i < max_n_nodes; i++) {
+      for (uint64_t i = 0; i < max_n_nodes; i++) {
         descendant[i] = !descendant[i];
       }
     }
 
     // Count the (non)descendants, excluding the root.
-    uindex_node_t n_descendants = 0;
-    uindex_node_t sum_upper_bound =
+    uint64_t n_descendants = 0;
+    uint64_t sum_upper_bound =
         ancestor_matrix.get_n_nodes() - (include_root ? 0 : 1);
-    for (uindex_node_t i = 0; i < sum_upper_bound; i++) {
+    for (uint64_t i = 0; i < sum_upper_bound; i++) {
       if (descendant[i]) {
         n_descendants++;
       }
@@ -173,13 +168,13 @@ public:
 
     // Sample the occurrence of the (non)descendant to pick. The resulting node
     // will be the `sampled_occurrence_i`th (non)descendant.
-    uindex_node_t sampled_occurrence_i =
+    uint64_t sampled_occurrence_i =
         std::uniform_int_distribution<uint64_t>(0, n_descendants - 1)(rng);
 
     // Walk through the (non)descendant bitvector and pick the correct node
     // index.
-    uindex_node_t sampled_node_i = 0;
-    for (uindex_node_t i = 0; i < ancestor_matrix.get_n_nodes(); i++) {
+    uint64_t sampled_node_i = 0;
+    for (uint64_t i = 0; i < ancestor_matrix.get_n_nodes(); i++) {
       if (descendant[i]) {
         if (sampled_occurrence_i == 0) {
           sampled_node_i = i;
@@ -222,15 +217,15 @@ public:
    * \param ancestor_matrix The current ancestor matrix of the mutation tree.
    * \return The index of the the moved node.
    */
-  uindex_node_t
+  uint64_t
   prune_and_reattach(ParentVector<max_n_nodes> &parent_vector,
                      AncestorMatrix<max_n_nodes> const &ancestor_matrix) {
     // Pick a node to move.
-    uindex_node_t node_to_move_i = std::uniform_int_distribution<uint64_t>(
+    uint64_t node_to_move_i = std::uniform_int_distribution<uint64_t>(
         0, parent_vector.get_n_nodes() - 2)(rng);
 
     // Sample one of the node's nondescendants, including the root.
-    uindex_node_t new_parent_i = sample_descendant_or_nondescendant(
+    uint64_t new_parent_i = sample_descendant_or_nondescendant(
         ancestor_matrix, node_to_move_i, false, true);
 
     // Move the node.
@@ -248,9 +243,8 @@ public:
    * \param parent_vector The parent vector to modify.
    * \return The indices of the swapped nodes.
    */
-  std::array<uindex_node_t, 2>
-  swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
-    std::array<uindex_node_t, 2> nodes_to_swap =
+  std::array<uint64_t, 2> swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
+    std::array<uint64_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(parent_vector.get_n_nodes());
     parent_vector.swap_nodes(nodes_to_swap[0], nodes_to_swap[1]);
     return nodes_to_swap;
@@ -261,9 +255,10 @@ public:
    *
    * This method picks two non-root nodes in the mutation tree and swaps their
    * complete subtrees. If these nodes are not ancestors of each other, this
-   * involves only swapping the parent vector entries. However, if of the sampled
-   * nodes i and j the node i is an ancestor of the node j, then the method
-   * samples one of the descendants j and attaches i to instead of the parent of j.
+   * involves only swapping the parent vector entries. However, if of the
+   * sampled nodes i and j the node i is an ancestor of the node j, then the
+   * method samples one of the descendants j and attaches i to instead of the
+   * parent of j.
    *
    * If the sampled nodes are related, the neighborhood correction factor is set
    * accordingly, otherwise it is set to 1.0.
@@ -273,15 +268,15 @@ public:
    * \param out_neighborhood_correction Output: Neighborhood correction factor.
    * \return The two swapped/moved nodes.
    */
-  std::array<uindex_node_t, 2>
+  std::array<uint64_t, 2>
   swap_subtrees(ParentVector<max_n_nodes> &parent_vector,
                 AncestorMatrix<max_n_nodes> const &ancestor_matrix,
                 double &out_neighborhood_correction) {
 
-    std::array<uindex_node_t, 2> nodes_to_swap =
+    std::array<uint64_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(parent_vector.get_n_nodes());
-    uindex_node_t node_a_i = nodes_to_swap[0];
-    uindex_node_t node_b_i = nodes_to_swap[1];
+    uint64_t node_a_i = nodes_to_swap[0];
+    uint64_t node_b_i = nodes_to_swap[1];
 
     bool distinct_lineages =
         !(ancestor_matrix.is_ancestor(node_a_i, node_b_i) ||
@@ -308,7 +303,7 @@ public:
           double(ancestor_matrix.get_n_descendants(node_b_i));
 
       // Sample one of node a's descendants.
-      uindex_node_t new_parent_i = sample_descendant_or_nondescendant(
+      uint64_t new_parent_i = sample_descendant_or_nondescendant(
           ancestor_matrix, node_a_i, true, false);
 
       // Move node a next to node b.

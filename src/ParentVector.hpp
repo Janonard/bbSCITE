@@ -1,9 +1,8 @@
 #pragma once
 #include <array>
-#include <bit>
+#include <cassert>
 #include <cstdint>
 #include <random>
-#include <sycl/ext/intel/ac_types/ac_int.hpp>
 #include <unordered_map>
 #include <vector>
 
@@ -30,9 +29,6 @@ namespace ffSCITE {
  */
 template <uint64_t max_n_nodes> class ParentVector {
 public:
-  static constexpr uint64_t n_node_bits = std::bit_width(max_n_nodes);
-  using uindex_node_t = ac_int<n_node_bits, false>;
-
   /**
    * \brief Default constructor
    *
@@ -40,7 +36,7 @@ public:
    * connected directly to the root.
    */
   ParentVector() : parent(), n_nodes(max_n_nodes) {
-    for (uindex_node_t i = 0; i < max_n_nodes; i++) {
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
       parent[i] = get_root();
     }
   }
@@ -54,12 +50,12 @@ public:
    *
    * \param n_nodes The number of nodes in the tree.
    */
-  ParentVector(uindex_node_t n_nodes) : parent(), n_nodes(n_nodes) {
+  ParentVector(uint64_t n_nodes) : parent(), n_nodes(n_nodes) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
 
-    for (uindex_node_t i = 0; i < max_n_nodes; i++) {
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
       parent[i] = get_root();
     }
   }
@@ -71,7 +67,7 @@ public:
    *
    * \return The node index of the root.
    */
-  uindex_node_t get_root() const { return n_nodes - 1; }
+  uint64_t get_root() const { return n_nodes - 1; }
 
   /**
    * \brief Construct a parent vector from a tree's Prüfer Code.
@@ -86,7 +82,7 @@ public:
    * \return The tree represented by the Prüfer Code.
    */
   static ParentVector<max_n_nodes>
-  from_pruefer_code(std::vector<uindex_node_t> const &pruefer_code) {
+  from_pruefer_code(std::vector<uint64_t> const &pruefer_code) {
     // Algorithm adapted from
     // https://en.wikipedia.org/wiki/Pr%C3%BCfer_sequence, 09th of May 2022,
     // 16:07, since the original reference implementation is sketchy.
@@ -94,20 +90,20 @@ public:
     assert(pruefer_code.size() <= max_n_nodes - 2);
 #endif
     ParentVector<max_n_nodes> pv(pruefer_code.size() + 2);
-    uindex_node_t n_nodes = pv.n_nodes;
+    uint64_t n_nodes = pv.n_nodes;
 
     // Compute the (resulting) degrees of every node.
-    std::array<uindex_node_t, max_n_nodes> degree;
-    for (uindex_node_t i = 0; i < max_n_nodes; i++) {
+    std::array<uint64_t, max_n_nodes> degree;
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
       degree[i] = 1;
     }
-    for (uindex_node_t i = 0; i < pruefer_code.size(); i++) {
+    for (uint64_t i = 0; i < pruefer_code.size(); i++) {
       degree[pruefer_code[i]]++;
     }
 
     // Build the tree.
-    for (uindex_node_t i = 0; i < pruefer_code.size(); i++) {
-      for (uindex_node_t j = 0; j < n_nodes; j++) {
+    for (uint64_t i = 0; i < pruefer_code.size(); i++) {
+      for (uint64_t j = 0; j < n_nodes; j++) {
         if (degree[j] == 1) {
           pv.parent[j] = pruefer_code[i];
           degree[pruefer_code[i]]--;
@@ -119,8 +115,8 @@ public:
 
     // Construct the last edge. v is the root of tree as it's new parent has
     // never been assigned.
-    uindex_node_t u = 0;
-    for (uindex_node_t i = 0; i < n_nodes; i++) {
+    uint64_t u = 0;
+    for (uint64_t i = 0; i < n_nodes; i++) {
       if (degree[i] == 1) {
         pv.parent[i] = pv.get_root();
         break;
@@ -144,7 +140,7 @@ public:
    */
   template <typename RNG>
   static ParentVector<max_n_nodes> sample_random_tree(RNG &rng,
-                                                      uindex_node_t n_nodes) {
+                                                      uint64_t n_nodes) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
@@ -153,24 +149,22 @@ public:
                                                                   n_nodes - 1);
 
     // Generate a pruefer code for the tree.
-    std::vector<uindex_node_t> pruefer_code;
-    for (uindex_node_t i = 0; i < n_nodes - 2; i++) {
+    std::vector<uint64_t> pruefer_code;
+    for (uint64_t i = 0; i < n_nodes - 2; i++) {
       pruefer_code.push_back(int_distribution(rng));
     }
 
     return from_pruefer_code(pruefer_code);
   }
 
-  uindex_node_t operator[](uindex_node_t node_i) const {
-    return parent[node_i];
-  }
+  uint64_t operator[](uint64_t node_i) const { return parent[node_i]; }
 
   /**
    * \brief Get the number of nodes in the tree.
    *
    * \return The number of nodes in the tree.
    */
-  uindex_node_t get_n_nodes() const { return n_nodes; }
+  uint64_t get_n_nodes() const { return n_nodes; }
 
   /**
    * \brief Check whether node a is a descendant of node b.
@@ -183,7 +177,7 @@ public:
    * \param node_b_i The index of node b.
    * \return true iff node a is a descendant of node b.
    */
-  bool is_descendant(uindex_node_t node_a_i, uindex_node_t node_b_i) const {
+  bool is_descendant(uint64_t node_a_i, uint64_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < n_nodes && node_b_i < n_nodes);
 #endif
@@ -209,7 +203,7 @@ public:
    * \param node_a_i One of the nodes to swap.
    * \param node_b_i The other node to swap.
    */
-  void swap_nodes(uindex_node_t node_a_i, uindex_node_t node_b_i) {
+  void swap_nodes(uint64_t node_a_i, uint64_t node_b_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i != get_root() && node_b_i != get_root());
 #endif
@@ -218,7 +212,7 @@ public:
       return;
     }
 
-    for (uindex_node_t i = 0; i < n_nodes; i++) {
+    for (uint64_t i = 0; i < n_nodes; i++) {
       if (i != node_a_i && i != node_b_i) {
         if (parent[i] == node_a_i) {
           parent[i] = node_b_i;
@@ -252,7 +246,7 @@ public:
    * \param node_i The index of the node to move.
    * \param new_parent_i The index of the node's new parent node.
    */
-  void move_subtree(uindex_node_t node_i, uindex_node_t new_parent_i) {
+  void move_subtree(uint64_t node_i, uint64_t new_parent_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(!is_descendant(new_parent_i, node_i) && node_i != get_root());
 #endif
@@ -270,15 +264,15 @@ public:
    * \return An array that contains all nodes of the tree in breadth-first
    * order.
    */
-  std::array<uindex_node_t, max_n_nodes> calc_breadth_first_traversal() const {
-    std::array<uindex_node_t, max_n_nodes> traversal;
+  std::array<uint64_t, max_n_nodes> calc_breadth_first_traversal() const {
+    std::array<uint64_t, max_n_nodes> traversal;
     traversal[0] = get_root();
-    uindex_node_t back_of_buffer = 1;
+    uint64_t back_of_buffer = 1;
 
     // Follow the node's edges to fill the traversal.
-    for (uindex_node_t traversal_i = 0; traversal_i < n_nodes; traversal_i++) {
+    for (uint64_t traversal_i = 0; traversal_i < n_nodes; traversal_i++) {
       // don't look up the root's parent, it is already included in the walk.
-      for (uindex_node_t j = 0; j < n_nodes - 1; j++) {
+      for (uint64_t j = 0; j < n_nodes - 1; j++) {
         if (parent[j] == traversal[traversal_i]) {
           traversal[back_of_buffer] = j;
           back_of_buffer++;
@@ -302,7 +296,7 @@ public:
    * \param node_a_i The index of one of the nodes to swap.
    * \param node_b_i The index of the other node to swap.
    */
-  void swap_subtrees(uindex_node_t node_a_i, uindex_node_t node_b_i) {
+  void swap_subtrees(uint64_t node_a_i, uint64_t node_b_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i != get_root() && node_b_i != get_root() &&
            !is_descendant(node_a_i, node_b_i) &&
@@ -312,7 +306,7 @@ public:
   }
 
 private:
-  std::array<uindex_node_t, max_n_nodes> parent;
-  uindex_node_t n_nodes;
+  std::array<uint64_t, max_n_nodes> parent;
+  uint64_t n_nodes;
 };
 } // namespace ffSCITE

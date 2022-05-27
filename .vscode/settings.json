@@ -69,7 +69,13 @@
         "variant": "cpp",
         "strstream": "cpp",
         "complex": "cpp",
-        "cfenv": "cpp"
+        "cfenv": "cpp",
+        "bit": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp"
     },
     "editor.tabSize": 2
 }

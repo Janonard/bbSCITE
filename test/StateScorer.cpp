@@ -1,10 +1,9 @@
 #include "StateScorer.hpp"
 #include <catch2/catch_all.hpp>
 
-constexpr uint64_t n_cells = 4;
+constexpr uint64_t n_cells = 6;
 constexpr uint64_t n_genes = 4;
 using ScorerImpl = ffSCITE::StateScorer<n_cells, n_genes>;
-using uindex_node_t = ScorerImpl::uindex_node_t;
 using ParentVectorImpl = ScorerImpl::ParentVectorImpl;
 using AncestorMatrixImpl = ScorerImpl::AncestorMatrixImpl;
 using ChainStateImpl = ScorerImpl::ChainStateImpl;
@@ -48,6 +47,18 @@ struct StateScorerScenario {
     data[{3, 1}] = 2;
     data[{3, 2}] = 0;
     data[{3, 3}] = 0;
+
+    // cell 4, attached to node 0, with false negatives
+    data[{4, 0}] = 1;
+    data[{4, 1}] = 0;
+    data[{4, 2}] = 0; // Error in this position
+    data[{4, 3}] = 0;
+
+    // cell 5, attached to node 3, with false positive
+    data[{5, 0}] = 1; // Error in this position
+    data[{5, 1}] = 0;
+    data[{5, 2}] = 0;
+    data[{5, 3}] = 1;
 
     ScorerImpl scorer(alpha, beta, prior_sd, n_cells, n_genes, data);
 
@@ -98,9 +109,9 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
 
   // Node 0
 
-  std::tuple<uindex_node_t, OccurrenceMatrix, double> attachment =
+  std::tuple<uint64_t, OccurrenceMatrix, double> attachment =
       scenario.scorer.get_best_attachment(0, am);
-  REQUIRE(std::get<0>(attachment) == 4);
+  REQUIRE(int(std::get<0>(attachment)) == 4);
 
   OccurrenceMatrix occurrences = std::get<1>(attachment);
   REQUIRE(int(occurrences[{0, 0}]) == 4);
@@ -115,7 +126,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   // Node 1
 
   attachment = scenario.scorer.get_best_attachment(1, am);
-  REQUIRE(std::get<0>(attachment) == 1);
+  REQUIRE(int(std::get<0>(attachment)) == 1);
 
   occurrences = std::get<1>(attachment);
   REQUIRE(int(occurrences[{0, 0}]) == 2);
@@ -131,7 +142,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   // Node 2
 
   attachment = scenario.scorer.get_best_attachment(2, am);
-  REQUIRE(std::get<0>(attachment) == 1);
+  REQUIRE(int(std::get<0>(attachment)) == 1);
 
   occurrences = std::get<1>(attachment);
   REQUIRE(int(occurrences[{0, 0}]) == 1);
@@ -146,7 +157,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   // Node 3
 
   attachment = scenario.scorer.get_best_attachment(3, am);
-  REQUIRE(std::get<0>(attachment) == 4);
+  REQUIRE(int(std::get<0>(attachment)) == 4);
 
   occurrences = std::get<1>(attachment);
   REQUIRE(int(occurrences[{0, 0}]) == 2);
@@ -157,13 +168,47 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{2, 1}]) == 0);
 
   REQUIRE(std::get<2>(attachment) == 2 * std::log(1 - alpha));
+
+  // Node 4
+
+  attachment = scenario.scorer.get_best_attachment(4, am);
+  REQUIRE(int(std::get<0>(attachment)) == 0);
+
+  occurrences = std::get<1>(attachment);
+  REQUIRE(int(occurrences[{0, 0}]) == 2);
+  REQUIRE(int(occurrences[{1, 0}]) == 0);
+  REQUIRE(int(occurrences[{2, 0}]) == 0);
+  REQUIRE(int(occurrences[{0, 1}]) == 1);
+  REQUIRE(int(occurrences[{1, 1}]) == 1);
+  REQUIRE(int(occurrences[{2, 1}]) == 0);
+
+  REQUIRE(std::get<2>(attachment) ==
+          2 * std::log(1 - alpha) + std::log(beta) + std::log(1 - beta));
+
+  // Node 5
+
+  attachment = scenario.scorer.get_best_attachment(5, am);
+  REQUIRE(int(std::get<0>(attachment)) == 3);
+
+  occurrences = std::get<1>(attachment);
+  REQUIRE(int(occurrences[{0, 0}]) == 2);
+  REQUIRE(int(occurrences[{1, 0}]) == 1);
+  REQUIRE(int(occurrences[{2, 0}]) == 0);
+  REQUIRE(int(occurrences[{0, 1}]) == 0);
+  REQUIRE(int(occurrences[{1, 1}]) == 1);
+  REQUIRE(int(occurrences[{2, 1}]) == 0);
+
+  REQUIRE(std::get<2>(attachment) ==
+          2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta));
 }
 
 TEST_CASE("StateScorer::score_state", "[StateScorer]") {
   auto scenario = StateScorerScenario::build_scenario();
 
   double score = scenario.scorer.logscore_state(scenario.state);
-  REQUIRE(std::isfinite(score));
-  bool is_not_nan = std::numeric_limits<double>::is_iec559 ? (score == score) : !std::isnan(score);
-  REQUIRE(is_not_nan); // NaN test
+  double beta_score = scenario.scorer.logscore_beta(scenario.state.beta);
+
+  double true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
+                      std::log(beta) + std::log(alpha);
+  REQUIRE(score - beta_score == true_score);
 }
