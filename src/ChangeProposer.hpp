@@ -1,7 +1,7 @@
 #pragma once
 #include "AncestorMatrix.hpp"
 #include "ChainState.hpp"
-#include <random>
+#include <oneapi/dpl/random>
 
 namespace ffSCITE {
 /**
@@ -71,6 +71,10 @@ public:
       : rng(rng), prob_beta_change(0.55), prob_prune_n_reattach(0.5),
         prob_swap_nodes(0.5), beta_jump_sd(0.1) {}
 
+  RNG &get_rng() {
+    return rng;
+  }
+
   /**
    * \brief The different move types that the proposer may propose.
    */
@@ -87,7 +91,7 @@ public:
    * \return A random move.
    */
   MoveType sample_move() {
-    double change_type_draw = std::uniform_real_distribution(0.0, 1.0)(rng);
+    double change_type_draw = oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
       return MoveType::ChangeBeta;
     } else if (change_type_draw <= prob_beta_change + prob_prune_n_reattach) {
@@ -116,9 +120,9 @@ public:
 
     // excluding n_nodes - 1, the root.
     sampled_nodes[0] =
-        std::uniform_int_distribution<uint64_t>(0, n_nodes - 2)(rng);
+        oneapi::dpl::uniform_int_distribution<uint64_t>(0, n_nodes - 2)(rng);
     sampled_nodes[1] =
-        std::uniform_int_distribution<uint64_t>(0, n_nodes - 3)(rng);
+        oneapi::dpl::uniform_int_distribution<uint64_t>(0, n_nodes - 3)(rng);
     if (sampled_nodes[1] >= sampled_nodes[0]) {
       sampled_nodes[1]++;
     }
@@ -169,7 +173,7 @@ public:
     // Sample the occurrence of the (non)descendant to pick. The resulting node
     // will be the `sampled_occurrence_i`th (non)descendant.
     uint64_t sampled_occurrence_i =
-        std::uniform_int_distribution<uint64_t>(0, n_descendants - 1)(rng);
+        oneapi::dpl::uniform_int_distribution<uint64_t>(0, n_descendants - 1)(rng);
 
     // Walk through the (non)descendant bitvector and pick the correct node
     // index.
@@ -195,7 +199,7 @@ public:
    */
   double change_beta(double old_beta) {
     double new_beta =
-        old_beta + std::normal_distribution<double>(0, beta_jump_sd)(rng);
+        old_beta + oneapi::dpl::normal_distribution<double>(0, beta_jump_sd)(rng);
     if (new_beta < 0) {
       new_beta = std::abs(new_beta);
     }
@@ -221,7 +225,7 @@ public:
   prune_and_reattach(ParentVector<max_n_nodes> &parent_vector,
                      AncestorMatrix<max_n_nodes> const &ancestor_matrix) {
     // Pick a node to move.
-    uint64_t node_to_move_i = std::uniform_int_distribution<uint64_t>(
+    uint64_t node_to_move_i = oneapi::dpl::uniform_int_distribution<uint64_t>(
         0, parent_vector.get_n_nodes() - 2)(rng);
 
     // Sample one of the node's nondescendants, including the root.

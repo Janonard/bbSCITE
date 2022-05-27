@@ -25,40 +25,40 @@ struct StateScorerScenario {
 
     MutationDataMatrix data;
     // cell 0, attached to node 4 (root)
-    data[{0, 0}] = 0;
-    data[{0, 1}] = 0;
-    data[{0, 2}] = 0;
-    data[{0, 3}] = 0;
+    data[0][0] = 0;
+    data[0][1] = 0;
+    data[0][2] = 0;
+    data[0][3] = 0;
 
     // cell 1, attached to node 1
-    data[{1, 0}] = 0;
-    data[{1, 1}] = 1;
-    data[{1, 2}] = 1;
-    data[{1, 3}] = 0;
+    data[1][0] = 0;
+    data[1][1] = 1;
+    data[1][2] = 1;
+    data[1][3] = 0;
 
     // cell 2, attached to node 1, with missing data
-    data[{2, 0}] = 0;
-    data[{2, 1}] = 1;
-    data[{2, 2}] = 2;
-    data[{2, 3}] = 2;
+    data[2][0] = 0;
+    data[2][1] = 1;
+    data[2][2] = 2;
+    data[2][3] = 2;
 
     // cell 3, attached to node 4, with missing data
-    data[{3, 0}] = 2;
-    data[{3, 1}] = 2;
-    data[{3, 2}] = 0;
-    data[{3, 3}] = 0;
+    data[3][0] = 2;
+    data[3][1] = 2;
+    data[3][2] = 0;
+    data[3][3] = 0;
 
     // cell 4, attached to node 0, with false negatives
-    data[{4, 0}] = 1;
-    data[{4, 1}] = 0;
-    data[{4, 2}] = 0; // Error in this position
-    data[{4, 3}] = 0;
+    data[4][0] = 1;
+    data[4][1] = 0;
+    data[4][2] = 0; // Error in this position
+    data[4][3] = 0;
 
     // cell 5, attached to node 3, with false positive
-    data[{5, 0}] = 1; // Error in this position
-    data[{5, 1}] = 0;
-    data[{5, 2}] = 0;
-    data[{5, 3}] = 1;
+    data[5][0] = 1; // Error in this position
+    data[5][1] = 0;
+    data[5][2] = 0;
+    data[5][3] = 1;
 
     ScorerImpl scorer(alpha, beta, prior_sd, n_cells, n_genes, data);
 

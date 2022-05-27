@@ -46,7 +46,8 @@ public:
   /**
    * \brief Shorthand for the mutation data matrix type.
    */
-  using MutationDataMatrix = StaticMatrix<DataEntry, max_n_cells, max_n_genes>;
+  using MutationDataMatrix =
+      std::array<std::array<ac_int<2, false>, max_n_genes>, max_n_cells>;
 
   /**
    * \brief Shorthand for the occurrence matrix type.
@@ -158,7 +159,7 @@ public:
       OccurrenceMatrix occurrences(0);
 
       for (uint64_t gene_i = 0; gene_i < n_genes; gene_i++) {
-        uint64_t posterior = data[{cell_i, gene_i}];
+        uint64_t posterior = data[cell_i][gene_i];
         uint64_t prior =
             mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
         occurrences[{posterior, prior}]++;
@@ -198,6 +199,6 @@ private:
   double log_error_probabilities[3][2];
   double bpriora, bpriorb;
   uint64_t n_cells, n_genes;
-  StaticMatrix<ac_int<2, false>, max_n_cells, max_n_genes> data;
+  MutationDataMatrix data;
 };
 } // namespace ffSCITE
