@@ -8,8 +8,8 @@ constexpr uint64_t n_cells = 15;
 constexpr uint64_t n_genes = 4;
 
 constexpr double alpha = 6.04e-5, beta = 0.25, prior_sd = 0.1;
-constexpr unsigned long repetitions = 5;
-constexpr unsigned long chain_length = 100000;
+constexpr unsigned long repetitions = 10;
+constexpr unsigned long chain_length = 1000000;
 
 using ChangeProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand0>;
 using StateScorerImpl = StateScorer<n_cells, n_genes>;

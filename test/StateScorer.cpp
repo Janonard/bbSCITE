@@ -109,11 +109,11 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
 
   // Node 0
 
-  std::tuple<uint64_t, OccurrenceMatrix, double> attachment =
+  ScorerImpl::Attachment attachment =
       scenario.scorer.get_best_attachment(0, am);
-  REQUIRE(int(std::get<0>(attachment)) == 4);
+  REQUIRE(int(attachment.node_i) == 4);
 
-  OccurrenceMatrix occurrences = std::get<1>(attachment);
+  OccurrenceMatrix occurrences = attachment.occurrences;
   REQUIRE(int(occurrences[{0, 0}]) == 4);
   REQUIRE(int(occurrences[{1, 0}]) == 0);
   REQUIRE(int(occurrences[{2, 0}]) == 0);
@@ -121,14 +121,14 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{1, 1}]) == 0);
   REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-  REQUIRE(std::get<2>(attachment) == 4 * std::log(1 - alpha));
+  REQUIRE(attachment.logscore == 4 * std::log(1 - alpha));
 
   // Node 1
 
   attachment = scenario.scorer.get_best_attachment(1, am);
-  REQUIRE(int(std::get<0>(attachment)) == 1);
+  REQUIRE(int(attachment.node_i) == 1);
 
-  occurrences = std::get<1>(attachment);
+  occurrences = attachment.occurrences;
   REQUIRE(int(occurrences[{0, 0}]) == 2);
   REQUIRE(int(occurrences[{1, 0}]) == 0);
   REQUIRE(int(occurrences[{2, 0}]) == 0);
@@ -136,15 +136,15 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{1, 1}]) == 2);
   REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-  REQUIRE(std::get<2>(attachment) ==
+  REQUIRE(attachment.logscore ==
           2 * std::log(1 - alpha) + 2 * std::log(1 - beta));
 
   // Node 2
 
   attachment = scenario.scorer.get_best_attachment(2, am);
-  REQUIRE(int(std::get<0>(attachment)) == 1);
+  REQUIRE(int(attachment.node_i) == 1);
 
-  occurrences = std::get<1>(attachment);
+  occurrences = attachment.occurrences;
   REQUIRE(int(occurrences[{0, 0}]) == 1);
   REQUIRE(int(occurrences[{1, 0}]) == 0);
   REQUIRE(int(occurrences[{2, 0}]) == 1);
@@ -152,14 +152,14 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{1, 1}]) == 1);
   REQUIRE(int(occurrences[{2, 1}]) == 1);
 
-  REQUIRE(std::get<2>(attachment) == std::log(1 - alpha) + std::log(1 - beta));
+  REQUIRE(attachment.logscore == std::log(1 - alpha) + std::log(1 - beta));
 
   // Node 3
 
   attachment = scenario.scorer.get_best_attachment(3, am);
-  REQUIRE(int(std::get<0>(attachment)) == 4);
+  REQUIRE(int(attachment.node_i) == 4);
 
-  occurrences = std::get<1>(attachment);
+  occurrences = attachment.occurrences;
   REQUIRE(int(occurrences[{0, 0}]) == 2);
   REQUIRE(int(occurrences[{1, 0}]) == 0);
   REQUIRE(int(occurrences[{2, 0}]) == 2);
@@ -167,14 +167,14 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{1, 1}]) == 0);
   REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-  REQUIRE(std::get<2>(attachment) == 2 * std::log(1 - alpha));
+  REQUIRE(attachment.logscore == 2 * std::log(1 - alpha));
 
   // Node 4
 
   attachment = scenario.scorer.get_best_attachment(4, am);
-  REQUIRE(int(std::get<0>(attachment)) == 0);
+  REQUIRE(int(attachment.node_i) == 0);
 
-  occurrences = std::get<1>(attachment);
+  occurrences = attachment.occurrences;
   REQUIRE(int(occurrences[{0, 0}]) == 2);
   REQUIRE(int(occurrences[{1, 0}]) == 0);
   REQUIRE(int(occurrences[{2, 0}]) == 0);
@@ -182,15 +182,15 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{1, 1}]) == 1);
   REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-  REQUIRE(std::get<2>(attachment) ==
+  REQUIRE(attachment.logscore ==
           2 * std::log(1 - alpha) + std::log(beta) + std::log(1 - beta));
 
   // Node 5
 
   attachment = scenario.scorer.get_best_attachment(5, am);
-  REQUIRE(int(std::get<0>(attachment)) == 3);
+  REQUIRE(int(attachment.node_i) == 3);
 
-  occurrences = std::get<1>(attachment);
+  occurrences = attachment.occurrences;
   REQUIRE(int(occurrences[{0, 0}]) == 2);
   REQUIRE(int(occurrences[{1, 0}]) == 1);
   REQUIRE(int(occurrences[{2, 0}]) == 0);
@@ -198,7 +198,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
   REQUIRE(int(occurrences[{1, 1}]) == 1);
   REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-  REQUIRE(std::get<2>(attachment) ==
+  REQUIRE(attachment.logscore ==
           2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta));
 }
 
