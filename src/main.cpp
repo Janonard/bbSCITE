@@ -15,5 +15,6 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #include <iostream>
+#include "Parameters.hpp"
 
 int main() { std::cout << "Hello World" << std::endl; }
