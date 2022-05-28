@@ -26,7 +26,7 @@
 namespace ffSCITE {
 class Parameters {
 public:
-  Parameters(int argc, char **argv)
+  Parameters(int argc, char **argv, uint64_t max_n_cells, uint64_t max_n_genes)
       : input_path(std::nullopt), output_path_base(std::nullopt),
         n_cells(std::nullopt), n_genes(std::nullopt), n_chains(std::nullopt),
         chain_length(std::nullopt), alpha(6.04e-5), beta(0.4309),
@@ -34,6 +34,7 @@ public:
         prob_swap_nodes(0.4), prob_swap_subtrees(0.05), beta_sd(0.1),
         beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {
 
+    bool error = false;
     /*
      * This style of argument parsing is WET and errorprone, but necessary to
      * stay CLI-compatible with the original SCITE application. I have copied it
@@ -46,7 +47,7 @@ public:
           input_path = argv[++i];
         } else {
           std::cerr << "Error: Missing argument to parameter -i." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-t") == 0) {
         std::cerr << "Warning: The -t parameter is not supported by ffSCITE "
@@ -57,56 +58,56 @@ public:
           output_path_base = argv[++i];
         } else {
           std::cerr << "Error: Missing argument to parameter -o." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-n") == 0) {
         if (i + 1 < argc) {
           n_genes = atoi(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -n." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-m") == 0) {
         if (i + 1 < argc) {
           n_cells = atoi(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -m." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-r") == 0) {
         if (i + 1 < argc) {
           n_chains = atoi(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -r." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-l") == 0) {
         if (i + 1 < argc) {
           chain_length = atoi(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -l." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-g") == 0) {
         if (i + 1 < argc) {
           gamma = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -g." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-fd") == 0) {
         if (i + 1 < argc) {
           alpha = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -fd." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-ad") == 0) {
         if (i + 1 < argc) {
           beta = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -ad." << std::endl;
-          exit(1);
+          error = true;
         }
         if (i + 1 < argc) {
           std::string next = argv[i + 1];
@@ -128,21 +129,21 @@ public:
           prob_beta_change = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -e." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-x") == 0) {
         if (i + 1 < argc) {
           beta_jump_scaling_chi = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -x." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-sd") == 0) {
         if (i + 1 < argc) {
           beta_sd = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -sd." << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-a") == 0) {
         std::cerr << "Warning: The -a parameter is not supported by ffSCITE "
@@ -162,21 +163,21 @@ public:
         } else {
           std::cerr << "Error: Missing argument to parameter -move_probs."
                     << std::endl;
-          exit(1);
+          error = true;
         }
         if (i + 1 < argc) {
           prob_swap_nodes = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -move_probs."
                     << std::endl;
-          exit(1);
+          error = true;
         }
         if (i + 1 < argc) {
           prob_swap_subtrees = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -move_probs."
                     << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-seed") == 0) {
         if (i + 1 < argc) {
@@ -184,7 +185,7 @@ public:
         } else {
           std::cerr << "Error: Missing argument to parameter -seed."
                     << std::endl;
-          exit(1);
+          error = true;
         }
       } else if (strcmp(argv[i], "-max_treelist_size") == 0) {
         std::cerr << "The -max_treelist_size parameter is not supported by "
@@ -204,7 +205,7 @@ public:
                   << std::endl;
       } else {
         std::cerr << "Error: Unknown parameter " << argv[i] << "." << std::endl;
-        exit(1);
+        error = true;
       }
     }
 
@@ -213,35 +214,35 @@ public:
       std::cerr << "Error: Missing input file path. Did you forget to set the "
                    "-i paramater?"
                 << std::endl;
-      exit(1);
+      error = true;
     }
 
     if (!n_cells.has_value()) {
       std::cerr << "Error: Missing number of cells. Did you forget to set the "
                    "-m parameter?"
                 << std::endl;
-      exit(1);
+      error = true;
     }
 
     if (!n_genes.has_value()) {
       std::cerr << "Error: Missing number of genes. Did you forget to set the "
                    "-n parameter?"
                 << std::endl;
-      exit(1);
+      error = true;
     }
 
     if (!n_chains.has_value()) {
       std::cerr << "Error: Missing number of markov chains to simulate. Did "
                    "you forget to set the -r parameter?"
                 << std::endl;
-      exit(1);
+      error = true;
     }
 
     if (!chain_length.has_value()) {
       std::cerr << "Error: Missing markov chain length. Did you forget to set "
                    "the -l parameter?"
                 << std::endl;
-      exit(1);
+      error = true;
     }
 
     if (prob_beta_change + prob_prune_n_reattach + prob_swap_nodes +
@@ -249,6 +250,20 @@ public:
         0) {
       std::cerr << "Error: The sum of the move type probabilities is zero."
                 << std::endl;
+      error = true;
+    }
+
+    if (n_cells > max_n_cells) {
+      std::cerr << "Error: The number of cells is too big. This build of ffSCITE only supports up to " << max_n_cells << " cells." << std::endl;
+      error = true;
+    }
+
+    if (n_genes > max_n_genes) {
+      std::cerr << "Error: The number of genes is too big. This build of ffSCITE only supports up to " << max_n_genes << " genes." << std::endl;
+      error = true;
+    }
+
+    if (error) {
       exit(1);
     }
   }
@@ -275,6 +290,8 @@ public:
   double get_alpha() const { return alpha; }
 
   double get_beta() const { return beta; }
+
+  double get_beta_sd() const { return beta_sd; }
 
   double get_sum_of_move_probs() const {
     return prob_beta_change + prob_prune_n_reattach + prob_swap_nodes +
