@@ -44,20 +44,26 @@ public:
    * \brief Shorthand for the used chain state.
    */
   using ChainStateImpl = ChainState<max_n_genes>;
-  /**
-   * \brief Shorthand for the mutation data matrix type.
-   */
-  using MutationDataMatrix =
-      StaticMatrix<ac_int<2, false>, max_n_cells, max_n_genes>;
+
   /**
    * \brief Shorthand for the chain state buffer accessor type.
    */
-  using Accessor =
-      cl::sycl::accessor<std::tuple<ChainStateImpl, double>, 1,
-                         cl::sycl::access::mode::read_write, access_target>;
+  using StateAccessor =
+      cl::sycl::accessor<ChainStateImpl, 1, cl::sycl::access::mode::read_write,
+                         access_target>;
+
+  using ScoreAccessor =
+      cl::sycl::accessor<double, 1, cl::sycl::access::mode::read_write,
+                         access_target>;
+
+  using IndexAccessor =
+      cl::sycl::accessor<uint64_t, 1, cl::sycl::access::mode::read_write,
+                         access_target>;
 
   /**
-   * \brief Construct a new MCMCKernel object
+   * \brief
+   *
+   *
    *
    * \param change_proposer The configured instance of the change proposer to
    * use.
@@ -71,13 +77,16 @@ public:
    * \param n_steps The number of steps to execute.
    */
   MCMCKernel(ChangeProposer change_proposer, StateScorer state_scorer,
-             double gamma, Accessor current_state_ac, Accessor best_state_ac,
+             double gamma, StateAccessor best_states_ac,
+             ScoreAccessor best_score_ac, IndexAccessor n_best_states_ac,
+             StateAccessor current_states_ac, ScoreAccessor current_scores_ac,
              uint64_t n_steps)
       : change_proposer(change_proposer), state_scorer(state_scorer),
-        current_state_ac(current_state_ac), best_state_ac(best_state_ac),
-        gamma(gamma), n_steps(n_steps) {
-    assert(current_state_ac.get_range() == 1);
-    assert(best_state_ac.get_range() == 1);
+        best_states_ac(best_states_ac), current_states_ac(current_states_ac),
+        best_score_ac(best_score_ac), current_scores_ac(current_scores_ac),
+        n_best_states_ac(n_best_states_ac), gamma(gamma), n_steps(n_steps) {
+    assert(best_score_ac.get_range()[0] == 1);
+    assert(current_states_ac.get_range() == current_scores_ac.get_range());
   }
 
   /**
@@ -87,41 +96,132 @@ public:
    * configured number of steps and writes the results back.
    */
   void operator()() const {
-    ChainStateImpl best_state = std::get<0>(best_state_ac[0]);
-    double best_score = std::get<1>(best_state_ac[0]);
-
-    ChainStateImpl current_state = std::get<0>(current_state_ac[0]);
-    double current_score = std::get<1>(best_state_ac[0]);
-
     // Copy of score to avoid mutation within the constant operator.
     ChangeProposer change_proposer = this->change_proposer;
     StateScorer state_scorer = this->state_scorer;
 
+    best_score_ac[0] = -std::numeric_limits<double>::infinity();
+    n_best_states_ac[0] = 0;
+
+    for (uint64_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
+         chain_i++) {
+      current_scores_ac[chain_i] =
+          state_scorer.logscore_state(current_states_ac[chain_i]);
+    }
+
     for (uint64_t i = 0; i < n_steps; i++) {
-      double neighborhood_correction = 1.0;
+      for (uint64_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
+           chain_i++) {
+        double neighborhood_correction = 1.0;
 
-      ChainStateImpl proposed_state = current_state;
-      change_proposer.propose_change(proposed_state, neighborhood_correction);
-      double proposed_score = state_scorer.logscore_state(proposed_state);
+        ChainStateImpl proposed_state = current_states_ac[chain_i];
+        change_proposer.propose_change(proposed_state, neighborhood_correction);
+        double proposed_score = state_scorer.logscore_state(proposed_state);
 
-      double acceptance_probability =
-          neighborhood_correction *
-          std::exp((proposed_score - current_score) * gamma);
-      bool accept_move = oneapi::dpl::bernoulli_distribution(
-          acceptance_probability)(change_proposer.get_rng());
-      if (accept_move) {
-        current_state = proposed_state;
-        current_score = proposed_score;
+        double acceptance_probability =
+            neighborhood_correction *
+            std::exp((proposed_score - current_scores_ac[chain_i]) * gamma);
+        bool accept_move = oneapi::dpl::bernoulli_distribution(
+            acceptance_probability)(change_proposer.get_rng());
+        if (accept_move) {
+          current_states_ac[chain_i] = proposed_state;
+          current_scores_ac[chain_i] = proposed_score;
+        }
+
+        if (proposed_score >= best_score_ac[0]) {
+          if (proposed_score > best_score_ac[0]) {
+            n_best_states_ac[0] = 0;
+            best_score_ac[0] = proposed_score;
+          }
+          if (n_best_states_ac[0] < best_states_ac.get_range()[0]) {
+            best_states_ac[n_best_states_ac[0]] = proposed_state;
+            n_best_states_ac[0]++;
+          }
+        }
       }
+    }
+  }
 
-      if (proposed_score > best_score) {
-        best_state = proposed_state;
-        best_score = proposed_score;
+  static std::vector<ChainStateImpl>
+  run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
+                 double alpha_mean, double beta_mean, double beta_sd,
+                 double gamma, cl::sycl::queue working_queue, uint32_t seed,
+                 uint64_t n_repetitions, uint64_t chain_length,
+                 uint64_t max_n_best_states) {
+    using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, ChangeProposer,
+                                      StateScorer, access_target>;
+
+    uint64_t n_cells = data_buffer.get_range()[0];
+    uint64_t n_genes = data_buffer.get_range()[1];
+
+    oneapi::dpl::minstd_rand0 twister;
+    twister.seed(seed);
+
+    cl::sycl::buffer<ChainStateImpl, 1> best_states_buffer(
+        (cl::sycl::range<1>(max_n_best_states)));
+    cl::sycl::buffer<double, 1> best_score_buffer((cl::sycl::range<1>(1)));
+    cl::sycl::buffer<uint64_t, 1> n_best_states_buffer((cl::sycl::range<1>(1)));
+
+    cl::sycl::buffer<ChainStateImpl, 1> current_states_buffer(
+        (cl::sycl::range<1>(n_repetitions)));
+    cl::sycl::buffer<double, 1> current_scores_buffer(
+        (cl::sycl::range<1>(n_repetitions)));
+
+    {
+      auto current_states_ac =
+          current_states_buffer
+              .template get_access<cl::sycl::access::mode::read_write>();
+      auto current_scores_ac =
+          current_scores_buffer
+              .template get_access<cl::sycl::access::mode::read_write>();
+
+      for (uint64_t rep_i = 0; rep_i < n_repetitions; rep_i++) {
+        current_states_ac[rep_i] =
+            ChainStateImpl::sample_random_state(twister, n_genes, beta_mean);
       }
     }
 
-    best_state_ac[0] = {best_state, best_score};
-    current_state_ac[0] = {current_state, current_score};
+    working_queue.submit([&](cl::sycl::handler &cgh) {
+      auto best_states_ac =
+          best_states_buffer
+              .template get_access<cl::sycl::access::mode::read_write>(cgh);
+      auto best_score_ac =
+          best_score_buffer
+              .template get_access<cl::sycl::access::mode::read_write>(cgh);
+      auto n_best_states_ac =
+          n_best_states_buffer
+              .template get_access<cl::sycl::access::mode::read_write>(cgh);
+
+      auto current_states_ac =
+          current_states_buffer
+              .template get_access<cl::sycl::access::mode::read_write>(cgh);
+      auto current_scores_ac =
+          current_scores_buffer
+              .template get_access<cl::sycl::access::mode::read_write>(cgh);
+
+      auto data_ac =
+          data_buffer.template get_access<cl::sycl::access::mode::read>(cgh);
+
+      ChangeProposer change_proposer(twister);
+      StateScorer state_scorer(alpha_mean, beta_mean, beta_sd, data_ac);
+      MCMCKernel kernel(change_proposer, state_scorer, gamma, best_states_ac,
+                        best_score_ac, n_best_states_ac, current_states_ac,
+                        current_scores_ac, chain_length);
+      cgh.single_task(kernel);
+    });
+
+    auto best_states_ac =
+        best_states_buffer.template get_access<cl::sycl::access::mode::read>();
+    auto n_best_states_ac =
+        n_best_states_buffer
+            .template get_access<cl::sycl::access::mode::read>();
+    std::vector<ChainStateImpl> best_states_vec;
+    best_states_vec.reserve(n_best_states_ac[0]);
+    for (uint64_t i = 0; i < n_best_states_ac[0]; i++) {
+      best_states_vec.push_back(best_states_ac[i]);
+    }
+
+    return best_states_vec;
   }
 
   /**
@@ -141,7 +241,9 @@ public:
 private:
   ChangeProposer change_proposer;
   StateScorer state_scorer;
-  Accessor best_state_ac, current_state_ac;
+  StateAccessor best_states_ac, current_states_ac;
+  ScoreAccessor best_score_ac, current_scores_ac;
+  IndexAccessor n_best_states_ac;
 
   double gamma;
   uint64_t n_steps;

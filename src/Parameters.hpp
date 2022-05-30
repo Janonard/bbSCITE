@@ -29,8 +29,8 @@ public:
   Parameters(int argc, char **argv, uint64_t max_n_cells, uint64_t max_n_genes)
       : input_path(std::nullopt), output_path_base(std::nullopt),
         n_cells(std::nullopt), n_genes(std::nullopt), n_chains(std::nullopt),
-        chain_length(std::nullopt), alpha(6.04e-5), beta(0.4309),
-        prob_beta_change(0.0), prob_prune_n_reattach(0.55),
+        chain_length(std::nullopt), max_n_best_states(128), alpha(6.04e-5),
+        beta(0.4309), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
         prob_swap_nodes(0.4), prob_swap_subtrees(0.05), beta_sd(0.1),
         beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {
 
@@ -188,9 +188,14 @@ public:
           error = true;
         }
       } else if (strcmp(argv[i], "-max_treelist_size") == 0) {
-        std::cerr << "The -max_treelist_size parameter is not supported by "
-                     "ffSCITE (yet). Ignoring the -max_treelist_size parameter."
-                  << std::endl;
+        if (i + 1 < argc) {
+          max_n_best_states = atoi(argv[++i]);
+        } else {
+          std::cerr
+              << "Error: Missing argument to parameter -max_treelist_size."
+              << std::endl;
+          error = true;
+        }
       } else if (strcmp(argv[i], "-no_tree_list") == 0) {
         std::cerr << "Warning: The -no_tree_list parameter is not supported by "
                      "ffSCITE (yet). Ignoring the -no_tree_list parameter."
@@ -254,12 +259,16 @@ public:
     }
 
     if (n_cells > max_n_cells) {
-      std::cerr << "Error: The number of cells is too big. This build of ffSCITE only supports up to " << max_n_cells << " cells." << std::endl;
+      std::cerr << "Error: The number of cells is too big. This build of "
+                   "ffSCITE only supports up to "
+                << max_n_cells << " cells." << std::endl;
       error = true;
     }
 
     if (n_genes > max_n_genes) {
-      std::cerr << "Error: The number of genes is too big. This build of ffSCITE only supports up to " << max_n_genes << " genes." << std::endl;
+      std::cerr << "Error: The number of genes is too big. This build of "
+                   "ffSCITE only supports up to "
+                << max_n_genes << " genes." << std::endl;
       error = true;
     }
 
@@ -286,6 +295,8 @@ public:
   uint64_t get_n_chains() const { return n_chains.value(); }
 
   uint64_t get_chain_length() const { return chain_length.value(); }
+
+  uint64_t get_max_n_best_states() const { return max_n_best_states; }
 
   double get_alpha() const { return alpha; }
 
@@ -331,6 +342,7 @@ private:
   std::optional<std::string> input_path, output_path_base;
 
   std::optional<uint64_t> n_cells, n_genes, n_chains, chain_length;
+  uint64_t max_n_best_states;
 
   double alpha, beta;
   double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,

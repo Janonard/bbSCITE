@@ -36,7 +36,10 @@ namespace ffSCITE {
  * \tparam max_n_cells The maximum number of cells processable.
  * \tparam max_n_genes The maximum number of genes processable.
  */
-template <uint64_t max_n_cells, uint64_t max_n_genes> class StateScorer {
+template <uint64_t max_n_cells, uint64_t max_n_genes,
+          cl::sycl::access::target access_target =
+              cl::sycl::access::target::device>
+class StateScorer {
 public:
   /**
    * \brief Shorthand for the chain state class in use.
@@ -60,15 +63,13 @@ public:
   using DataEntry = ac_int<2, false>;
 
   /**
-   * \brief Shorthand for the mutation data matrix type.
-   */
-  using MutationDataMatrix =
-      std::array<std::array<ac_int<2, false>, max_n_genes>, max_n_cells>;
-
-  /**
    * \brief Shorthand for the occurrence matrix type.
    */
   using OccurrenceMatrix = StaticMatrix<uint64_t, 3, 2>;
+
+  using MutationDataAccessor =
+      cl::sycl::accessor<DataEntry, 2, cl::sycl::access::mode::read,
+                         access_target>;
 
   /**
    * \brief Initialize a new state scorer
@@ -87,9 +88,8 @@ public:
    * data matrix.
    */
   StateScorer(double prior_alpha, double prior_beta, double prior_beta_sd,
-              uint64_t n_cells, uint64_t n_genes, MutationDataMatrix data)
-      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), n_cells(n_cells),
-        n_genes(n_genes), data(data) {
+              MutationDataAccessor data)
+      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data) {
     // mutation not observed, not present
     log_error_probabilities[0][0] = std::log(1.0 - prior_alpha);
     // mutation observed, not present
@@ -121,7 +121,7 @@ public:
    */
   double logscore_state(ChainStateImpl const &state) {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(state.mutation_tree.get_n_nodes() == n_genes + 1);
+    assert(state.mutation_tree.get_n_nodes() == data.get_range()[1] + 1);
 #endif
 
     log_error_probabilities[0][1] = std::log(state.beta);
@@ -130,7 +130,7 @@ public:
     AncestorMatrixImpl ancestor_matrix(state.mutation_tree);
     OccurrenceMatrix occurrences(0);
 
-    for (uint64_t cell_i = 0; cell_i < n_cells; cell_i++) {
+    for (uint64_t cell_i = 0; cell_i < data.get_range()[0]; cell_i++) {
       auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
       occurrences += best_attachment.occurrences;
     }
@@ -156,7 +156,7 @@ public:
 
   /**
    * \brief Information about a found mutation tree attachment for a cell.
-   * 
+   *
    * It is exclusively used as a return value of \ref get_best_attachment.
    */
   struct Attachment {
@@ -165,7 +165,8 @@ public:
      */
     uint64_t node_i;
     /**
-     * \brief The occurrences of correct and incorrect data values, assuming the cell is attached to the node with index \ref node_i.
+     * \brief The occurrences of correct and incorrect data values, assuming the
+     * cell is attached to the node with index \ref node_i.
      */
     OccurrenceMatrix occurrences;
     /**
@@ -182,8 +183,8 @@ public:
    * cell to.
    * \return A struct with information about the found attachment.
    */
-  Attachment
-  get_best_attachment(uint64_t cell_i, AncestorMatrixImpl mutation_tree) {
+  Attachment get_best_attachment(uint64_t cell_i,
+                                 AncestorMatrixImpl mutation_tree) {
     uint64_t best_attachment = mutation_tree.get_root();
     OccurrenceMatrix best_attachment_occurrences(0);
     double best_attachment_logscore = -std::numeric_limits<double>::infinity();
@@ -192,7 +193,7 @@ public:
          attachment_node_i < mutation_tree.get_n_nodes(); attachment_node_i++) {
       OccurrenceMatrix occurrences(0);
 
-      for (uint64_t gene_i = 0; gene_i < n_genes; gene_i++) {
+      for (uint64_t gene_i = 0; gene_i < data.get_range()[1]; gene_i++) {
         uint64_t posterior = data[cell_i][gene_i];
         uint64_t prior =
             mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
@@ -232,7 +233,6 @@ public:
 private:
   double log_error_probabilities[3][2];
   double bpriora, bpriorb;
-  uint64_t n_cells, n_genes;
-  MutationDataMatrix data;
+  MutationDataAccessor data;
 };
 } // namespace ffSCITE
