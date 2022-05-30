@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "ChangeProposer.hpp"
+#include "Parameters.hpp"
 #include "StateScorer.hpp"
 #include <CL/sycl.hpp>
 
@@ -144,10 +145,7 @@ public:
 
   static std::vector<ChainStateImpl>
   run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
-                 double alpha_mean, double beta_mean, double beta_sd,
-                 double gamma, cl::sycl::queue working_queue, uint32_t seed,
-                 uint64_t n_repetitions, uint64_t chain_length,
-                 uint64_t max_n_best_states) {
+                 cl::sycl::queue working_queue, Parameters const &parameters) {
     using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, ChangeProposer,
                                       StateScorer, access_target>;
 
@@ -155,17 +153,17 @@ public:
     uint64_t n_genes = data_buffer.get_range()[1];
 
     oneapi::dpl::minstd_rand0 twister;
-    twister.seed(seed);
+    twister.seed(parameters.get_seed());
 
     cl::sycl::buffer<ChainStateImpl, 1> best_states_buffer(
-        (cl::sycl::range<1>(max_n_best_states)));
+        (cl::sycl::range<1>(parameters.get_max_n_best_states())));
     cl::sycl::buffer<double, 1> best_score_buffer((cl::sycl::range<1>(1)));
     cl::sycl::buffer<uint64_t, 1> n_best_states_buffer((cl::sycl::range<1>(1)));
 
     cl::sycl::buffer<ChainStateImpl, 1> current_states_buffer(
-        (cl::sycl::range<1>(n_repetitions)));
+        (cl::sycl::range<1>(parameters.get_n_chains())));
     cl::sycl::buffer<double, 1> current_scores_buffer(
-        (cl::sycl::range<1>(n_repetitions)));
+        (cl::sycl::range<1>(parameters.get_n_chains())));
 
     {
       auto current_states_ac =
@@ -175,9 +173,9 @@ public:
           current_scores_buffer
               .template get_access<cl::sycl::access::mode::read_write>();
 
-      for (uint64_t rep_i = 0; rep_i < n_repetitions; rep_i++) {
-        current_states_ac[rep_i] =
-            ChainStateImpl::sample_random_state(twister, n_genes, beta_mean);
+      for (uint64_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
+        current_states_ac[rep_i] = ChainStateImpl::sample_random_state(
+            twister, n_genes, parameters.get_beta_mean());
       }
     }
 
@@ -202,11 +200,17 @@ public:
       auto data_ac =
           data_buffer.template get_access<cl::sycl::access::mode::read>(cgh);
 
-      ChangeProposer change_proposer(twister);
-      StateScorer state_scorer(alpha_mean, beta_mean, beta_sd, data_ac);
-      MCMCKernel kernel(change_proposer, state_scorer, gamma, best_states_ac,
-                        best_score_ac, n_best_states_ac, current_states_ac,
-                        current_scores_ac, chain_length);
+      ChangeProposer change_proposer(twister, parameters.get_prob_beta_change(),
+                                     parameters.get_prob_prune_n_reattach(),
+                                     parameters.get_prob_swap_nodes(),
+                                     parameters.get_beta_jump_sd());
+      StateScorer state_scorer(parameters.get_alpha_mean(),
+                               parameters.get_beta_mean(),
+                               parameters.get_beta_sd(), data_ac);
+      MCMCKernel kernel(change_proposer, state_scorer, parameters.get_gamma(),
+                        best_states_ac, best_score_ac, n_best_states_ac,
+                        current_states_ac, current_scores_ac,
+                        parameters.get_chain_length());
       cgh.single_task(kernel);
     });
 

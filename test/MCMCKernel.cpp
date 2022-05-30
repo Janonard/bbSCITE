@@ -23,8 +23,8 @@ using namespace ffSCITE;
 constexpr uint64_t n_cells = 15;
 constexpr uint64_t n_genes = 4;
 
-constexpr double alpha = 6.04e-5, beta = 0.25, prior_sd = 0.1;
-constexpr unsigned long repetitions = 10;
+constexpr double alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
+constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 
 using ChangeProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand0>;
@@ -136,14 +136,18 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
     data[14][3] = 0;
   }
 
-  std::random_device seeder;
-
   cl::sycl::queue working_queue(
       (cl::sycl::ext::intel::fpga_emulator_selector()));
 
-  std::vector<ChainStateImpl> best_states = MCMCKernelImpl::run_simulation(
-      data_buffer, alpha, beta, prior_sd, 1.0, working_queue, seeder(),
-      repetitions, chain_length, 20);
+  Parameters parameters;
+  parameters.set_alpha_mean(alpha);
+  parameters.set_beta_mean(beta);
+  parameters.set_beta_sd(beta_sd);
+  parameters.set_n_chains(n_chains);
+  parameters.set_chain_length(chain_length);
+
+  std::vector<ChainStateImpl> best_states =
+      MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
 
   bool correct_tree_found = false;
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {

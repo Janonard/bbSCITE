@@ -35,7 +35,8 @@ using MCMCKernelImpl =
 using ChainStateImpl = ChainState<max_n_genes>;
 
 int main(int argc, char **argv) {
-  Parameters parameters(argc, argv, max_n_cells, max_n_genes);
+  Parameters parameters;
+  parameters.load_and_verify_args(argc, argv, max_n_cells, max_n_genes);
 
   cl::sycl::buffer<ac_int<2, false>, 2> data(
       cl::sycl::range<2>(parameters.get_n_cells(), parameters.get_n_genes()));
@@ -70,11 +71,8 @@ int main(int argc, char **argv) {
   cl::sycl::queue working_queue(
       (cl::sycl::ext::intel::fpga_emulator_selector()));
 
-  std::vector<ChainStateImpl> best_states = MCMCKernelImpl::run_simulation(
-      data, parameters.get_alpha(), parameters.get_beta(),
-      parameters.get_beta_sd(), parameters.get_gamma(), working_queue,
-      parameters.get_seed(), parameters.get_n_chains(),
-      parameters.get_chain_length(), parameters.get_max_n_best_states());
+  std::vector<ChainStateImpl> best_states =
+      MCMCKernelImpl::run_simulation(data, working_queue, parameters);
 
   // Output the tree in graphviz format
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {

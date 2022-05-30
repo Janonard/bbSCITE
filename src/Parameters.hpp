@@ -26,14 +26,17 @@
 namespace ffSCITE {
 class Parameters {
 public:
-  Parameters(int argc, char **argv, uint64_t max_n_cells, uint64_t max_n_genes)
+  Parameters()
       : input_path(std::nullopt), output_path_base(std::nullopt),
         n_cells(std::nullopt), n_genes(std::nullopt), n_chains(std::nullopt),
-        chain_length(std::nullopt), max_n_best_states(128), alpha(6.04e-5),
-        beta(0.4309), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
-        prob_swap_nodes(0.4), prob_swap_subtrees(0.05), beta_sd(0.1),
-        beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {
+        chain_length(std::nullopt), max_n_best_states(128), alpha_mean(6.04e-5),
+        beta_mean(0.4309), beta_sd(0.1), prob_beta_change(0.0),
+        prob_prune_n_reattach(0.55), prob_swap_nodes(0.4),
+        prob_swap_subtrees(0.05), beta_jump_scaling_chi(10.0), gamma(1.0),
+        seed(std::nullopt) {}
 
+  bool load_and_verify_args(int argc, char **argv, uint64_t max_n_cells,
+                            uint64_t max_n_genes) {
     bool error = false;
     /*
      * This style of argument parsing is WET and errorprone, but necessary to
@@ -97,14 +100,14 @@ public:
         }
       } else if (strcmp(argv[i], "-fd") == 0) {
         if (i + 1 < argc) {
-          alpha = atof(argv[++i]);
+          alpha_mean = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -fd." << std::endl;
           error = true;
         }
       } else if (strcmp(argv[i], "-ad") == 0) {
         if (i + 1 < argc) {
-          beta = atof(argv[++i]);
+          beta_mean = atof(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -ad." << std::endl;
           error = true;
@@ -112,7 +115,7 @@ public:
         if (i + 1 < argc) {
           std::string next = argv[i + 1];
           if (next.compare(0, 1, "-") != 0) {
-            beta += atof(argv[++i]);
+            beta_mean += atof(argv[++i]);
             std::cerr << "Warning: homo- and heterocygous mutations are not "
                          "supported by "
                          "ffSCITE (yet). Summing false negative probabilites."
@@ -272,12 +275,12 @@ public:
       error = true;
     }
 
-    if (error) {
-      exit(1);
-    }
+    return error;
   }
 
   std::string get_input_path() const { return input_path.value(); }
+
+  void set_input_path(std::string input_path) { this->input_path = input_path; }
 
   std::string get_output_path_base() const {
     if (output_path_base.has_value()) {
@@ -288,21 +291,45 @@ public:
     }
   }
 
+  void set_output_path_base(std::string output_path_base) {
+    this->output_path_base = output_path_base;
+  }
+
   uint64_t get_n_cells() const { return n_cells.value(); }
+
+  void set_n_cells(uint64_t n_cells) { this->n_cells = n_cells; }
 
   uint64_t get_n_genes() const { return n_genes.value(); }
 
+  void set_n_genes(uint64_t n_genes) { this->n_genes = n_genes; }
+
   uint64_t get_n_chains() const { return n_chains.value(); }
+
+  void set_n_chains(uint64_t n_chains) { this->n_chains = n_chains; }
 
   uint64_t get_chain_length() const { return chain_length.value(); }
 
+  void set_chain_length(uint64_t chain_length) {
+    this->chain_length = chain_length;
+  }
+
   uint64_t get_max_n_best_states() const { return max_n_best_states; }
 
-  double get_alpha() const { return alpha; }
+  void set_max_n_best_states(uint64_t max_n_best_states) {
+    this->max_n_best_states = max_n_best_states;
+  }
 
-  double get_beta() const { return beta; }
+  double get_alpha_mean() const { return alpha_mean; }
+
+  void set_alpha_mean(double alpha_mean) { this->alpha_mean = alpha_mean; }
+
+  double get_beta_mean() const { return beta_mean; }
+
+  void set_beta_mean(double beta_mean) { this->beta_mean = beta_mean; }
 
   double get_beta_sd() const { return beta_sd; }
+
+  void set_beta_sd(double beta_sd) { this->beta_sd = beta_sd; }
 
   double get_sum_of_move_probs() const {
     return prob_beta_change + prob_prune_n_reattach + prob_swap_nodes +
@@ -313,21 +340,39 @@ public:
     return prob_beta_change / get_sum_of_move_probs();
   }
 
+  void set_prob_beta_change(double prob_beta_change) {
+    this->prob_beta_change = prob_beta_change;
+  }
+
   double get_prob_prune_n_reattach() const {
     return prob_prune_n_reattach / get_sum_of_move_probs();
+  }
+
+  void set_prob_prune_n_reattach(double prob_prune_n_reattach) {
+    this->prob_prune_n_reattach = prob_prune_n_reattach;
   }
 
   double get_prob_swap_nodes() const {
     return prob_swap_nodes / get_sum_of_move_probs();
   }
 
+  void set_prob_swap_nodes(double prob_swap_nodes) {
+    this->prob_swap_nodes = prob_swap_nodes;
+  }
+
   double get_prob_swap_subtrees() const {
     return prob_swap_subtrees / get_sum_of_move_probs();
+  }
+
+  void set_prob_swap_subtrees(double prob_swap_subtrees) {
+    this->prob_swap_subtrees = prob_swap_subtrees;
   }
 
   double get_beta_jump_sd() const { return beta_sd / beta_jump_scaling_chi; }
 
   double get_gamma() const { return gamma; }
+
+  void set_gamma(double gamma) { this->gamma = gamma; }
 
   uint32_t get_seed() const {
     if (seed.has_value()) {
@@ -338,16 +383,17 @@ public:
     }
   }
 
+  void set_seed(uint32_t seed) { this->seed = seed; }
+
 private:
   std::optional<std::string> input_path, output_path_base;
 
   std::optional<uint64_t> n_cells, n_genes, n_chains, chain_length;
   uint64_t max_n_best_states;
 
-  double alpha, beta;
+  double alpha_mean, beta_mean, beta_sd;
   double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
       prob_swap_subtrees;
-  double beta_sd;
   double beta_jump_scaling_chi;
   double gamma;
 

@@ -69,10 +69,10 @@ public:
    */
   template <typename RNG>
   static ChainState<max_n_genes> sample_random_state(RNG &rng, uint64_t n_genes,
-                                                     double beta_prior) {
+                                                     double beta) {
     ParentVectorImpl mutation_tree =
         ParentVectorImpl::sample_random_tree(rng, n_genes + 1);
-    return ChainState<max_n_genes>(mutation_tree, beta_prior);
+    return ChainState<max_n_genes>(mutation_tree, beta);
   }
 
   /**

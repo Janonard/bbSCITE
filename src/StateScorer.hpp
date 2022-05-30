@@ -77,9 +77,9 @@ public:
    * This new state scorer uses the initial assumptions over the alpha and beta
    * error rates and also load the mutation data.
    *
-   * \param prior_alpha The initial assumption of the alpha error rate (false
+   * \param alpha_mean The initial assumption of the alpha error rate (false
    * positive)
-   * \param prior_beta The initial assumption of the beta error rate
+   * \param beta_mean The initial assumption of the beta error rate
    * (false negative)
    * \param prior_sd The assumed standard derivation of the beta error rate
    * \param n_cells The number of cells covered by the mutation
@@ -87,26 +87,26 @@ public:
    * \param n_genes The number of genes covered by the mutation
    * data matrix.
    */
-  StateScorer(double prior_alpha, double prior_beta, double prior_beta_sd,
+  StateScorer(double alpha_mean, double beta_mean, double beta_sd,
               MutationDataAccessor data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data) {
     // mutation not observed, not present
-    log_error_probabilities[0][0] = std::log(1.0 - prior_alpha);
+    log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
     // mutation observed, not present
-    log_error_probabilities[1][0] = std::log(prior_alpha);
+    log_error_probabilities[1][0] = std::log(alpha_mean);
     // missing data, mutation not present
     log_error_probabilities[2][0] = std::log(1.0);
     // mutation not observed, but present
-    log_error_probabilities[0][1] = std::log(prior_beta);
+    log_error_probabilities[0][1] = std::log(beta_mean);
     // mutation observed and present
-    log_error_probabilities[1][1] = std::log(1.0 - prior_beta);
+    log_error_probabilities[1][1] = std::log(1.0 - beta_mean);
     // missing data, mutation present
     log_error_probabilities[2][1] = std::log(1.0);
 
-    bpriora = ((1 - prior_beta) * std::pow(prior_beta, 2) /
-               std::pow(prior_beta_sd, 2)) -
-              prior_beta;
-    bpriorb = bpriora * ((1 / prior_beta) - 1);
+    bpriora =
+        ((1 - beta_mean) * std::pow(beta_mean, 2) / std::pow(beta_sd, 2)) -
+        beta_mean;
+    bpriorb = bpriora * ((1 / beta_mean) - 1);
   }
 
   /**
