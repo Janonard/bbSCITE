@@ -46,7 +46,8 @@ public:
   /**
    * \brief Shorthand for the mutation data matrix type.
    */
-  using MutationDataMatrix = StaticMatrix<DataEntry, max_n_cells, max_n_genes>;
+  using MutationDataMatrix =
+      std::array<std::array<ac_int<2, false>, max_n_genes>, max_n_cells>;
 
   /**
    * \brief Shorthand for the occurrence matrix type.
@@ -115,7 +116,7 @@ public:
 
     for (uint64_t cell_i = 0; cell_i < n_cells; cell_i++) {
       auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
-      occurrences += std::get<1>(best_attachment);
+      occurrences += best_attachment.occurrences;
     }
 
     double tree_score = get_logscore_of_occurrences(occurrences);
@@ -138,16 +139,34 @@ public:
   }
 
   /**
+   * \brief Information about a found mutation tree attachment for a cell.
+   * 
+   * It is exclusively used as a return value of \ref get_best_attachment.
+   */
+  struct Attachment {
+    /**
+     * \brief The index of the best node to attach the cell to.
+     */
+    uint64_t node_i;
+    /**
+     * \brief The occurrences of correct and incorrect data values, assuming the cell is attached to the node with index \ref node_i.
+     */
+    OccurrenceMatrix occurrences;
+    /**
+     * \brief The log-likelihood that the found attachment is correct.
+     */
+    double logscore;
+  };
+
+  /**
    * \brief Find the most likely attachment point for the given cell.
    *
    * \param cell_i The index of the cell to attach.
    * \param mutation_tree The ancestor matrix of the mutation tree to attach the
    * cell to.
-   * \return A tuple of the most likely node to attach the node to, the
-   * occurrences of the different likelihood types, and the log-likelihood that
-   * the return attachment point is correct.
+   * \return A struct with information about the found attachment.
    */
-  std::tuple<uint64_t, OccurrenceMatrix, double>
+  Attachment
   get_best_attachment(uint64_t cell_i, AncestorMatrixImpl mutation_tree) {
     uint64_t best_attachment = mutation_tree.get_root();
     OccurrenceMatrix best_attachment_occurrences(0);
@@ -158,7 +177,7 @@ public:
       OccurrenceMatrix occurrences(0);
 
       for (uint64_t gene_i = 0; gene_i < n_genes; gene_i++) {
-        uint64_t posterior = data[{cell_i, gene_i}];
+        uint64_t posterior = data[cell_i][gene_i];
         uint64_t prior =
             mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
         occurrences[{posterior, prior}]++;
@@ -198,6 +217,6 @@ private:
   double log_error_probabilities[3][2];
   double bpriora, bpriorb;
   uint64_t n_cells, n_genes;
-  StaticMatrix<ac_int<2, false>, max_n_cells, max_n_genes> data;
+  MutationDataMatrix data;
 };
 } // namespace ffSCITE
