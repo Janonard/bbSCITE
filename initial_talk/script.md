@@ -3,22 +3,13 @@
 * Welcome to the initial talk of my bachelor's thesis!
 * As you might know, I've been working together with Tobias to evaluate and explore the oneAPI workflow for FPGAs for almost three years
 * Therefore, it was more or less obvious that I should also do my bachelor's thesis in this general area.
-* The initial idea was that I continue to extend StencilStream, or current project.
+* The initial idea was that I continue to extend StencilStream, our current project.
 * However, this was deemed inappropriate since it would make it hard to distinguish paid work as a student assistant and unpaid work for the bachelor's thesis.
 * Therefore, Tobias suggested that I should do some classic performance engineering as a bachelor's thesis instead.
 * I will therefore implement an application for single-cell inference of tumor evolution data as efficiently as possible, using Intel FPGAs and oneAPI.
 
-* It is based on the SCITE algorithm by Katharina Jahn et al. from ETH Zürich, which was published in 2016.
-* The original implementation however is not that efficient.
-  * For example it spends 65% of it's runtime in `free` and `new` calls.
-* We know this from an unpublished report by Dominik Ernst et al. from the FAU, who optimized the application for CPUs.
-  * Tobias got this report and saw that there might also be some potential to also optimize it for FPGAs.
-* He suggested this topic, and I also found this algorithm interesting.
-* Additionally, I have some personal connection to the topic, so it was indeed a good choice for me.
-
-* So let me finally present the problem at hand:
 * As you might now, cancer tumors are created when a normal body cell mutates in a way that makes it more reproductive and let's it evade natural body defenses.
-* These mutations are passed on to clones of the originally mutated cell, so-called subclones.
+* These mutations are passed on to children of the originally mutated cell, so-called subclones.
 * When the tumor starts to grow, some cells may mutate again and these mutations are added to the genomes of their subclones.
 * These newly mutated subclones may have different behavior depending on their combined mutations, and may require different treatments.
 * There is therefore an incentive to analyze a tumor's cells and identify which mutation combinations are present in the tumor.
@@ -30,32 +21,53 @@
   * For example, false negatives are quoted with rates over 10% and over 50% of the datapoints may be missing due to errors in the sequencing process.
 * Therefore, an algorithm is needed that can find the most likely mutation lineage for the given, noisy input data.
 
-* SCITE is one such algorithm, and it belongs to the class of Monte-Carlo-Markov-Chain Algorithms.
+* SCITE by Katharina Jahn et al. from ETH Zürich, is one such algorithm and was published in 2016.
+* It belongs to the class of Monte-Carlo-Markov-Chain Algorithms
 * Monte-Carlo Algorithms basically repeat a random experiment that yields a possible solution to a problem and records the best encountered solution.
 * Monte-Carlo-Markov-Chain algorithms therefore simulate a markov chain where every solution is a randomly modified version of the previous solution.
   * This has the advantage that new solutions don't need to be devised from scratch and possibly good characteristics of a solution may be preserved.
   * However, an algorithm designer has to take extra care that the chain actually converges on good solutions.
 
-* When we take a look at the abstracted problem, we see that the model in the paper and in the application differ by some details
-  * It appears that the authors have tried different approaches in the application but only published a fraction of it
-  * So I will focus on the slightly simpler model from the paper.
+* The original implementation however is not that efficient.
+  * For example it spends 65% of it's runtime in `free` and `new` calls.
+* We know this from an unpublished report by Dominik Ernst et al. from the FAU, who optimized the application for CPUs.
+  * Tobias got this report and saw that there might also be some potential to also optimize it for FPGAs.
+* He suggested this topic, and I also found this algorithm interesting.
+* Additionally, I have some personal connection to the topic, so it was indeed a good choice for me.
+
+* Lets have a look at the abstracted problem.
+* First of all, I have to make clear that the application offers some optional differences and approaches that have been apparently evaluated, but not published in the paper.
+  * I will only cover the slightly simpler model of the paper in this presentation.
 * The input is a matrix that contains an entry for every cell and genome position.
 * The entries of the matrix denote whether the given genome position of a cell has been observed as mutated, unmutated, or missing.
-* This input matrix is noisy, which means that the entries may or may not reflect the true state of the cells.
-* We assume that every matrix entry is independent from the others, and that we have (Formula for error probabilities)
-* Note that there are no probabilities given for missing data; The algorithm simply ignores them.
+* If the sequencing were perfect, we would be able to obtain the true state of cells, the matrix E.
+* But since we already know that single cell sequencing is error prone, we get the noisy input matrix D instead.
+  * We see that there are quite some false positives and some missing data points.
+* And from this noisy input, we now have to infer which cells have which mutations.
 
-* The output of the algorithm is a mutation tree and a mapping of every cell onto one of the nodes in the tree.
-* Every node in the mutation tree except the root represents a genome position. (Slide with mutation tree)
-* If a gene A is the child of another gene B, then we assume that every cell that has a mutation at A also has a mutation at B, and so forth up to the root. (Example from one node in the tree)
-* We assume that every gene mutates only once and that it does not mutate back, otherwise this tree would not make sense.
-* Now, when we place a node on the tree, we have a statement of the true state of the cell and can compute the likelihood that the made statement over the cell's mutation status is correct.
+* In order to do this, we need to compute the likelihood of a assumed true mutation matrix.
+* For this, we assume that the matrix are independent and follow this simple posterior probability distribution.
+  * We simply have a probability for false positives called alpha and a probability for false negatives called beta.
+* Note that there are no probabilities for missing data, they are simply ignored.
+* Then, we can simply multiply the posterior probabilities to get the likelihood of an assumed true mutation matrix.
+  * Now, we can describe the problem as a maximum-likelihood problem, which is nice.
 
-* The goal now obviously is to find a tree and a cell-node mapping that maximizes this likelihood.
-* This is done by starting of with a random tree, applying a random modification to it and computing it's likelihood.
-  * If the likelihood of the new tree is better than the best we know, it is stored as the new, best solution.
-  * The quality of the solution is contained by using rejection sampling, which rejects less likely trees with a higher probability than those with higher likelihoods.
-* Then, these steps of proposing a new tree, computing it's likelihood and evaluating the new state are repeated multiple thousand times.
+* We have already established how mutations are introduced: A cell mutates and it's clones inherits all mutations from their ancestors.
+  * Additionally, the authors made the infinite sites assumption, which says that every gene only mutates once in the history of the tumor and that a gene never mutates back.
+* So, one obvious way to model the mutations is a tree:
+  * The root of the tree is the completely unmutated state.
+  * We introduce a node for every gene that may mutate and "attach" every cell to one of the nodes in the tree.
+  * Then, we say that a cell has mutations on every gene on the path from its attachment node up to the root.
+  * For example, the cell with index 2, which is attached to the gene with index 2, has mutations at genes 0, 1, and 2,
+  * but not on gene 3 since it is not on the path from the attachment node to the root.
+
+* With all that background, it is easy to describe the algorithm:
+  * It starts of with a random tree and modifies it.
+  * For example, it may swap two nodes in place, or swap two complete subtrees, or just take a subtree and move it somewhere else.
+  * Then, it finds the mostly likely attachment node for every cell in the resulting tree
+  * and lastly, it computes the overall likelihood of the made mutation statements.
+  * Based on this likelihood, it will accept or reject the proposed state as the new state of the chain.
+  * This is then repeated as long as the user has requested, usually multiple thousand to million of times.
 
 * This algorithm offers multiple opportunities for exploitable parallelism.
 * First of all, there is little feedback from one chain step to the next
