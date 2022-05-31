@@ -75,6 +75,14 @@ public:
     return ChainState<max_n_genes>(mutation_tree, beta);
   }
 
+  bool operator==(ChainState<max_n_genes> const&other) const {
+    return beta == other.beta && mutation_tree == other.mutation_tree;
+  }
+
+  bool operator!=(ChainState<max_n_genes> const&other) const {
+    return !operator==(other);
+  }
+
   /**
    * \brief The (proposed) mutation tree.
    */

@@ -36,7 +36,10 @@ using ChainStateImpl = ChainState<max_n_genes>;
 
 int main(int argc, char **argv) {
   Parameters parameters;
-  parameters.load_and_verify_args(argc, argv, max_n_cells, max_n_genes);
+  if (parameters.load_and_verify_args(argc, argv, max_n_cells, max_n_genes)) {
+    std::cerr << "Quitting due to CLI argument errors." << std::endl; 
+    return 1;
+  }
 
   cl::sycl::buffer<ac_int<2, false>, 2> data(
       cl::sycl::range<2>(parameters.get_n_cells(), parameters.get_n_genes()));

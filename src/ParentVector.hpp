@@ -321,6 +321,22 @@ public:
     std::swap(parent[node_a_i], parent[node_b_i]);
   }
 
+  bool operator==(ParentVector<max_n_nodes> const&other) const {
+    if (n_nodes != other.n_nodes) {
+      return false;
+    }
+    for (uint64_t node_i = 0; node_i < n_nodes; node_i++) {
+      if (parent[node_i] != other.parent[node_i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool operator!=(ParentVector<max_n_nodes> const&other) const {
+    return !operator==(other);
+  }
+
 private:
   std::array<uint64_t, max_n_nodes> parent;
   uint64_t n_nodes;

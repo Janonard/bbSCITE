@@ -134,7 +134,16 @@ public:
             n_best_states_ac[0] = 0;
             best_score_ac[0] = proposed_score;
           }
-          if (n_best_states_ac[0] < best_states_ac.get_range()[0]) {
+
+          bool is_duplicate = false;
+          for (uint64_t state_i = 0; state_i < n_best_states_ac[0]; state_i++) {
+            if (best_states_ac[state_i].mutation_tree == proposed_state.mutation_tree) {
+              is_duplicate = true;
+              break;
+            }
+          }
+
+          if (n_best_states_ac[0] < best_states_ac.get_range()[0] && !is_duplicate) {
             best_states_ac[n_best_states_ac[0]] = proposed_state;
             n_best_states_ac[0]++;
           }
