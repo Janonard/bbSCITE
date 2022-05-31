@@ -62,20 +62,33 @@
   * but not on gene 3 since it is not on the path from the attachment node to the root.
 
 * With all that background, it is easy to describe the algorithm:
-  * It starts of with a random tree and modifies it.
-  * For example, it may swap two nodes in place, or swap two complete subtrees, or just take a subtree and move it somewhere else.
-  * Then, it finds the mostly likely attachment node for every cell in the resulting tree
-  * and lastly, it computes the overall likelihood of the made mutation statements.
-  * Based on this likelihood, it will accept or reject the proposed state as the new state of the chain.
-  * This is then repeated as long as the user has requested, usually multiple thousand to million of times.
+  * First of all, it runs multiple independent chains to eliminate the effect of different starting trees.
+  * These are generated randomly in the beginning of a chain, and then, this current state is modified.
+    * For example, it may swap two nodes in place, or swap two complete subtrees, or just take a subtree and move it somewhere else.
+  * Then, it computes the overall likelihood of the made mutation statements.
+    * Which includes finding the mostly likely attachment node for every cell in the resulting tree
+  * If this new solution is more likely then the previously best, it is stored.
+  * Then, it runs a bernoulli experiment to decide whether it should accept or reject this proposed state as the new current state.
+    * This is done to ensure that the chain converges on likely solutions.
+  * This loop of proposing a new state and computing its likelihood is then repeated multiple thousands to millions of times, as long as the user requests it.
 
 * This algorithm offers multiple opportunities for exploitable parallelism.
 * First of all, there is little feedback from one chain step to the next
   * Actually only the current and best states of the chain and their likelihoods.
-* And you also have execute multiple independent chains from different starting points
 * The bounds of the loop are also deterministic since users simply request the number of repetititons
-* Therefore, this loop should benefit greatly from pipelining and unrolling.
+* Therefore, these loop should benefit greatly from pipelining and unrolling.
 * Lastly, there are also many internal loops that can be unrolled and pipelined, for example in the computation of the tree likelihood.
+* However, there are also some challenges:
+* Several operations like the likelihood computations or the tree modifications require tree traversals.
+  * These are obviously bounded by the number of nodes, but this is often way higher than the actual path lengths.
+* Then, we need a lot of random numbers for the tree modifications
+  * Using a single random number generator in the whole design might be a bottleneck,
+  * but in my initial research I already discovered that different RNGs may produce correlated values, even for different seeds.
+  * This is obviously bad, so I have to take care of that.
+* Lastly, there are also the common FPGA design problems of memory management and the handling of arithmetic operations.
+  * You always have those when you need to optimize your designs.
+
+
 * I therefore assume that my implementation will perform quite well.
   * As least as fast as the original implementation by Katharina Jahn, but maybe even faster than the optimized version by Dominik Ernst if I'm able to obtain this version or at least performance figures.
 
