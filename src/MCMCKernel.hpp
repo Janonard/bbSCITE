@@ -172,8 +172,9 @@ public:
    * @param parameters The configuration parameters of the simulation
    * @return std::vector<ChainStateImpl> A vector with all of the optimal
    * states.
+   * @return cl::sycl::event The SYCL event of the MCMC kernel execution.
    */
-  static std::vector<ChainStateImpl>
+  static std::tuple<std::vector<ChainStateImpl>, cl::sycl::event>
   run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
                  cl::sycl::queue working_queue, Parameters const &parameters) {
     using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, ChangeProposer,
@@ -209,7 +210,7 @@ public:
       }
     }
 
-    working_queue.submit([&](cl::sycl::handler &cgh) {
+    cl::sycl::event event = working_queue.submit([&](cl::sycl::handler &cgh) {
       auto best_states_ac =
           best_states_buffer
               .template get_access<cl::sycl::access::mode::read_write>(cgh);
@@ -258,7 +259,7 @@ public:
       best_states_vec.push_back(best_states_ac[i]);
     }
 
-    return best_states_vec;
+    return {best_states_vec, event};
   }
 
   /**

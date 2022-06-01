@@ -146,8 +146,9 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   parameters.set_n_chains(n_chains);
   parameters.set_chain_length(chain_length);
 
-  std::vector<ChainStateImpl> best_states =
+  auto result =
       MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
+  std::vector<ChainStateImpl> best_states = std::get<0>(result);
 
   bool correct_tree_found = false;
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {

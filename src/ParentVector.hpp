@@ -357,7 +357,56 @@ public:
     return !operator==(other);
   }
 
+  std::string to_graphviz() const {
+    std::stringstream stream;
+    stream << "digraph G {" << std::endl;
+    stream << "node [color=deeppink4, style=filled, fontcolor=white];"
+           << std::endl;
+    for (uint64_t node_i = 0; node_i < n_nodes - 1; node_i++) {
+      stream << parent[node_i] << " -> " << node_i << ";" << std::endl;
+    }
+    stream << "}" << std::endl;
+    return stream.str();
+  }
+
+  std::string to_newick() const {
+    std::vector<std::vector<uint64_t>> children;
+
+    // Initialize children list
+    children.reserve(n_nodes);
+    for (uint64_t node_i = 0; node_i < n_nodes; node_i++) {
+      children.push_back(std::vector<uint64_t>());
+    }
+
+    // Populate children list (not including the root to avoid infinite
+    // recursion).
+    for (uint64_t node_i = 0; node_i < n_nodes - 1; node_i++) {
+      children[parent[node_i]].push_back(node_i);
+    }
+
+    std::stringstream stream;
+    add_node_to_newick_code(children, stream, get_root());
+    stream << std::endl;
+    return stream.str();
+  }
+
 private:
+  void
+  add_node_to_newick_code(std::vector<std::vector<uint64_t>> const &children,
+                          std::stringstream &stream, uint64_t node_i) const {
+    if (children[node_i].size() != 0) {
+      stream << "(";
+      for (uint64_t i = 0; i < children[node_i].size(); i++) {
+        add_node_to_newick_code(children, stream, children[node_i][i]);
+        if (i != children[node_i].size() - 1) {
+          stream << ",";
+        }
+      }
+      stream << ")";
+    }
+    stream << node_i;
+  }
+
   std::array<uint64_t, max_n_nodes> parent;
   uint64_t n_nodes;
 };

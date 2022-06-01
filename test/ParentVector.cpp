@@ -212,3 +212,48 @@ TEST_CASE("ParentVector::swap_subtrees", "[ParentVector]") {
   REQUIRE(pv[6] == 5);
   REQUIRE(pv[7] == pv.get_root());
 }
+
+const std::string required_graphviz_tree =
+    "digraph G {\n"
+    "node [color=deeppink4, style=filled, fontcolor=white];\n"
+    "2 -> 0;\n"
+    "2 -> 1;\n"
+    "5 -> 2;\n"
+    "5 -> 3;\n"
+    "6 -> 4;\n"
+    "7 -> 5;\n"
+    "7 -> 6;\n"
+    "}\n";
+
+TEST_CASE("ParentVector::to_graphviz", "[ParentVector]") {
+  /*
+   * Tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  PV pv = PV::from_pruefer_code({2, 2, 5, 5, 6, 7});
+
+  std::string graphviz_string = pv.to_graphviz();
+  REQUIRE(graphviz_string == required_graphviz_tree);
+}
+
+const std::string required_newick_tree =
+    "(((0,1)2,3)5,(4)6)7\n";
+
+TEST_CASE("ParentVector::to_newick", "[ParentVector]") {
+  /*
+   * Tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  PV pv = PV::from_pruefer_code({2, 2, 5, 5, 6, 7});
+
+  std::string newick_string = pv.to_newick();
+  REQUIRE(newick_string == required_newick_tree);
+}

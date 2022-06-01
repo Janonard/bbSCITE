@@ -74,27 +74,48 @@ int main(int argc, char **argv) {
   }
 
   // Initializing the SYCL queue.
-  cl::sycl::queue working_queue(
-      (cl::sycl::ext::intel::fpga_emulator_selector()));
+  cl::sycl::device device =
+      cl::sycl::ext::intel::fpga_emulator_selector().select_device();
+  cl::sycl::property_list queue_properties = {
+      cl::sycl::property::queue::enable_profiling{}};
+  cl::sycl::queue working_queue(device, queue_properties);
 
   // Running the simulation and retrieving the best states.
-  std::vector<ChainStateImpl> best_states =
-      MCMCKernelImpl::run_simulation(data, working_queue, parameters);
+  auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters);
+  std::vector<ChainStateImpl> best_states = std::get<0>(result);
+  cl::sycl::event runtime_event = std::get<1>(result);
 
-  // Output the trees as graphviz files.
+  static constexpr double timesteps_per_second = 1000000000.0;
+  double start_of_event =
+      runtime_event.get_profiling_info<
+          cl::sycl::info::event_profiling::command_start>() /
+      timesteps_per_second;
+  double end_of_event =
+      runtime_event
+          .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
+      timesteps_per_second;
+  std::cout << "Simulation completed in " << end_of_event - start_of_event
+            << "s" << std::endl;
+
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {
-    std::stringstream output_path;
-    output_path << parameters.get_output_path_base() << "_ml" << state_i
-                << ".gv";
+    // Output the tree as a graphviz file.
+    {
+      std::stringstream output_path;
+      output_path << parameters.get_output_path_base() << "_ml" << state_i
+                  << ".gv";
 
-    std::ofstream output_file(output_path.str());
-    output_file << "digraph G {" << std::endl;
-    output_file << "node [color=deeppink4, style=filled, fontcolor=white];"
-                << std::endl;
-    for (uint64_t node_i = 0; node_i < parameters.get_n_genes(); node_i++) {
-      output_file << best_states[state_i].mutation_tree[node_i] << " -> "
-                  << node_i << ";" << std::endl;
+      std::ofstream output_file(output_path.str());
+      output_file << best_states[state_i].mutation_tree.to_graphviz();
     }
-    output_file << "}" << std::endl;
+
+    // Output the tree in newick format
+    {
+      std::stringstream output_path;
+      output_path << parameters.get_output_path_base() << "_ml" << state_i
+                  << ".newick";
+
+      std::ofstream output_file(output_path.str());
+      output_file << best_states[state_i].mutation_tree.to_newick();
+    }
   }
 }
