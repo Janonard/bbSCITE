@@ -170,5 +170,15 @@ int main(int argc, char **argv) {
       std::ofstream output_file(output_path.str());
       output_file << best_states[state_i].mutation_tree.to_newick();
     }
+
+    // Output the found beta value for the tree
+    {
+      std::stringstream output_path;
+      output_path << parameters.get_output_path_base() << "_ml" << state_i
+                  << "_beta.txt";
+
+      std::ofstream output_file(output_path.str());
+      output_file << best_states[state_i].beta << std::endl;
+    }
   }
 }
