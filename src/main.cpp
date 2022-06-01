@@ -37,20 +37,73 @@ using ChainStateImpl = ChainState<max_n_genes>;
 int main(int argc, char **argv) {
   // Load the CLI parameters.
   Parameters parameters;
-  if (!parameters.load_and_verify_args(argc, argv, max_n_cells, max_n_genes)) {
+  if (!parameters.load_and_verify_args(argc, argv)) {
     std::cerr << "Quitting due to CLI argument errors." << std::endl;
+    return 1;
+  }
+
+  // First pass over the input data to check validity and identify number of
+  // cells and genes.
+  uint64_t n_cells = 0, n_genes = 0;
+  {
+    std::ifstream input_file(parameters.get_input_path());
+    char c;
+    uint64_t cells_in_line = 0;
+
+    while ((c = input_file.get()) != -1) {
+      if (c == '0' || c == '1' || c == '2' || c == '3') {
+        cells_in_line++;
+      } else if (c == '\n') {
+        if (n_cells == 0) {
+          n_cells = cells_in_line;
+        } else if (n_cells != cells_in_line) {
+          std::cerr << "Error: Inconsistent rows in the input file!"
+                    << std::endl;
+          return 1;
+        }
+        n_genes++;
+        cells_in_line = 0;
+      } else if (c == ' ') {
+        continue;
+      } else {
+        std::cerr << "Error: Illegal character " << c << " in the input file!"
+                  << std::endl;
+        return 1;
+      }
+    }
+
+    if (cells_in_line == n_cells) {
+      n_genes++;
+    } else if (cells_in_line != 0) {
+      std::cerr << "Error: Inconsistent rows in the input file!" << std::endl;
+    }
+  }
+  if (n_cells == 0 || n_genes == 0) {
+    std::cerr << "Error: Empty input file!" << std::endl;
+    return 1;
+  }
+  if (n_cells > max_n_cells) {
+    std::cerr << "Error: This build of ffSCITE only supports up " << max_n_cells
+              << " cells. The input data contains " << n_cells << " cells."
+              << std::endl;
+    return 1;
+  }
+  if (n_genes > max_n_genes) {
+    std::cerr << "Error: This build of ffSCITE only supports up " << max_n_genes
+              << " genes. The input data contains " << n_genes << " genes."
+              << std::endl;
     return 1;
   }
 
   // Load the mutation input data.
   cl::sycl::buffer<ac_int<2, false>, 2> data(
-      cl::sycl::range<2>(parameters.get_n_cells(), parameters.get_n_genes()));
+      cl::sycl::range<2>(n_cells, n_genes));
   {
     auto data_ac = data.get_access<cl::sycl::access::mode::discard_write>();
     std::ifstream input_file(parameters.get_input_path());
 
-    for (uint64_t gene_i = 0; gene_i < parameters.get_n_genes(); gene_i++) {
-      for (uint64_t cell_i = 0; cell_i < parameters.get_n_cells(); cell_i++) {
+    for (uint64_t gene_i = 0; gene_i < n_genes; gene_i++) {
+      for (uint64_t cell_i = 0; cell_i < n_cells; cell_i++) {
         int entry;
         input_file >> entry;
         switch (entry) {

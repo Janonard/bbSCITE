@@ -40,12 +40,11 @@ public:
    */
   Parameters()
       : input_path(std::nullopt), output_path_base(std::nullopt),
-        n_cells(std::nullopt), n_genes(std::nullopt), n_chains(std::nullopt),
-        chain_length(std::nullopt), max_n_best_states(128), alpha_mean(6.04e-5),
-        beta_mean(0.4309), beta_sd(0.1), prob_beta_change(0.0),
-        prob_prune_n_reattach(0.55), prob_swap_nodes(0.4),
-        prob_swap_subtrees(0.05), beta_jump_scaling_chi(10.0), gamma(1.0),
-        seed(std::nullopt) {}
+        n_chains(std::nullopt), chain_length(std::nullopt),
+        max_n_best_states(128), alpha_mean(6.04e-5), beta_mean(0.4309),
+        beta_sd(0.1), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
+        prob_swap_nodes(0.4), prob_swap_subtrees(0.05),
+        beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {}
 
   /**
    * @brief Verify the CLI arguments and store them in the object's fields.
@@ -56,17 +55,12 @@ public:
    *
    * @param argc The number of arguments passed to the main function.
    * @param argv The list of arguments passed to the main function.
-   * @param max_n_cells The maximum number of cells supported by the
-   * application. Used to verify the validity of the parameters.
-   * @param max_n_genes The maximum number of genes supported by the
-   * application. Used to verify the validity of the parameters.
    * @return true Arguments were free of errors and parameters were successfully
    * loaded.
    * @return false There are errors in the CLI arguments. Some parameters may
    * have been loaded successfully.
    */
-  bool load_and_verify_args(int argc, char **argv, uint64_t max_n_cells,
-                            uint64_t max_n_genes) {
+  bool load_and_verify_args(int argc, char **argv) {
     bool error = false;
     for (int i = 1; i < argc; ++i) {
       if (argv[i][0] != '-') {
@@ -92,19 +86,13 @@ public:
           error = true;
         }
       } else if (strcmp(argv[i], "-n") == 0) {
-        if (i + 1 < argc) {
-          n_genes = atoi(argv[++i]);
-        } else {
-          std::cerr << "Error: Missing argument to parameter -n." << std::endl;
-          error = true;
-        }
+        std::cerr << "Warning: The number of genes is inferred from the input "
+                     "file. Ignoring parameter -n."
+                  << std::endl;
       } else if (strcmp(argv[i], "-m") == 0) {
-        if (i + 1 < argc) {
-          n_cells = atoi(argv[++i]);
-        } else {
-          std::cerr << "Error: Missing argument to parameter -m." << std::endl;
-          error = true;
-        }
+        std::cerr << "Warning: The number of cells is inferred from the input "
+                     "file. Ignoring parameter -n."
+                  << std::endl;
       } else if (strcmp(argv[i], "-r") == 0) {
         if (i + 1 < argc) {
           n_chains = atoi(argv[++i]);
@@ -273,20 +261,6 @@ public:
       error = true;
     }
 
-    if (!n_cells.has_value()) {
-      std::cerr << "Error: Missing number of cells. Did you forget to set the "
-                   "-m parameter?"
-                << std::endl;
-      error = true;
-    }
-
-    if (!n_genes.has_value()) {
-      std::cerr << "Error: Missing number of genes. Did you forget to set the "
-                   "-n parameter?"
-                << std::endl;
-      error = true;
-    }
-
     if (!n_chains.has_value()) {
       std::cerr << "Error: Missing number of markov chains to simulate. Did "
                    "you forget to set the -r parameter?"
@@ -306,20 +280,6 @@ public:
         0) {
       std::cerr << "Error: The sum of the move type probabilities is zero."
                 << std::endl;
-      error = true;
-    }
-
-    if (n_cells > max_n_cells) {
-      std::cerr << "Error: The number of cells is too big. This build of "
-                   "ffSCITE only supports up to "
-                << max_n_cells << " cells." << std::endl;
-      error = true;
-    }
-
-    if (n_genes > max_n_genes) {
-      std::cerr << "Error: The number of genes is too big. This build of "
-                   "ffSCITE only supports up to "
-                << max_n_genes << " genes." << std::endl;
       error = true;
     }
 
@@ -366,34 +326,6 @@ public:
   void set_output_path_base(std::string output_path_base) {
     this->output_path_base = output_path_base;
   }
-
-  /**
-   * @brief Get the number of cells in the input.
-   *
-   * @return uint64_t The number of cells in the input.
-   */
-  uint64_t get_n_cells() const { return n_cells.value(); }
-
-  /**
-   * @brief Set the number of cells in the input
-   *
-   * @param n_cells The new number of cells in the input.
-   */
-  void set_n_cells(uint64_t n_cells) { this->n_cells = n_cells; }
-
-  /**
-   * @brief Get the number of genes in the input.
-   *
-   * @return uint64_t The number of genes in the input.
-   */
-  uint64_t get_n_genes() const { return n_genes.value(); }
-
-  /**
-   * @brief Set the number of genes in the input.
-   *
-   * @param n_genes The new number of genes in the input.
-   */
-  void set_n_genes(uint64_t n_genes) { this->n_genes = n_genes; }
 
   /**
    * @brief Get the number of chains to execute.
@@ -702,7 +634,7 @@ private:
 
   std::optional<std::string> input_path, output_path_base;
 
-  std::optional<uint64_t> n_cells, n_genes, n_chains, chain_length;
+  std::optional<uint64_t> n_chains, chain_length;
   uint64_t max_n_best_states;
 
   double alpha_mean, beta_mean, beta_sd;
