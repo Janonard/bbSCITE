@@ -21,35 +21,35 @@
 
 namespace ffSCITE {
 /**
- * \brief Engine to propose random changes to a chain's state.
+ * @brief Engine to propose random changes to a chain's state.
  *
  * It uses a URNG to propose a change to a tree presented to it. The individual
  * types of changes are exposed as public methods to ease testing, but users
- * should only use the \ref ChangeProposer::propose_change method.
+ * should only use the @ref ChangeProposer::propose_change method.
  *
- * \tparam max_n_genes The maximal number of genes in the dataset.
+ * @tparam max_n_genes The maximal number of genes in the dataset.
  * tree.
- * \tparam RNG The URNG to retrieve random numbers for the changes from.
+ * @tparam RNG The URNG to retrieve random numbers for the changes from.
  */
 template <uint64_t max_n_genes, typename RNG> class ChangeProposer {
 public:
   /**
-   * \brief Shorthand for the chain state type.
+   * @brief Shorthand for the chain state type.
    */
   using ChainStateImpl = ChainState<max_n_genes>;
 
   /**
-   * \brief Shorthand for the parent vector type.
+   * @brief Shorthand for the parent vector type.
    */
   using ParentVectorImpl = typename ChainStateImpl::ParentVectorImpl;
 
   /**
-   * \brief Shorthand for the maximal number of nodes in the mutation tree.
+   * @brief Shorthand for the maximal number of nodes in the mutation tree.
    */
   static constexpr uint64_t max_n_nodes = ChainStateImpl::max_n_nodes;
 
   /**
-   * \brief Initialize the change proposer with user-defined parameters.
+   * @brief Initialize the change proposer with user-defined parameters.
    *
    * The parameters `prob_beta_change`, `prob_prune_n_reattach`, and
    * `prob_swap_nodes` describe how often which types of changes are proposed.
@@ -58,14 +58,14 @@ public:
    * Therefore, the sum of these three parameters has to be less than 1.0 and
    * this is asserted if the constructor is not compiled for a SYCL device.
    *
-   * \param rng The URNG instance that is used to sample changes.
-   * \param prob_beta_change The probability that a proposed change changes the
+   * @param rng The URNG instance that is used to sample changes.
+   * @param prob_beta_change The probability that a proposed change changes the
    * beta error rate.
-   * \param prob_prune_n_reattach The probability that a
+   * @param prob_prune_n_reattach The probability that a
    * proposed change prunes and reattaches a subtree of the mutation tree.
-   * \param prob_swap_nodes The probability that a proposed change swap two
+   * @param prob_swap_nodes The probability that a proposed change swap two
    * nodes in the mutation tree.
-   * \param beta_jump_sd The standard derivation of
+   * @param beta_jump_sd The standard derivation of
    * the beta error changes.
    */
   ChangeProposer(RNG rng, double prob_beta_change, double prob_prune_n_reattach,
@@ -79,20 +79,18 @@ public:
   }
 
   /**
-   * \brief Initialize the change proposer with default parameters.
+   * @brief Initialize the change proposer with default parameters.
    *
-   * \param rng The URNG instance that is used to sample changes.
+   * @param rng The URNG instance that is used to sample changes.
    */
   ChangeProposer(RNG rng)
       : rng(rng), prob_beta_change(0.55), prob_prune_n_reattach(0.5),
         prob_swap_nodes(0.5), beta_jump_sd(0.1) {}
 
-  RNG &get_rng() {
-    return rng;
-  }
+  RNG &get_rng() { return rng; }
 
   /**
-   * \brief The different move types that the proposer may propose.
+   * @brief The different move types that the proposer may propose.
    */
   enum class MoveType {
     ChangeBeta,
@@ -102,12 +100,13 @@ public:
   };
 
   /**
-   * \brief Sample one of the possible moves with the defined distribution.
+   * @brief Sample one of the possible moves with the defined distribution.
    *
-   * \return A random move.
+   * @return A random move.
    */
   MoveType sample_move() {
-    double change_type_draw = oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
+    double change_type_draw =
+        oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
       return MoveType::ChangeBeta;
     } else if (change_type_draw <= prob_beta_change + prob_prune_n_reattach) {
@@ -121,7 +120,7 @@ public:
   }
 
   /**
-   * \brief Sample two distinct non-root nodes.
+   * @brief Sample two distinct non-root nodes.
    *
    * Let V be the set of nodes in the mutation tree and r be the root of the
    * tree. Then, this method can be viewed as a uniformly distributed random
@@ -129,7 +128,7 @@ public:
    * these two nodes are not guaranteed: The first node may have a lower or
    * higher index than the second node.
    *
-   * \return Two random nodes
+   * @return Two random nodes
    */
   std::array<uint64_t, 2> sample_nonroot_nodepair(uint64_t n_nodes) {
     std::array<uint64_t, 2> sampled_nodes;
@@ -146,7 +145,7 @@ public:
   }
 
   /**
-   * \brief Sample from one of a node's descendants or nondescendants.
+   * @brief Sample from one of a node's descendants or nondescendants.
    *
    * Let V be the set of nodes in the mutation tree and i the parameter node.
    * Then, this method can be viewed as a uniformly distributed random variable
@@ -154,13 +153,13 @@ public:
    * or from {v ∈ V | i \not\leadsto v} if `sample_descendants` is false. If
    * `include_root` is false, the root is removed from the sampled set.
    *
-   * \param ancestor_matrix The current ancestor matrix of the mutation tree.
-   * \param node_i The node from who's descendants or nondescendants this method
+   * @param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * @param node_i The node from who's descendants or nondescendants this method
    * samples.
-   * \param sample_descandent True iff the method is supposed to sample
+   * @param sample_descandent True iff the method is supposed to sample
    * from the nodes descendants. Otherwise, it will sample from the node's
    * nondescendants.
-   * \return One of the nodes descendants or nondescendants.
+   * @return One of the nodes descendants or nondescendants.
    */
   uint64_t sample_descendant_or_nondescendant(
       AncestorMatrix<max_n_nodes> const &ancestor_matrix, uint64_t node_i,
@@ -189,7 +188,8 @@ public:
     // Sample the occurrence of the (non)descendant to pick. The resulting node
     // will be the `sampled_occurrence_i`th (non)descendant.
     uint64_t sampled_occurrence_i =
-        oneapi::dpl::uniform_int_distribution<uint64_t>(0, n_descendants - 1)(rng);
+        oneapi::dpl::uniform_int_distribution<uint64_t>(0,
+                                                        n_descendants - 1)(rng);
 
     // Walk through the (non)descendant bitvector and pick the correct node
     // index.
@@ -208,14 +208,14 @@ public:
   }
 
   /**
-   * \brief Propose a new beta error rate.
+   * @brief Propose a new beta error rate.
    *
-   * \param old_beta The old beta error rate.
-   * \return The newly proposed beta error rate.
+   * @param old_beta The old beta error rate.
+   * @return The newly proposed beta error rate.
    */
   double change_beta(double old_beta) {
-    double new_beta =
-        old_beta + oneapi::dpl::normal_distribution<double>(0, beta_jump_sd)(rng);
+    double new_beta = old_beta + oneapi::dpl::normal_distribution<double>(
+                                     0, beta_jump_sd)(rng);
     if (new_beta < 0) {
       new_beta = std::abs(new_beta);
     }
@@ -226,16 +226,16 @@ public:
   }
 
   /**
-   * \brief Propose a prune-and-reattach move.
+   * @brief Propose a prune-and-reattach move.
    *
    * This method picks a non-root node in the mutation tree, detaches it from
    * it's current parent and attaches to another node (which may not be a
    * descendant of the moved node). Note that this modifies the referenced
    * parent vector.
    *
-   * \param parent_vector The parent vector to modify.
-   * \param ancestor_matrix The current ancestor matrix of the mutation tree.
-   * \return The index of the the moved node.
+   * @param parent_vector The parent vector to modify.
+   * @param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * @return The index of the the moved node.
    */
   uint64_t
   prune_and_reattach(ParentVector<max_n_nodes> &parent_vector,
@@ -255,13 +255,13 @@ public:
   }
 
   /**
-   * \brief Propose a swap-nodes move.
+   * @brief Propose a swap-nodes move.
    *
    * This method picks two non-root nodes in the mutation tree and swaps their
    * labels. The structure will remain the same, just two nodes are swapped.
    *
-   * \param parent_vector The parent vector to modify.
-   * \return The indices of the swapped nodes.
+   * @param parent_vector The parent vector to modify.
+   * @return The indices of the swapped nodes.
    */
   std::array<uint64_t, 2> swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
     std::array<uint64_t, 2> nodes_to_swap =
@@ -271,7 +271,7 @@ public:
   }
 
   /**
-   * \brief Propose a swap-subtrees move.
+   * @brief Propose a swap-subtrees move.
    *
    * This method picks two non-root nodes in the mutation tree and swaps their
    * complete subtrees. If these nodes are not ancestors of each other, this
@@ -283,10 +283,10 @@ public:
    * If the sampled nodes are related, the neighborhood correction factor is set
    * accordingly, otherwise it is set to 1.0.
    *
-   * \param parent_vector The parent vector to modify.
-   * \param ancestor_matrix The current ancestor matrix of the mutation tree.
-   * \param out_neighborhood_correction Output: Neighborhood correction factor.
-   * \return The two swapped/moved nodes.
+   * @param parent_vector The parent vector to modify.
+   * @param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * @param out_neighborhood_correction Output: Neighborhood correction factor.
+   * @return The two swapped/moved nodes.
    */
   std::array<uint64_t, 2>
   swap_subtrees(ParentVector<max_n_nodes> &parent_vector,
@@ -336,10 +336,10 @@ public:
   }
 
   /**
-   * \brief Propose a random change to the markov chain state.
+   * @brief Propose a random change to the markov chain state.
    *
-   * \param state The current state of the chain, which will be modified.
-   * \param out_neighborhood_correction Output: The neighborhood correction
+   * @param state The current state of the chain, which will be modified.
+   * @param out_neighborhood_correction Output: The neighborhood correction
    * factor.
    */
   void propose_change(ChainState<max_n_genes> &state,

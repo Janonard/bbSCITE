@@ -19,24 +19,24 @@
 
 namespace ffSCITE {
 /**
- * \brief A datastructure to query whether two nodes in a tree are related.
+ * @brief A datastructure to query whether two nodes in a tree are related.
  *
  * This is done by storing a nxn-matrix of bits. According to an ancestor matrix
  * A, the node i is an ancestor of j iff A[i][j] is true (or 1). Ancestor
- * matrices are usually constructed from a \ref ParentVector.
+ * matrices are usually constructed from a @ref ParentVector.
  *
- * \tparam max_n_nodes The maximal number of nodes in tree,
+ * @tparam max_n_nodes The maximal number of nodes in tree,
  * excluding the root.
  */
 template <uint64_t max_n_nodes> class AncestorMatrix {
 public:
   /**
-   * \brief Shorthand to the corresponding parent vector type.
+   * @brief Shorthand to the corresponding parent vector type.
    */
   using ParentVectorImpl = ParentVector<max_n_nodes>;
 
   /**
-   * \brief Default constructor
+   * @brief Default constructor
    *
    * Instantiate the ancestor matrix of a tree with the maximal number of nodes
    * where all nodes are connected directly to the root.
@@ -53,13 +53,13 @@ public:
   operator=(AncestorMatrix<max_n_nodes> const &other) = default;
 
   /**
-   * \brief Construct the ancestor matrix for a parent vector's tree.
+   * @brief Construct the ancestor matrix for a parent vector's tree.
    *
    * This done by walking up from every node to the tree's root and marking all
    * nodes on the way. The number of nodes will be transferred from the parent
    * vector.
    *
-   * \param parent_vector The parent vector to construct the ancestor matrix
+   * @param parent_vector The parent vector to construct the ancestor matrix
    * from.
    */
   AncestorMatrix(ParentVectorImpl const &parent_vector)
@@ -83,11 +83,11 @@ public:
   }
 
   /**
-   * \brief Query whether node a is an ancestor of node b.
+   * @brief Query whether node a is an ancestor of node b.
    *
-   * \param node_a_i The index of the potential ancestor.
-   * \param node_b_i The index of the potential descendant.
-   * \return true iff node a is an ancestor of node b.
+   * @param node_a_i The index of the potential ancestor.
+   * @param node_b_i The index of the potential descendant.
+   * @return true iff node a is an ancestor of node b.
    */
   bool is_ancestor(uint64_t node_a_i, uint64_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -97,11 +97,11 @@ public:
   }
 
   /**
-   * \brief Query whether node a is a descendant of node b.
+   * @brief Query whether node a is a descendant of node b.
    *
-   * \param node_a_i The index of the potential descendant.
-   * \param node_b_i The index of the potential ancestor.
-   * \return true iff node a is an ancestor of node b.
+   * @param node_a_i The index of the potential descendant.
+   * @param node_b_i The index of the potential ancestor.
+   * @return true iff node a is an ancestor of node b.
    */
   bool is_descendant(uint64_t node_a_i, uint64_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -111,15 +111,15 @@ public:
   }
 
   /**
-   * \brief Return a boolean array describing a node's descendants.
+   * @brief Return a boolean array describing a node's descendants.
    *
    * For example, if this method was invoked for node a, one can query whether
    * node b is a descendant of node a by checking whether the bit with index b
    * in the array is true. This form of an array of boolean values can be used
    * to iterate over the descendants of a node.
    *
-   * \param node_i The index of the node who's descendants are queried.
-   * \return The descendants bit array.
+   * @param node_i The index of the node who's descendants are queried.
+   * @return The descendants bit array.
    */
   std::array<bool, max_n_nodes> get_descendants(uint64_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -133,10 +133,10 @@ public:
   }
 
   /**
-   * \brief Get the total number of a node's descendants.
+   * @brief Get the total number of a node's descendants.
    *
-   * \param node_i The index of the node who's number of descendants is queried.
-   * \return The number of descendants.
+   * @param node_i The index of the node who's number of descendants is queried.
+   * @return The number of descendants.
    */
   uint64_t get_n_descendants(uint64_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -152,15 +152,15 @@ public:
   }
 
   /**
-   * \brief Return a boolean array describing a node's ancestors.
+   * @brief Return a boolean array describing a node's ancestors.
    *
    * For example, if this method was invoked for node a, one can query whether
    * node b is an ancestor of node a by checking whether the bit with index b
    * in the array is true. This form of an array of boolean values can be used
    * to iterate over the ancestors of a node.
    *
-   * \param node_i The index of the node who's ancestors are queried.
-   * \return The ancestors bit array.
+   * @param node_i The index of the node who's ancestors are queried.
+   * @return The ancestors bit array.
    */
   std::array<bool, max_n_nodes> get_ancestors(uint64_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -174,10 +174,10 @@ public:
   }
 
   /**
-   * \brief Get the total number of a node's ancestors.
+   * @brief Get the total number of a node's ancestors.
    *
-   * \param node_i The index of the node who's number of ancestors is queried.
-   * \return The number of ancestors.
+   * @param node_i The index of the node who's number of ancestors is queried.
+   * @return The number of ancestors.
    */
   uint64_t get_n_ancestors(uint64_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -193,9 +193,9 @@ public:
   }
 
   /**
-   * \brief Return the number of nodes in the tree.
+   * @brief Return the number of nodes in the tree.
    *
-   * \return The number of nodes in the tree.
+   * @return The number of nodes in the tree.
    */
   uint64_t get_n_nodes() const { return n_nodes; }
 

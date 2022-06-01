@@ -21,11 +21,11 @@
 
 namespace ffSCITE {
 /**
- * \brief An abstract matrix width static sizes and some vector operations.
+ * @brief An abstract matrix width static sizes and some vector operations.
  *
- * \tparam T The type of the entries
- * \tparam width The width of the matrix
- * \tparam height The height of the matrix
+ * @tparam T The type of the entries
+ * @tparam width The width of the matrix
+ * @tparam height The height of the matrix
  */
 template <typename T, uint64_t width, uint64_t height> class StaticMatrix {
 public:

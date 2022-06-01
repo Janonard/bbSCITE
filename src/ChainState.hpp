@@ -19,17 +19,17 @@
 
 namespace ffSCITE {
 /**
- * \brief Compact structure containing the state of a SCITE markov chain.
+ * @brief Compact structure containing the state of a SCITE markov chain.
  *
  * This is nothing more than a parent vector for the mutation tree, the beta
  * error rate, and some default operations.
  *
- * \tparam The maximal number of genes in the dataset.
+ * @tparam max_n_genes The maximal number of genes in the dataset.
  */
 template <uint64_t max_n_genes> struct ChainState {
 public:
   /**
-   * \brief The maximal number of nodes in a mutation tree.
+   * @brief The maximal number of nodes in a mutation tree.
    *
    * The mutation tree has a node for every gene that may mutate, but also an
    * additional node that represents the totally unmutated state.
@@ -37,7 +37,7 @@ public:
   static constexpr uint64_t max_n_nodes = max_n_genes + 1;
 
   /**
-   * \brief Shorthand for the parent vector type.
+   * @brief Shorthand for the parent vector type.
    */
   using ParentVectorImpl = ParentVector<max_n_nodes>;
 
@@ -47,25 +47,25 @@ public:
   operator=(ChainState<max_n_genes> const &other) = default;
 
   /**
-   * \brief Initialize a chain state with the given mutation tree and beta error
+   * @brief Initialize a chain state with the given mutation tree and beta error
    * rate.
    *
-   * \param mutation_tree The mutation tree to use.
-   * \param beta The beta error rate to use.
+   * @param mutation_tree The mutation tree to use.
+   * @param beta The probability of false negatives for the new state.
    */
   ChainState(ParentVector<max_n_nodes> mutation_tree, double beta)
       : mutation_tree(mutation_tree), beta(beta) {}
 
   /**
-   * \brief Initialize a new, random chain state.
+   * @brief Initialize a new, random chain state.
    *
    * The mutation tree will be sampled from a uniform distribution and the beta
    * error rate will be set to a prior value.
    *
-   * \tparam RNG The URNG to use for mutation tree sampling.
-   * \param rng The URNG instance to use.
-   * \param n_genes The number of genes in the dataset.
-   * \param beta_prior A prior estimate of the beta error rate.
+   * @tparam RNG The URNG to use for mutation tree sampling.
+   * @param rng The URNG instance to use.
+   * @param n_genes The number of genes in the dataset.
+   * @param beta The probability of false negatives for the new state.
    */
   template <typename RNG>
   static ChainState<max_n_genes> sample_random_state(RNG &rng, uint64_t n_genes,
@@ -75,21 +75,24 @@ public:
     return ChainState<max_n_genes>(mutation_tree, beta);
   }
 
-  bool operator==(ChainState<max_n_genes> const&other) const {
+  /**
+   * @brief Test for equality to the other state.
+   *
+   * @param other The other state to compare to.
+   * @return true The other state is equal to this state.
+   * @return false The other state is not equal to this state.
+   */
+  bool operator==(ChainState<max_n_genes> const &other) const {
     return beta == other.beta && mutation_tree == other.mutation_tree;
   }
 
-  bool operator!=(ChainState<max_n_genes> const&other) const {
-    return !operator==(other);
-  }
-
   /**
-   * \brief The (proposed) mutation tree.
+   * @brief The (proposed) mutation tree.
    */
   ParentVector<max_n_nodes> mutation_tree;
 
   /**
-   * \brief The (proposed) beta error rate.
+   * @brief The (proposed) beta error rate.
    */
   double beta;
 };

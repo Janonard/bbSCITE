@@ -22,18 +22,18 @@
 
 namespace ffSCITE {
 /**
- * \brief SYCL kernel that simulates a SCITE markov chain.
+ * @brief SYCL kernel that simulates a SCITE markov chain.
  *
  * It picks up a chain with a given current and best states, simulates the chain
  * from this point for a set number of iterations and writes the resulting state
  * back. It takes a change proposer and a state scorer as it's type argument so
  * that they can easily be swapped out to test different approaches.
  *
- * \tparam max_n_cells The maximum number of cells supported by the kernel.
- * \tparam max_n_genes The maximum number of genes supported by the kernel.
- * \tparam ChangeProposer The type of the change proposing strategy.
- * \tparam StateScorer The type of the state scoring strategy.
- * \tparam access_target The target from where the states are accessed.
+ * @tparam max_n_cells The maximum number of cells supported by the kernel.
+ * @tparam max_n_genes The maximum number of genes supported by the kernel.
+ * @tparam ChangeProposer The type of the change proposing strategy.
+ * @tparam StateScorer The type of the state scoring strategy.
+ * @tparam access_target The target from where the states are accessed.
  */
 template <uint64_t max_n_cells, uint64_t max_n_genes, typename ChangeProposer,
           typename StateScorer,
@@ -42,40 +42,48 @@ template <uint64_t max_n_cells, uint64_t max_n_genes, typename ChangeProposer,
 class MCMCKernel {
 public:
   /**
-   * \brief Shorthand for the used chain state.
+   * @brief Shorthand for the used chain state.
    */
   using ChainStateImpl = ChainState<max_n_genes>;
 
   /**
-   * \brief Shorthand for the chain state buffer accessor type.
+   * @brief Shorthand for the chain state buffer accessor type.
    */
   using StateAccessor =
       cl::sycl::accessor<ChainStateImpl, 1, cl::sycl::access::mode::read_write,
                          access_target>;
 
+  /**
+   * @brief Shorthand for the double buffer accessor type.
+   */
   using ScoreAccessor =
       cl::sycl::accessor<double, 1, cl::sycl::access::mode::read_write,
                          access_target>;
 
+  /**
+   * @brief Shorthand for the index buffer accessor type.
+   */
   using IndexAccessor =
       cl::sycl::accessor<uint64_t, 1, cl::sycl::access::mode::read_write,
                          access_target>;
 
   /**
-   * \brief
+   * @brief Initialize the MCMC kernel instance.
    *
-   *
-   *
-   * \param change_proposer The configured instance of the change proposer to
+   * @param change_proposer The configured instance of the change proposer to
    * use.
-   * \param state_scorer The configured instance of the state scorer to
+   * @param state_scorer The configured instance of the state scorer to
    * use.
-   * \param gamma A factor for the width of the optimization space
+   * @param gamma A factor for the width of the optimization space
    * exploration.
-   * \param current_state_ac Accessor to the current state of the
-   * chain.
-   * \param best_state_ac Accessor to the best known state of the chain.
-   * \param n_steps The number of steps to execute.
+   * @param best_states_ac Accessor to the buffer for the optimal states.
+   * @param best_score_ac Accessor to the score of the optimal states.
+   * @param current_states_ac Accessor to the current states of the
+   * chains.
+   * @param current_scores_ac Accessor to the scores of the current states of
+   * the chains.
+   * @param n_best_states_ac Accessor to the number of best states.
+   * @param n_steps The number of steps to execute.
    */
   MCMCKernel(ChangeProposer change_proposer, StateScorer state_scorer,
              double gamma, StateAccessor best_states_ac,
@@ -94,7 +102,7 @@ public:
    * @brief Run the MCMC chain.
    *
    * This will read the current and best states from device memory, execute the
-   * configured number of steps and writes the results back.
+   * configured number of steps for every chain and writes the results back.
    */
   void operator()() const {
     // Copy of score to avoid mutation within the constant operator.
@@ -137,13 +145,15 @@ public:
 
           bool is_duplicate = false;
           for (uint64_t state_i = 0; state_i < n_best_states_ac[0]; state_i++) {
-            if (best_states_ac[state_i].mutation_tree == proposed_state.mutation_tree) {
+            if (best_states_ac[state_i].mutation_tree ==
+                proposed_state.mutation_tree) {
               is_duplicate = true;
               break;
             }
           }
 
-          if (n_best_states_ac[0] < best_states_ac.get_range()[0] && !is_duplicate) {
+          if (n_best_states_ac[0] < best_states_ac.get_range()[0] &&
+              !is_duplicate) {
             best_states_ac[n_best_states_ac[0]] = proposed_state;
             n_best_states_ac[0]++;
           }
@@ -152,6 +162,17 @@ public:
     }
   }
 
+  /**
+   * @brief Run the MCMC experiment with the given data and parameters.
+   *
+   * @param data_buffer The mutation data from the input file. The number of
+   * cells and genes is inferred from its range.
+   * @param working_queue The configured SYCL queue to execute the simulation
+   * with.
+   * @param parameters The configuration parameters of the simulation
+   * @return std::vector<ChainStateImpl> A vector with all of the optimal
+   * states.
+   */
   static std::vector<ChainStateImpl>
   run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
                  cl::sycl::queue working_queue, Parameters const &parameters) {

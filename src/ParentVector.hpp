@@ -24,7 +24,7 @@
 
 namespace ffSCITE {
 /**
- * \brief Canonical datatype to store and modify a mutation tree.
+ * @brief Canonical datatype to store and modify a mutation tree.
  *
  * A parent vector stores an rooted and enumerated tree, i.e. a tree where V =
  * {0, ..., n-1} for some natural number n. For this, it contains an array of
@@ -41,12 +41,12 @@ namespace ffSCITE {
  * that no cycles are introduced. The methods also assert the validity of the
  * requested operations if they are not compiled for SYCL devices.
  *
- * \tparam max_n_nodes The maximal number of nodes in the tree.
+ * @tparam max_n_nodes The maximal number of nodes in the tree.
  */
 template <uint64_t max_n_nodes> class ParentVector {
 public:
   /**
-   * \brief Default constructor
+   * @brief Default constructor
    *
    * Instantiate a tree with the maximal number of nodes where all nodes are
    * connected directly to the root.
@@ -60,11 +60,11 @@ public:
   ParentVector &operator=(ParentVector const &other) = default;
 
   /**
-   * \brief Instantiate a parent vector with a certain number of nodes.
+   * @brief Instantiate a parent vector with a certain number of nodes.
    *
    * All nodes will be initially attached to the root.
    *
-   * \param n_nodes The number of nodes in the tree.
+   * @param n_nodes The number of nodes in the tree.
    */
   ParentVector(uint64_t n_nodes) : parent(), n_nodes(n_nodes) {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -77,16 +77,16 @@ public:
   }
 
   /**
-   * \brief Return the node index of the root.
+   * @brief Return the node index of the root.
    *
    * This index is always the number of nodes minus 1.
    *
-   * \return The node index of the root.
+   * @return The node index of the root.
    */
   uint64_t get_root() const { return n_nodes - 1; }
 
   /**
-   * \brief Construct a parent vector from a tree's Prüfer Code.
+   * @brief Construct a parent vector from a tree's Prüfer Code.
    *
    * A Prüfer Code is a series of indices that uniquely describes a tree. It's
    * rather compact and can easily be used to sample a uniformly distributed
@@ -94,8 +94,8 @@ public:
    * - 2` since a Prüfer Code of length n describes a tree with n+2 nodes. This
    * is asserted if the method is not compiled for a SYCL device.
    *
-   * \param pruefer_code The Prüfer Code to reconstruct.
-   * \return The tree represented by the Prüfer Code.
+   * @param pruefer_code The Prüfer Code to reconstruct.
+   * @return The tree represented by the Prüfer Code.
    */
   static ParentVector<max_n_nodes>
   from_pruefer_code(std::vector<uint64_t> const &pruefer_code) {
@@ -143,16 +143,16 @@ public:
   }
 
   /**
-   * \brief Generate a random, uniformly distributed tree.
+   * @brief Generate a random, uniformly distributed tree.
    *
    * This is done by generating a random Prüfer Code and using
    * `from_pruefer_code` to construct the tree.
    *
-   * \tparam The type of URNG to use.
-   * \param rng The URNG instance to use.
-   * \param n_nodes The number of nodes in the resulting tree, must be lower
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @param n_nodes The number of nodes in the resulting tree, must be lower
    * than or equal to `max_n_nodes`.
-   * \return A random, uniformly distributed tree.
+   * @return A random, uniformly distributed tree.
    */
   template <typename RNG>
   static ParentVector<max_n_nodes> sample_random_tree(RNG &rng,
@@ -161,8 +161,8 @@ public:
     assert(n_nodes <= max_n_nodes);
 #endif
 
-    oneapi::dpl::uniform_int_distribution<unsigned long> int_distribution(0,
-                                                                  n_nodes - 1);
+    oneapi::dpl::uniform_int_distribution<unsigned long> int_distribution(
+        0, n_nodes - 1);
 
     // Generate a pruefer code for the tree.
     std::vector<uint64_t> pruefer_code;
@@ -176,22 +176,22 @@ public:
   uint64_t operator[](uint64_t node_i) const { return parent[node_i]; }
 
   /**
-   * \brief Get the number of nodes in the tree.
+   * @brief Get the number of nodes in the tree.
    *
-   * \return The number of nodes in the tree.
+   * @return The number of nodes in the tree.
    */
   uint64_t get_n_nodes() const { return n_nodes; }
 
   /**
-   * \brief Check whether node a is a descendant of node b.
+   * @brief Check whether node a is a descendant of node b.
    *
    * This is done by following the parent vector links until either node b or
    * the root has been found. If node b was found, then a is a descendant of b,
    * otherwise not.
    *
-   * \param node_a_i The index of node a.
-   * \param node_b_i The index of node b.
-   * \return true iff node a is a descendant of node b.
+   * @param node_a_i The index of node a.
+   * @param node_b_i The index of node b.
+   * @return true iff node a is a descendant of node b.
    */
   bool is_descendant(uint64_t node_a_i, uint64_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -210,14 +210,14 @@ public:
   }
 
   /**
-   * \brief Swap the positions of two nodes within the tree.
+   * @brief Swap the positions of two nodes within the tree.
    *
    * After this operation, the tree will have the same topology as before, but
    * node b will be where node a used to be, and vice versa. None of these nodes
    * may be the root of the tree since the root is not movable.
    *
-   * \param node_a_i One of the nodes to swap.
-   * \param node_b_i The other node to swap.
+   * @param node_a_i One of the nodes to swap.
+   * @param node_b_i The other node to swap.
    */
   void swap_nodes(uint64_t node_a_i, uint64_t node_b_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -250,7 +250,7 @@ public:
   }
 
   /**
-   * \brief Move the subtree below a node to a new parent.
+   * @brief Move the subtree below a node to a new parent.
    *
    * After that, the moved node's parent will be the requested new parent, but
    * apart from that, the tree will remain the same. If the method is not
@@ -259,8 +259,8 @@ public:
    * tree and introduce a cycle. The node to move must also not be the root of
    * the tree, as the root is not movable.
    *
-   * \param node_i The index of the node to move.
-   * \param new_parent_i The index of the node's new parent node.
+   * @param node_i The index of the node to move.
+   * @param new_parent_i The index of the node's new parent node.
    */
   void move_subtree(uint64_t node_i, uint64_t new_parent_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -271,13 +271,13 @@ public:
   }
 
   /**
-   * \brief Compute an array that contains all nodes of the tree in
+   * @brief Compute an array that contains all nodes of the tree in
    * breadth-first order, starting from the root.
    *
    * Storing these indices in an array makes it later easy to statically
    * traverse the tree in breadth-first order.
    *
-   * \return An array that contains all nodes of the tree in breadth-first
+   * @return An array that contains all nodes of the tree in breadth-first
    * order.
    */
   std::array<uint64_t, max_n_nodes> calc_breadth_first_traversal() const {
@@ -300,7 +300,7 @@ public:
   }
 
   /**
-   * \brief Swap two subtrees in the tree.
+   * @brief Swap two subtrees in the tree.
    *
    * This operation takes the subtree below node a, hangs it next to node b, and
    * then hangs the subtree below node b to where node a used to be. If the
@@ -309,8 +309,8 @@ public:
    * of the tree and introduce a cycle. None of these nodes may be the root of
    * the tree, since the root is not movable.
    *
-   * \param node_a_i The index of one of the nodes to swap.
-   * \param node_b_i The index of the other node to swap.
+   * @param node_a_i The index of one of the nodes to swap.
+   * @param node_b_i The index of the other node to swap.
    */
   void swap_subtrees(uint64_t node_a_i, uint64_t node_b_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
@@ -321,7 +321,17 @@ public:
     std::swap(parent[node_a_i], parent[node_b_i]);
   }
 
-  bool operator==(ParentVector<max_n_nodes> const&other) const {
+  /**
+   * @brief Compare two parent vectors for equality.
+   *
+   * Two trees are equal iff their number of nodes is equal and every node has
+   * the same parent.
+   *
+   * @param other The other tree to compare too.
+   * @return true The two trees are equal.
+   * @return false The two trees are not equal.
+   */
+  bool operator==(ParentVector<max_n_nodes> const &other) const {
     if (n_nodes != other.n_nodes) {
       return false;
     }
@@ -333,7 +343,17 @@ public:
     return true;
   }
 
-  bool operator!=(ParentVector<max_n_nodes> const&other) const {
+  /**
+   * @brief Compare two parent vectors for inequality.
+   *
+   * Two trees are equal iff their number of nodes is equal and every nodes has
+   * the same parent.
+   *
+   * @param other The other tree to compare too.
+   * @return true The two trees are not equal.
+   * @return false The two trees are equal.
+   */
+  bool operator!=(ParentVector<max_n_nodes> const &other) const {
     return !operator==(other);
   }
 

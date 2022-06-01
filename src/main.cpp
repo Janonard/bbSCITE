@@ -35,12 +35,14 @@ using MCMCKernelImpl =
 using ChainStateImpl = ChainState<max_n_genes>;
 
 int main(int argc, char **argv) {
+  // Load the CLI parameters.
   Parameters parameters;
-  if (parameters.load_and_verify_args(argc, argv, max_n_cells, max_n_genes)) {
-    std::cerr << "Quitting due to CLI argument errors." << std::endl; 
+  if (!parameters.load_and_verify_args(argc, argv, max_n_cells, max_n_genes)) {
+    std::cerr << "Quitting due to CLI argument errors." << std::endl;
     return 1;
   }
 
+  // Load the mutation input data.
   cl::sycl::buffer<ac_int<2, false>, 2> data(
       cl::sycl::range<2>(parameters.get_n_cells(), parameters.get_n_genes()));
   {
@@ -71,13 +73,15 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Initializing the SYCL queue.
   cl::sycl::queue working_queue(
       (cl::sycl::ext::intel::fpga_emulator_selector()));
 
+  // Running the simulation and retrieving the best states.
   std::vector<ChainStateImpl> best_states =
       MCMCKernelImpl::run_simulation(data, working_queue, parameters);
 
-  // Output the tree in graphviz format
+  // Output the trees as graphviz files.
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {
     std::stringstream output_path;
     output_path << parameters.get_output_path_base() << "_ml" << state_i
