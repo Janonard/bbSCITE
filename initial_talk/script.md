@@ -88,6 +88,25 @@
 * Lastly, there are also the common FPGA design problems of memory management and the handling of arithmetic operations.
   * You always have those when you need to optimize your designs.
 
+* Last but not least, I come to my tasks and goals for the thesis.
+* My goals are to develop an FPGA-based implementation of the SCITE algorithm that
+  * performs better than the original implementation,
+  * while producing similar or better results.
+* Optionally, I also want it to be faster than the implementation by Dominik Ernst et al.
+  * I may not be able to verify this since I do not have access to neither their implementation nor their performance figures.
+  * One of the reasons why this goal is optional.
+* Another option if I find the time for it is to extend the application to also support the successor to SCITE, infinity SCITE.
+  * It solves the same problem with a similar approach, but allows a single gene to mutate back
+  * With this, the authors evaluated whether the the assumption that genes do not mutate back is reasonable,
+  * but since SCITE is a little bit simpler, I decided to implement it first and then maybe extend my application to infSCITE.
+
+* In order to achieve these goals, I've identified three tasks:
+  * Providing an initial, functional implementation,
+  * Setting up a verification and benchmarking framework,
+  * and then optimizing my application, as well as I have time.
+* I've already completed the initial implementation.
+* I've probably already busted my time window, but if there still is some time and interest, I could show a little demo.
+
 
 * I therefore assume that my implementation will perform quite well.
   * As least as fast as the original implementation by Katharina Jahn, but maybe even faster than the optimized version by Dominik Ernst if I'm able to obtain this version or at least performance figures.
