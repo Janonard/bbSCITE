@@ -230,10 +230,13 @@ public:
       auto data_ac =
           data_buffer.template get_access<cl::sycl::access::mode::read>(cgh);
 
+      double beta_jump_sd =
+          parameters.get_beta_sd() / parameters.get_beta_jump_scaling_chi();
+
       ChangeProposer change_proposer(twister, parameters.get_prob_beta_change(),
                                      parameters.get_prob_prune_n_reattach(),
                                      parameters.get_prob_swap_nodes(),
-                                     parameters.get_beta_jump_sd());
+                                     beta_jump_sd);
       StateScorer state_scorer(parameters.get_alpha_mean(),
                                parameters.get_beta_mean(),
                                parameters.get_beta_sd(), data_ac);
