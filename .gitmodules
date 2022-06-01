@@ -1,0 +1,3 @@
+[submodule "SCITE"]
+	path = SCITE
+	url = git@github.com:cbg-ethz/SCITE.git
