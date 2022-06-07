@@ -10,3 +10,18 @@ add_compile_options(-qactypes -fintelfpga -Wtautological-constant-compare)
 
 add_subdirectory(test)
 add_subdirectory(src)
+
+set(SCITE_SOURCES
+  SCITE/findBestTrees.cpp
+  SCITE/mcmcBinTreeMove.cpp
+  SCITE/mcmcTreeMove.cpp
+  SCITE/rand.cpp
+  SCITE/scoreTree.cpp
+  SCITE/trees.cpp
+  SCITE/matrices.cpp
+  SCITE/mcmc.cpp
+  SCITE/output.cpp
+  SCITE/scoreBinTree.cpp
+  SCITE/treelist.cpp)
+
+add_executable(scite ${SCITE_SOURCES})
