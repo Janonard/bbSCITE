@@ -91,7 +91,7 @@ public:
                   << std::endl;
       } else if (strcmp(argv[i], "-m") == 0) {
         std::cerr << "Warning: The number of cells is inferred from the input "
-                     "file. Ignoring parameter -n."
+                     "file. Ignoring parameter -m."
                   << std::endl;
       } else if (strcmp(argv[i], "-r") == 0) {
         if (i + 1 < argc) {

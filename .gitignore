@@ -1,1 +1,8 @@
 build
+.venv
+*.gv
+*.newick
+*.csv
+*.txt
+!requirements.txt
+*.png

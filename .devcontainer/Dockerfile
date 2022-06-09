@@ -9,10 +9,14 @@ RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRO
   | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
 RUN echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
   | sudo tee /etc/apt/sources.list.d/oneAPI.list
-RUN export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get -y upgrade
-RUN export DEBIAN_FRONTEND=noninteractive && apt-get -y install --no-install-recommends intel-basekit
+RUN export DEBIAN_FRONTEND=noninteractive \
+  && apt-get update \
+  && apt-get -y upgrade \
+  && apt-get -y install --no-install-recommends intel-basekit
   
 
 # [Optional] Uncomment this section to install additional OS packages.
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends cmake libboost-dev bash-completion
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && apt-get -y upgrade \
+    && apt-get -y install --no-install-recommends cmake libboost-dev bash-completion python-is-python3 graphviz
