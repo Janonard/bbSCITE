@@ -1,0 +1,16 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Module",
+            "type": "python",
+            "request": "launch",
+            "module": "verification",
+            "justMyCode": true,
+            "args": ["-n", "18", "-m", "36", "-a", "0.01", "-b", "0.25", "-e", "0.25"]
+        }
+    ]
+}
