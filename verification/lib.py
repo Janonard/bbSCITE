@@ -1,10 +1,12 @@
-from math import log, exp
+from lib2to3.pgen2 import token
+from math import inf, log, exp
 from pathlib import Path
 from typing import List
 import networkx as nx
 import random
 import numpy as np
 from typing import List, Tuple, Optional
+import lark
 
 
 class MutationTree(nx.DiGraph):
@@ -58,7 +60,7 @@ class MutationTree(nx.DiGraph):
     def get_newick_code(self, parent: Optional[int] = None):
         if parent is None:
             parent = self.root
-        
+
         if self.out_degree(parent) > 0:
             return f"({','.join(self.get_newick_code(node) for node in self.adj[parent])}){parent}"
         else:
@@ -93,6 +95,89 @@ def random_mutation_tree(n_genes, n_cells):
     return MutationTree(attachments, incoming_graph_data=tree)
 
 
+newick_grammar = """
+    tree        : NUMBER                    -> leaf
+                | "(" branches ")" NUMBER   -> internal
+    branches    : branches "," tree         -> branch_list
+                | tree                      -> first_branch
+
+    NUMBER      : /[0-9]+/
+
+    %import common.WS
+    %ignore WS
+"""
+newick_parser = lark.Lark(newick_grammar, start="tree")
+
+
+class NewickTransformer(lark.Transformer):
+
+    def leaf(self, tree) -> Tuple[nx.DiGraph, int]:
+        mutation_tree = nx.DiGraph()
+        node = tree[0]
+        mutation_tree.add_node(node)
+        return (mutation_tree, node)
+
+    def internal(self, tree) -> Tuple[nx.DiGraph, int]:
+        mutation_tree = nx.DiGraph()
+        children = []
+        for (subtree, subtree_root) in tree[0]:
+            mutation_tree.update(subtree)
+            children.append(subtree_root)
+
+        root = tree[1]
+        mutation_tree.add_node(root)
+        for child in children:
+            mutation_tree.add_edge(root, child)
+
+        return mutation_tree, root
+
+    def branch_list(self, tree) -> List[Tuple[nx.DiGraph, int]]:
+        subtrees = tree[0]
+        subtrees.append(tree[1])
+        return subtrees
+
+    def first_branch(self, subtrees) -> List[Tuple[nx.DiGraph, int]]:
+        return subtrees
+
+    def NUMBER(self, tree) -> int:
+        return int(tree.value)
+
+
+def parse_newick_code(newick_code: str) -> Tuple[nx.DiGraph, int]:
+    grammar_tree = newick_parser.parse(newick_code)
+    tree = NewickTransformer().transform(grammar_tree)
+    return tree
+
+
+def get_most_likely_attachment(
+        mutation_tree: nx.DiGraph,
+        mutation_matrix: np.ndarray,
+        cell_i: int,
+        prob_false_positives: float,
+        prob_false_negatives: float) -> int:
+    max_likely_attachment_i = None
+    max_log_likelihood = -inf
+    root = len(mutation_tree.nodes) - 1
+
+    for attachment_i in mutation_tree.nodes:
+        occurrences = [[0, 0], [0, 0]]
+        mutations = set(nx.shortest_path(mutation_tree, root, attachment_i))
+        for gene_i in range(len(mutation_tree.nodes)-1):
+            posterior = mutation_matrix[gene_i][cell_i]
+            if posterior < 2:
+                prior = 1 if gene_i in mutations else 0
+                occurrences[posterior][prior] += 1
+        log_likelihood = log(1.0 - prob_false_positives) * occurrences[0][0]
+        log_likelihood += log(prob_false_positives) * occurrences[1][0]
+        log_likelihood += log(prob_false_negatives) * occurrences[0][1]
+        log_likelihood += log(1.0 - prob_false_negatives) * occurrences[1][1]
+        if max_log_likelihood < log_likelihood:
+            max_likely_attachment_i = attachment_i
+            max_log_likelihood = log_likelihood
+
+    return max_likely_attachment_i
+
+
 def apply_sequencing_noise(mutation_matrix: np.ndarray, prob_false_positives: float, prob_false_negatives: float, prob_missing: float) -> np.ndarray:
     n_genes = mutation_matrix.shape[0]
     n_cells = mutation_matrix.shape[1]
@@ -120,8 +205,17 @@ def apply_sequencing_noise(mutation_matrix: np.ndarray, prob_false_positives: fl
     return noisy_mutation_matrix
 
 
-def write_mutation_matrix(mutation_matrix: np.array, path: Path):
+def write_mutation_matrix(mutation_matrix: np.ndarray, path: Path):
     with open(path, mode="w") as out_file:
         for gene_i in range(mutation_matrix.shape[0]):
             print(" ".join(str(entry)
                   for entry in mutation_matrix[gene_i]), file=out_file)
+
+
+def read_mutation_matrix(path: Path) -> np.ndarray:
+    with open(path, mode="r") as in_file:
+        matrix = [
+            [int(entry) for entry in line.split(" ")]
+            for line in in_file.readlines()
+        ]
+        return np.array(matrix, dtype=np.int8)

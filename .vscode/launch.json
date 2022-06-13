@@ -10,7 +10,17 @@
             "request": "launch",
             "module": "verification",
             "justMyCode": true,
-            "args": ["-n", "18", "-m", "36", "-a", "0.01", "-b", "0.25", "-e", "0.25"]
+            "args": [
+                "-a",
+                "0.01",
+                "-b",
+                "0.25",
+                "score",
+                "-t",
+                "true_tree.newick",
+                "-m",
+                "input.csv"
+            ]
         }
     ]
 }

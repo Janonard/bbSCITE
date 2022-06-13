@@ -5,3 +5,4 @@ sympy
 pydot
 autopep8
 pylint
+lark
