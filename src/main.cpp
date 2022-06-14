@@ -25,8 +25,8 @@
 
 using namespace ffSCITE;
 
-constexpr uint64_t max_n_cells = 128;
-constexpr uint64_t max_n_genes = 127;
+constexpr uint64_t max_n_cells = 1024;
+constexpr uint64_t max_n_genes = 1024;
 using ChangeProposerImpl =
     ChangeProposer<max_n_genes, oneapi::dpl::minstd_rand0>;
 using StateScorerImpl = StateScorer<max_n_cells, max_n_genes>;
