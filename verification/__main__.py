@@ -53,8 +53,21 @@ def score_tree(args: argparse.Namespace):
     # Load the mutation tree
     with open(args.tree, mode="r") as tree_file:
         newick_code = tree_file.readline()
-    mutation_tree, root_i = parse_newick_code(newick_code)
-    assert root_i == len(mutation_tree) - 1
+    mutation_tree, _ = parse_newick_code(newick_code)
+
+    # Check if the nodes in the tree are consecutively labeled
+    is_consecutive = True
+    for i in range(len(mutation_tree.nodes)):
+        if i not in mutation_tree.nodes:
+            is_consecutive = False
+            break
+
+    # If this is not the case, fix it.
+    if not is_consecutive:
+        nodes = list(mutation_tree.nodes)
+        nodes.sort()
+        mutation_tree = nx.relabel.relabel_nodes(
+            mutation_tree, {nodes[i]: i for i in range(len(nodes))})
 
     # Find the most-likely attachments for every cell.
     attachments = [
@@ -89,14 +102,14 @@ generate_parser = subparsers.add_parser(
 
 generate_parser.add_argument("-o", "--out-dir", required=False, type=Path,
                              default=Path("."), help="The directory for the input data.")
-generate_parser.add_argument("-a", "--alpha", required=True, type=float,
-                             help="The probability of false positives.")
-generate_parser.add_argument("-b", "--beta", required=True, type=float,
-                             help="The probability of false negatives.")
 generate_parser.add_argument("-n", "--genes", required=True,
                              type=int, help="The number of genes.")
 generate_parser.add_argument("-m", "--cells", required=True,
                              type=int, help="The number of cells.")
+generate_parser.add_argument("-a", "--alpha", required=True, type=float,
+                             help="The probability of false positives.")
+generate_parser.add_argument("-b", "--beta", required=True, type=float,
+                             help="The probability of false negatives.")
 generate_parser.add_argument("-e", "--missing", required=True,
                              type=float, help="The probability of missing data.")
 generate_parser.add_argument("-s", "--seed", required=False,
