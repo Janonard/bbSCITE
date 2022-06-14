@@ -137,11 +137,11 @@ public:
           current_scores_ac[chain_i] = proposed_score;
         }
 
-        if (proposed_score >= best_score_ac[0]) {
+        if (proposed_score >= best_score_ac[0] || n_best_states_ac[0] == 0) {
           if (proposed_score > best_score_ac[0]) {
             n_best_states_ac[0] = 0;
-            best_score_ac[0] = proposed_score;
           }
+          best_score_ac[0] = proposed_score;
 
           bool is_duplicate = false;
           for (uint64_t state_i = 0; state_i < n_best_states_ac[0]; state_i++) {
