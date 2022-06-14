@@ -138,17 +138,17 @@ int main(int argc, char **argv) {
   std::vector<ChainStateImpl> best_states = std::get<0>(result);
   cl::sycl::event runtime_event = std::get<1>(result);
 
-  static constexpr double timesteps_per_second = 1000000000.0;
+  static constexpr double timesteps_per_millisecond = 1000000.0;
   double start_of_event =
       runtime_event.get_profiling_info<
           cl::sycl::info::event_profiling::command_start>() /
-      timesteps_per_second;
+      timesteps_per_millisecond;
   double end_of_event =
       runtime_event
           .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
-      timesteps_per_second;
-  std::cout << "Simulation completed in " << end_of_event - start_of_event
-            << "s" << std::endl;
+      timesteps_per_millisecond;
+  std::cout << "Time elapsed: " << end_of_event - start_of_event
+            << " ms" << std::endl;
 
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {
     // Output the tree as a graphviz file.
