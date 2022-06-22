@@ -6,3 +6,6 @@ build
 *.txt
 !requirements.txt
 *.png
+*.samples
+*.out
+*.tar.gz
