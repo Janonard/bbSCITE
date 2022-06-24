@@ -1,32 +1,35 @@
-build-documents:
-  only:
-    - main
-  stage: build
-  image: "texlive/texlive:latest"
-  script:
-    - "cd proposal"
-    - "latexmk --pdf proposal"
-    - "cd ../thesis"
-    - "latexmk --pdf thesis"
-  artifacts:
-    paths:
-    - "proposal/proposal.pdf"
-    - "thesis/thesis.pdf"
-  tags:
-    - shared
-
 build-tests:
   only:
     - main
   stage: build
   script:
-    - "ml devel/Boost devel/CMake nalla_pcie intel/oneAPI"
+    - "ml fpga devel"
+    - "ml intel/oneapi bittware/520n Boost CMake"
     - "mkdir build"
     - "cd build"
-    - "cmake .."
+    - "cmake -DCMAKE_BUILD_TYPE=Release .."
     - "make -j$(nproc) unit_test"
     - "./test/unit_test"
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p short --time=00:05:00"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:05:00"
   tags:
-    - noctua
+    - noctua2
+
+build-report:
+  only:
+    - main
+  stage: build
+  script:
+    - "ml fpga devel"
+    - "ml intel/oneapi bittware/520n Boost CMake"
+    - "mkdir build"
+    - "cd build"
+    - "dpcpp -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv ../src/main.cpp -o ffSCITE"
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:15:00"
+  artifacts:
+    paths:
+      - "build/ffSCITE.prj/reports"
+    expire_in: 1 month
+  tags:
+    - noctua2
