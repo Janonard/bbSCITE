@@ -42,7 +42,9 @@ public:
    * where all nodes are connected directly to the root.
    */
   AncestorMatrix() : ancestor(), n_nodes(max_n_nodes) {
+#pragma unroll
     for (uint64_t i = 0; i < max_n_nodes; i++) {
+#pragma unroll
       for (uint64_t j = 0; j < max_n_nodes; j++) {
         ancestor[i][j] = (i == j) || (i == max_n_nodes - 1);
       }
@@ -64,9 +66,14 @@ public:
    */
   AncestorMatrix(ParentVectorImpl const &parent_vector)
       : ancestor(), n_nodes(parent_vector.get_n_nodes()) {
-    for (uint64_t i = 0; i < n_nodes; i++) {
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i >= n_nodes) {
+        continue;
+      }
+
+#pragma unroll
       // First, we assume that node i has no ancestors.
-      for (uint64_t j = 0; j < n_nodes; j++) {
+      for (uint64_t j = 0; j < max_n_nodes; j++) {
         ancestor[j][i] = false;
       }
 
@@ -126,8 +133,11 @@ public:
     assert(node_i < n_nodes);
 #endif
     std::array<bool, max_n_nodes> descendants;
-    for (uint64_t i = 0; i < n_nodes; i++) {
-      descendants[i] = is_ancestor(node_i, i);
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < n_nodes) {
+        descendants[i] = is_ancestor(node_i, i);
+      }
     }
     return descendants;
   }
@@ -143,8 +153,9 @@ public:
     assert(node_i < n_nodes);
 #endif
     uint64_t n_descendants = 0;
-    for (uint64_t i = 0; i < n_nodes; i++) {
-      if (is_ancestor(node_i, i)) {
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < n_nodes && is_ancestor(node_i, i)) {
         n_descendants++;
       }
     }
@@ -167,8 +178,11 @@ public:
     assert(node_i < n_nodes);
 #endif
     std::array<bool, max_n_nodes> ancestors;
-    for (uint64_t i = 0; i < n_nodes; i++) {
-      ancestors[i] = is_ancestor(i, node_i);
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < n_nodes) {
+        ancestors[i] = is_ancestor(i, node_i);
+      }
     }
     return ancestors;
   }
@@ -184,8 +198,9 @@ public:
     assert(node_i < n_nodes);
 #endif
     uint64_t n_ancestors = 0;
-    for (uint64_t i = 0; i < n_nodes; i++) {
-      if (is_ancestor(i, node_i)) {
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < n_nodes && is_ancestor(i, node_i)) {
         n_ancestors++;
       }
     }

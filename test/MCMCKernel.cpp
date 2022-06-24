@@ -27,13 +27,8 @@ constexpr double alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 
-using ChangeProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand0>;
-using DeviceScorerImpl = StateScorer<n_cells, n_genes>;
-using HostScorerImpl =
-    StateScorer<n_cells, n_genes, cl::sycl::access::target::host_buffer>;
-using MCMCKernelImpl =
-    MCMCKernel<n_cells, n_genes, ChangeProposerImpl, DeviceScorerImpl>;
-using DataEntry = DeviceScorerImpl::DataEntry;
+using MCMCKernelImpl = MCMCKernel<n_cells, n_genes, oneapi::dpl::minstd_rand0>;
+using DataEntry = MCMCKernelImpl::DataEntry;
 using ChainStateImpl = MCMCKernelImpl::ChainStateImpl;
 
 TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {

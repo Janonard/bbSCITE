@@ -14,10 +14,8 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#include "ChangeProposer.hpp"
 #include "MCMCKernel.hpp"
 #include "Parameters.hpp"
-#include "StateScorer.hpp"
 #include <CL/sycl.hpp>
 #include <ext/intel/fpga_extensions.hpp>
 #include <iostream>
@@ -25,13 +23,16 @@
 
 using namespace ffSCITE;
 
-constexpr uint64_t max_n_cells = 1024;
-constexpr uint64_t max_n_genes = 1024;
-using ChangeProposerImpl =
-    ChangeProposer<max_n_genes, oneapi::dpl::minstd_rand0>;
-using StateScorerImpl = StateScorer<max_n_cells, max_n_genes>;
-using MCMCKernelImpl =
-    MCMCKernel<max_n_cells, max_n_genes, ChangeProposerImpl, StateScorerImpl>;
+constexpr uint64_t max_n_cells = 16;
+constexpr uint64_t max_n_genes = 16;
+
+#ifdef EMULATOR
+using URING = oneapi::dpl::minstd_rand0;
+#else
+using URNG = DummyRNG;
+#endif 
+
+using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
 using ChainStateImpl = ChainState<max_n_genes>;
 
 int main(int argc, char **argv) {
@@ -127,8 +128,13 @@ int main(int argc, char **argv) {
   }
 
   // Initializing the SYCL queue.
+#ifdef EMULATOR
   cl::sycl::device device =
       cl::sycl::ext::intel::fpga_emulator_selector().select_device();
+#else
+  cl::sycl::device device =
+      cl::sycl::ext::intel::fpga_selector().select_device();
+#endif
   cl::sycl::property_list queue_properties = {
       cl::sycl::property::queue::enable_profiling{}};
   cl::sycl::queue working_queue(device, queue_properties);
@@ -147,8 +153,8 @@ int main(int argc, char **argv) {
       runtime_event
           .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
       timesteps_per_millisecond;
-  std::cout << "Time elapsed: " << end_of_event - start_of_event
-            << " ms" << std::endl;
+  std::cout << "Time elapsed: " << end_of_event - start_of_event << " ms"
+            << std::endl;
 
   for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {
     // Output the tree as a graphviz file.

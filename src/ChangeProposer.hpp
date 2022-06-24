@@ -170,6 +170,7 @@ public:
     // If we have to sample a nondescendant, we invert the bitvector and
     // continue as if we were to sample a descendant.
     if (!sample_descendant) {
+#pragma unroll
       for (uint64_t i = 0; i < max_n_nodes; i++) {
         descendant[i] = !descendant[i];
       }
@@ -179,8 +180,9 @@ public:
     uint64_t n_descendants = 0;
     uint64_t sum_upper_bound =
         ancestor_matrix.get_n_nodes() - (include_root ? 0 : 1);
-    for (uint64_t i = 0; i < sum_upper_bound; i++) {
-      if (descendant[i]) {
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < sum_upper_bound && descendant[i]) {
         n_descendants++;
       }
     }
@@ -194,8 +196,9 @@ public:
     // Walk through the (non)descendant bitvector and pick the correct node
     // index.
     uint64_t sampled_node_i = 0;
-    for (uint64_t i = 0; i < ancestor_matrix.get_n_nodes(); i++) {
-      if (descendant[i]) {
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < ancestor_matrix.get_n_nodes() && descendant[i]) {
         if (sampled_occurrence_i == 0) {
           sampled_node_i = i;
           break;
@@ -344,7 +347,8 @@ public:
    */
   void propose_change(ChainState<max_n_genes> &state,
                       double &out_neighborhood_correction) {
-    AncestorMatrix<max_n_nodes> ancestor_matrix(state.mutation_tree);
+    [[intel::fpga_register]] AncestorMatrix<max_n_nodes> ancestor_matrix(
+        state.mutation_tree);
     out_neighborhood_correction = 1.0;
     switch (sample_move()) {
     case MoveType::ChangeBeta:

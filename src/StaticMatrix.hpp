@@ -33,7 +33,9 @@ public:
   ~StaticMatrix() {}
 
   StaticMatrix(T value) : internal() {
+#pragma unroll
     for (uint64_t c = 0; c < width; c++) {
+#pragma unroll
       for (uint64_t r = 0; r < height; r++) {
         internal[c][r] = value;
       }
@@ -54,7 +56,9 @@ public:
 
   StaticMatrix<T, width, height> &
   operator+=(StaticMatrix<T, width, height> rhs) {
+#pragma unroll
     for (uint64_t c = 0; c < width; c++) {
+#pragma unroll
       for (uint64_t r = 0; r < height; r++) {
         internal[c][r] += rhs.internal[c][r];
       }
@@ -63,7 +67,9 @@ public:
   }
 
   StaticMatrix<T, width, height> &operator*=(T scalar) {
+#pragma unroll
     for (uint64_t c = 0; c < width; c++) {
+#pragma unroll
       for (uint64_t r = 0; r < height; r++) {
         internal[c][r] *= scalar;
       }

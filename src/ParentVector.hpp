@@ -71,6 +71,7 @@ public:
     assert(n_nodes <= max_n_nodes);
 #endif
 
+#pragma unroll
     for (uint64_t i = 0; i < max_n_nodes; i++) {
       parent[i] = get_root();
     }
@@ -228,8 +229,9 @@ public:
       return;
     }
 
-    for (uint64_t i = 0; i < n_nodes; i++) {
-      if (i != node_a_i && i != node_b_i) {
+#pragma unroll
+    for (uint64_t i = 0; i < max_n_nodes; i++) {
+      if (i < n_nodes && i != node_a_i && i != node_b_i) {
         if (parent[i] == node_a_i) {
           parent[i] = node_b_i;
         } else if (parent[i] == node_b_i) {
@@ -335,8 +337,9 @@ public:
     if (n_nodes != other.n_nodes) {
       return false;
     }
-    for (uint64_t node_i = 0; node_i < n_nodes; node_i++) {
-      if (parent[node_i] != other.parent[node_i]) {
+#pragma unroll
+    for (uint64_t node_i = 0; node_i < max_n_nodes; node_i++) {
+      if (node_i < n_nodes && parent[node_i] != other.parent[node_i]) {
         return false;
       }
     }

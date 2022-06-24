@@ -93,7 +93,8 @@ public:
    */
   StateScorer(double alpha_mean, double beta_mean, double beta_sd,
               MutationDataAccessor data)
-      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data) {
+      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(),
+        n_cells(data.get_range()[0]), n_genes(data.get_range()[1]) {
     // mutation not observed, not present
     log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
     // mutation observed, not present
@@ -111,6 +112,16 @@ public:
         ((1 - beta_mean) * std::pow(beta_mean, 2) / std::pow(beta_sd, 2)) -
         beta_mean;
     bpriorb = bpriora * ((1 / beta_mean) - 1);
+
+#pragma unroll
+    for (uint64_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+#pragma unroll
+      for (uint64_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
+        if (cell_i < n_cells && gene_i < n_genes) {
+          this->data[cell_i][gene_i] = data[cell_i][gene_i];
+        }
+      }
+    }
   }
 
   /**
@@ -125,18 +136,21 @@ public:
    */
   double logscore_state(ChainStateImpl const &state) {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(state.mutation_tree.get_n_nodes() == data.get_range()[1] + 1);
+    assert(state.mutation_tree.get_n_nodes() == n_genes + 1);
 #endif
 
     log_error_probabilities[0][1] = std::log(state.beta);
     log_error_probabilities[1][1] = std::log(1.0 - state.beta);
 
-    AncestorMatrixImpl ancestor_matrix(state.mutation_tree);
+    [[intel::fpga_register]] AncestorMatrixImpl ancestor_matrix(
+        state.mutation_tree);
     OccurrenceMatrix occurrences(0);
 
-    for (uint64_t cell_i = 0; cell_i < data.get_range()[0]; cell_i++) {
-      auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
-      occurrences += best_attachment.occurrences;
+    for (uint64_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+      if (cell_i < n_cells) {
+        auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
+        occurrences += best_attachment.occurrences;
+      }
     }
 
     double tree_score = get_logscore_of_occurrences(occurrences);
@@ -197,11 +211,13 @@ public:
          attachment_node_i < mutation_tree.get_n_nodes(); attachment_node_i++) {
       OccurrenceMatrix occurrences(0);
 
-      for (uint64_t gene_i = 0; gene_i < data.get_range()[1]; gene_i++) {
-        uint64_t posterior = data[cell_i][gene_i];
-        uint64_t prior =
-            mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
-        occurrences[{posterior, prior}]++;
+      for (uint64_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
+        if (gene_i < n_genes) {
+          uint64_t posterior = data[cell_i][gene_i];
+          uint64_t prior =
+              mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
+          occurrences[{posterior, prior}]++;
+        }
       }
 
       double attachment_logscore = get_logscore_of_occurrences(occurrences);
@@ -225,7 +241,9 @@ public:
    */
   double get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
     double logscore = 0.0;
+#pragma unroll
     for (uint64_t i_posterior = 0; i_posterior < 3; i_posterior++) {
+#pragma unroll
       for (uint64_t i_prior = 0; i_prior < 2; i_prior++) {
         logscore += occurrences[{i_posterior, i_prior}] *
                     log_error_probabilities[i_posterior][i_prior];
@@ -237,6 +255,7 @@ public:
 private:
   double log_error_probabilities[3][2];
   double bpriora, bpriorb;
-  MutationDataAccessor data;
+  DataEntry data[max_n_cells][max_n_genes];
+  uint64_t n_cells, n_genes;
 };
 } // namespace ffSCITE
