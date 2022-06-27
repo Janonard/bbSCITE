@@ -53,21 +53,7 @@ def score_tree(args: argparse.Namespace):
     # Load the mutation tree
     with open(args.tree, mode="r") as tree_file:
         newick_code = tree_file.readline()
-    mutation_tree, _ = parse_newick_code(newick_code)
-
-    # Check if the nodes in the tree are consecutively labeled
-    is_consecutive = True
-    for i in range(len(mutation_tree.nodes)):
-        if i not in mutation_tree.nodes:
-            is_consecutive = False
-            break
-
-    # If this is not the case, fix it.
-    if not is_consecutive:
-        nodes = list(mutation_tree.nodes)
-        nodes.sort()
-        mutation_tree = nx.relabel.relabel_nodes(
-            mutation_tree, {nodes[i]: i for i in range(len(nodes))})
+    mutation_tree = parse_newick_code(newick_code)
 
     # Find the most-likely attachments for every cell.
     attachments = [
@@ -90,6 +76,11 @@ def score_tree(args: argparse.Namespace):
     else:
         print(
             f"Mutation tree likelihood: {exp(log_likelihood)} = log({log_likelihood})")
+
+    # Write the true matrix:
+    if args.out_matrix is not None:
+        write_mutation_matrix(mutation_tree.get_mutation_matrix(), args.out_matrix)
+
 
 
 parser = argparse.ArgumentParser(
@@ -128,6 +119,8 @@ score_parser.add_argument("-t", "--tree", required=True,
                           type=Path, help="The path to the mutation tree.")
 score_parser.add_argument("-m", "--matrix", required=True,
                           type=Path, help="The path to the mutation matrix.")
+score_parser.add_argument("-o", "--out-matrix", required=False,
+                          type=Path, help="The path to store the tree's mutation matrix at.")
 score_parser.add_argument("-x", "--compact", default=False, required=False,
                           action="store_true", help="Only emit log-likelihood, no explanatory text.")
 

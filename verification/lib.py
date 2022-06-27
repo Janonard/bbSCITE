@@ -145,7 +145,22 @@ class NewickTransformer(lark.Transformer):
 
 def parse_newick_code(newick_code: str) -> Tuple[nx.DiGraph, int]:
     grammar_tree = newick_parser.parse(newick_code)
-    tree = NewickTransformer().transform(grammar_tree)
+    tree, _ = NewickTransformer().transform(grammar_tree)
+
+    # Check if the nodes in the tree are consecutively labeled
+    is_consecutive = True
+    for i in range(len(tree.nodes)):
+        if i not in tree.nodes:
+            is_consecutive = False
+            break
+
+    # If this is not the case, fix it.
+    if not is_consecutive:
+        nodes = list(tree.nodes)
+        nodes.sort()
+        tree = nx.relabel.relabel_nodes(
+            tree, {nodes[i]: i for i in range(len(nodes))})
+    
     return tree
 
 
