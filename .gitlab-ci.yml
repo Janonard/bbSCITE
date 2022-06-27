@@ -29,7 +29,7 @@ build-report:
     - "cd build"
     - "dpcpp -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv ../src/main.cpp -o ffSCITE"
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:15:00"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:30:00 --mem 32G"
   artifacts:
     paths:
       - "build/ffSCITE.prj/reports"
