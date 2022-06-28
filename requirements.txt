@@ -6,3 +6,4 @@ pydot
 autopep8
 pylint
 lark
+scipy

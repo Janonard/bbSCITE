@@ -27,7 +27,7 @@ constexpr uint64_t max_n_cells = 64;
 constexpr uint64_t max_n_genes = 64;
 
 #ifdef EMULATOR
-using URING = oneapi::dpl::minstd_rand0;
+using URNG = oneapi::dpl::minstd_rand0;
 #else
 using URNG = DummyRNG;
 #endif 

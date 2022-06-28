@@ -1,23 +1,9 @@
 #!/usr/bin/env bash
-#SBATCH -A hpc-lco-kenter
-#SBATCH -t 24:00:00
-#SBATCH -J scite-quality-benchmark
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=joo@mail.upb.de
-#SBATCH -p normal
-#SBATCH -q cont
-#SBATCH -n 128
-#SBATCH --ntasks-per-core 1
 
 set -e 
 
-module reset
-module load fpga devel
-module load intel/oneapi Boost CMake
-source .venv/bin/activate
-
-SCITE=./build/scite
-FFSCITE=./build/src/ffSCITE_emu
+SCITE=$1
+FFSCITE=$2
 TOOL=./tool.py
 
 ALPHA=1e-6
@@ -27,46 +13,51 @@ MISSING=0.25
 N_GENES=64
 N_CELLS=64
 
+N_INPUTS=128
 REPETITIONS=10
 LENGTH=1000000
 
-function run_single_instance {
+BASE_DIR="quality_benchmark.out"
+mkdir -p $BASE_DIR
+
+# Generate inputs
+for input_i in `seq $N_INPUTS`
+do
+    INPUT_DIR="${BASE_DIR}/${input_i}"
+    mkdir -p $INPUT_DIR
+
+    $TOOL generate -n $N_GENES -m $N_CELLS -a $ALPHA -b $BETA -e $MISSING -o $INPUT_DIR &
+done
+wait
+
+echo "Inputs generated"
+
+function run {
     EXEC=$1
-    INPUT=$2
-    OUT_DIR=$3
+    EXEC_ID=$2
 
-    $EXEC -i $INPUT -n $N_GENES -m $N_CELLS -r $REPETITIONS -l $LENGTH \
-        -fd $ALPHA -ad $BETA -e 0 -move_probs 0.55 0.4 0.05 -o $OUT_DIR/tree -seed 42 \
-        > $OUT_DIR/stdout.txt
-    
-    cat $OUT_DIR/stdout.txt | grep "Time elapsed" | cut -d" " -f3 > $OUT_DIR/runtime.txt
+    # For every repetition,
+    for rep_i in `seq $REPETITIONS`
+    do
+        # and every input,
+        for input_i in `seq $N_INPUTS`
+        do
+            INPUT="${BASE_DIR}/${input_i}/input.csv"
+            OUT_DIR="${BASE_DIR}/${input_i}/${EXEC_ID}/${rep_i}/"
+            mkdir -p $OUT_DIR
 
-    $TOOL score -a $ALPHA -b $BETA -m $INPUT -t $OUT_DIR/tree_ml0.newick -x > $OUT_DIR/likelihood.txt
+            # Run the simulation once.
+            $EXEC -i $INPUT -n $N_GENES -m $N_CELLS -r 1 -l $LENGTH -fd $ALPHA -ad $BETA -e 0 -move_probs 0.55 0.4 0.05 -o $OUT_DIR/tree > $OUT_DIR/stdout.txt \
+                && $TOOL score -a $ALPHA -b $BETA -t "$OUT_DIR/tree_ml0.newick" -m $INPUT -x > $OUT_DIR/likelihood.txt \
+                && cat $OUT_DIR/stdout.txt | grep "Time elapsed" | cut -d" " -f3 > $OUT_DIR/runtime.txt &
+        done
+        wait
+
+        echo "${EXEC_ID} completed repetition ${rep_i} at $(date)"
+    done
+
+    echo "${EXEC_ID} finished the simulation"
 }
 
-for n_cells in `seq 64 64 256`
-do
-    for n_genes in `seq 64 64 256`
-    do
-        BASE_DIR="out.${n_genes}x${n_cells}"
-        mkdir -p $BASE_DIR
-
-        for repetition in `seq 64`
-        do
-            REP_DIR="${BASE_DIR}/${repetition}"
-            mkdir -p $REP_DIR
-
-            $TOOL generate -n $N_GENES -m $N_CELLS -a $ALPHA -b $BETA -e $MISSING -o $REP_DIR
-            INPUT="${REP_DIR}/input.csv"
-
-            SCITE_DIR="${REP_DIR}/scite"
-            FFSCITE_DIR="${REP_DIR}/ffSCITE"
-            mkdir -p $SCITE_DIR $FFSCITE_DIR
-
-            run_single_instance $SCITE $INPUT $SCITE_DIR &
-            run_single_instance $FFSCITE $INPUT $FFSCITE_DIR &
-        done
-
-        wait
-    done
-done
+run $FFSCITE "ffSCITE"
+run $SCITE "SCITE"

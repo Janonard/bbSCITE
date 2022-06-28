@@ -9,7 +9,8 @@ set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE APPEND PROPERTY COMPILE_O
 set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE APPEND PROPERTY LINK_OPTIONS -fintelfpga -Xsv)
 
 # Specific options
-set_property(TARGET ffSCITE_emu APPEND PROPERTY LINK_OPTIONS -DEMULATOR)
+set_property(TARGET ffSCITE_emu APPEND PROPERTY LINK_OPTIONS)
+target_compile_definitions(ffSCITE_emu PUBLIC EMULATOR)
 set_property(TARGET ffSCITE_report APPEND PROPERTY LINK_OPTIONS -Xshardware -fsycl-link)
 set_property(TARGET ffSCITE APPEND PROPERTY LINK_OPTIONS -Xshardware)
 
