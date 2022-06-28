@@ -1,22 +1,9 @@
 #!/usr/bin/env bash
-#SBATCH -A hpc-lco-kenter
-#SBATCH -t 24:00:00
-#SBATCH -J scite-quality-benchmark
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=joo@mail.upb.de
-#SBATCH -p normal
-#SBATCH -q cont
-#SBATCH --cpus-per-task 128
 
 set -e 
 
-module reset
-module load fpga devel
-module load intel/oneapi bittware/520n Boost CMake
-source .venv/bin/activate
-
-SCITE=./build/scite
-FFSCITE=./build/src/ffSCITE_emu
+SCITE=$1
+FFSCITE=$2
 TOOL=./tool.py
 
 ALPHA=1e-6
@@ -74,5 +61,3 @@ function run {
 
 run $FFSCITE "ffSCITE"
 run $SCITE "SCITE"
-
-tar -cf - $BASE_DIR | pigz > "quality_benchmark.tar.gz" 
