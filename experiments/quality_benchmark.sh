@@ -60,7 +60,9 @@ function run {
             mkdir -p $OUT_DIR
 
             # Run the simulation once.
-            $EXEC -i $INPUT -n $N_GENES -m $N_CELLS -r 1 -l $LENGTH -fd $ALPHA -ad $BETA -e 0 -move_probs 0.55 0.4 0.05 -o $OUT_DIR/tree > $OUT_DIR/stdout.txt &
+            $EXEC -i $INPUT -n $N_GENES -m $N_CELLS -r 1 -l $LENGTH -fd $ALPHA -ad $BETA -e 0 -move_probs 0.55 0.4 0.05 -o $OUT_DIR/tree > $OUT_DIR/stdout.txt \
+                && $TOOL score -a $ALPHA -b $BETA -t "$OUT_DIR/tree_ml0.newick" -m $INPUT -x > $OUT_DIR/likelihood.txt \
+                && cat $OUT_DIR/stdout.txt | grep "Time elapsed" | cut -d" " -f3 > $OUT_DIR/runtime.txt &
         done
         wait
 
