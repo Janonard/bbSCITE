@@ -41,6 +41,14 @@ ProposerImpl init_proposer() {
   return proposer;
 }
 
+/*
+ * These unit tests do not prove that the tested methods are correct. Instead,
+ * they only check whether their behavior is plausible. We chose to not correct
+ * this since we needed to prioritize the optimization of the application. For
+ * more information, check out Issue 15
+ * (https://git.uni-paderborn.de/joo/ffscite/-/issues/15).
+ */
+
 TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
   auto proposer = init_proposer();
 
