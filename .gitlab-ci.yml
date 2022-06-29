@@ -80,7 +80,7 @@ quality benchmark:
     - "./experiments/quality_benchmark.sh ./build/scite ./build/src/ffSCITE_emu"
     - "./tool.py test"
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=12:00:00 --cpus-per-task=128"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=12:00:00 --cpus-per-task=128 --mail-type=All --mail-user=joo@mail.upb.de"
   artifacts:
     paths:
       - "quality_benchmark.out"
