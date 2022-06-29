@@ -81,8 +81,8 @@ def score_tree(args: argparse.Namespace):
 
     # Write the true matrix:
     if args.out_matrix is not None:
-        write_mutation_matrix(mutation_tree.get_mutation_matrix(), args.out_matrix)
-
+        write_mutation_matrix(
+            mutation_tree.get_mutation_matrix(), args.out_matrix)
 
 
 def quality_test(args: argparse.Namespace):
@@ -105,17 +105,28 @@ def quality_test(args: argparse.Namespace):
     max_bit_flip_difference = max(abs(log(args.alpha) - log(1 - args.beta)),
                                   abs(log(args.beta) - log(1 - args.alpha)))
     print(
-        f"Mean differences: {mean(differences)} ≌ {abs(mean(differences)) / max_bit_flip_difference} bit flips")
+        f"Mean differences: {mean(differences):.2f} ≌ {abs(mean(differences)) / max_bit_flip_difference:.2f} bit flips")
 
     epsilon = args.n_bits * max_bit_flip_difference
-    _, p_value = ttest_1samp(
-        differences, -epsilon, alternative="greater")
 
-    if p_value < 1.0 - args.confidence_level:
-        print(f"ffSCITE is non-inferior to SCITE! (p-value = {p_value} < {1.0 -args.confidence_level:.2f} = 1 - confidence level)")
+    _, lower_p_value = ttest_1samp(
+        differences, -epsilon, alternative="greater")
+    _, upper_p_value = ttest_1samp(
+        differences, epsilon, alternative="less")
+
+    p_value_bound = (1.0 - args.confidence_level) / 2.0
+
+    print(f"H0: µ <= -{epsilon:.2f} or µ >= {epsilon:.2f}")
+    print(f"H1: -{epsilon:.2f} < µ < {epsilon:.2f}")
+    print(f"p-value for lower part of H0: {lower_p_value:.4f}")
+    print(f"p-value for upper part of H0: {upper_p_value:.4f}")
+    print(f"maximal p-value to reject H0 parts: {p_value_bound:.4f}")
+
+    if lower_p_value < p_value_bound and upper_p_value < p_value_bound:
+        print(f"ffSCITE is non-inferior to SCITE!")
         exit(0)
     else:
-        print(f"ffSCITE may not be non-inferior to SCITE! (p-value = {p_value} < {1.0 -args.confidence_level:.2f} = 1 - confidence level)")
+        print(f"ffSCITE may not be non-inferior to SCITE!")
         exit(1)
 
 
@@ -161,7 +172,7 @@ score_parser.add_argument("-x", "--compact", default=False, required=False,
                           action="store_true", help="Only emit log-likelihood, no explanatory text.")
 
 test_parser = subparsers.add_parser(
-    "test", help="Execute a hypothesis test to show the non-inferiority of ffSCITE.")
+    "tost", help="Execute a hypothesis test to show the non-inferiority of ffSCITE.")
 
 test_parser.add_argument("-d", "--basedir", default=Path(
     "./quality_benchmark.out"), type=Path, help="Base path of the collected data.")
@@ -180,5 +191,5 @@ if args.subcommand == "generate":
     generate(args)
 elif args.subcommand == "score":
     score_tree(args)
-elif args.subcommand == "test":
+elif args.subcommand == "tost":
     quality_test(args)
