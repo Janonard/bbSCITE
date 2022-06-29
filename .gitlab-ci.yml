@@ -19,7 +19,7 @@ unit-tests:
     - "make -j16 unit_test"
     - "./test/unit_test"
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:05:00 --mem 2G --cpus-per-task=16"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:10:00 --mem 8G --cpus-per-task=16"
   tags:
     - noctua2
 
@@ -36,7 +36,7 @@ synthesis:
     - "cmake -DCMAKE_BUILD_TYPE=Release .."
     - "make -j8 ffSCITE_emu scite"
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:02:00 --mem 2G --cpus-per-task=8"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:10:00 --mem 8G --cpus-per-task=8"
   artifacts:
     paths:
       - "build/src/ffSCITE_emu"
