@@ -217,6 +217,7 @@ public:
    * @return The newly proposed beta error rate.
    */
   double change_beta(double old_beta) {
+    // Not using double as the normal distribution's output here since it introduced a compiler error as of this writing.
     double new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
                                      0, beta_jump_sd)(rng);
     if (new_beta < 0) {
