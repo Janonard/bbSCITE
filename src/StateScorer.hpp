@@ -38,7 +38,7 @@ namespace ffSCITE {
  * @tparam access_target The access target where the input data resides.
  * Defaults to the device buffer but may be changed, e.g. for testing.
  */
-template <uint64_t max_n_cells, uint64_t max_n_genes,
+template <uint32_t max_n_cells, uint32_t max_n_genes,
           cl::sycl::access::target access_target =
               cl::sycl::access::target::device>
 class StateScorer {
@@ -67,7 +67,7 @@ public:
   /**
    * @brief Shorthand for the occurrence matrix type.
    */
-  using OccurrenceMatrix = StaticMatrix<uint64_t, 3, 2>;
+  using OccurrenceMatrix = StaticMatrix<uint32_t, 3, 2>;
 
   /**
    * @brief Shorthand for the mutation data input accessor.
@@ -91,7 +91,7 @@ public:
    * @param data An accessor to the mutation input data. The number of cells and
    * genes is inferred from the accessor range.
    */
-  StateScorer(double alpha_mean, double beta_mean, double beta_sd,
+  StateScorer(float alpha_mean, float beta_mean, float beta_sd,
               MutationDataAccessor data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(),
         n_cells(data.get_range()[0]), n_genes(data.get_range()[1]) {
@@ -114,9 +114,9 @@ public:
     bpriorb = bpriora * ((1 / beta_mean) - 1);
 
 #pragma unroll
-    for (uint64_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
 #pragma unroll
-      for (uint64_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
+      for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
         if (cell_i < n_cells && gene_i < n_genes) {
           this->data[cell_i][gene_i] = data[cell_i][gene_i];
         }
@@ -134,7 +134,7 @@ public:
    * @return The likelihood that the state represents the true mutation history
    * of the sequenced cells.
    */
-  double logscore_state(ChainStateImpl const &state) {
+  float logscore_state(ChainStateImpl const &state) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(state.mutation_tree.get_n_nodes() == n_genes + 1);
 #endif
@@ -146,15 +146,15 @@ public:
         state.mutation_tree);
     OccurrenceMatrix occurrences(0);
 
-    for (uint64_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
       if (cell_i < n_cells) {
         auto best_attachment = get_best_attachment(cell_i, ancestor_matrix);
         occurrences += best_attachment.occurrences;
       }
     }
 
-    double tree_score = get_logscore_of_occurrences(occurrences);
-    double beta_score = logscore_beta(state.beta);
+    float tree_score = get_logscore_of_occurrences(occurrences);
+    float beta_score = logscore_beta(state.beta);
     return tree_score + beta_score;
   }
 
@@ -166,7 +166,7 @@ public:
    *
    * @param beta The beta error rate to score.
    */
-  double logscore_beta(double beta) {
+  float logscore_beta(float beta) {
     return std::log(std::tgamma(bpriora + bpriorb)) +
            (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
@@ -181,7 +181,7 @@ public:
     /**
      * @brief The index of the best node to attach the cell to.
      */
-    uint64_t node_i;
+    uint32_t node_i;
     /**
      * @brief The occurrences of correct and incorrect data values, assuming the
      * cell is attached to the node with index @ref node_i.
@@ -190,7 +190,7 @@ public:
     /**
      * @brief The log-likelihood that the found attachment is correct.
      */
-    double logscore;
+    float logscore;
   };
 
   /**
@@ -201,26 +201,26 @@ public:
    * cell to.
    * @return A struct with information about the found attachment.
    */
-  Attachment get_best_attachment(uint64_t cell_i,
+  Attachment get_best_attachment(uint32_t cell_i,
                                  AncestorMatrixImpl mutation_tree) {
-    uint64_t best_attachment = mutation_tree.get_root();
+    uint32_t best_attachment = mutation_tree.get_root();
     OccurrenceMatrix best_attachment_occurrences(0);
-    double best_attachment_logscore = -std::numeric_limits<double>::infinity();
+    float best_attachment_logscore = -std::numeric_limits<float>::infinity();
 
-    for (uint64_t attachment_node_i = 0;
+    for (uint32_t attachment_node_i = 0;
          attachment_node_i < mutation_tree.get_n_nodes(); attachment_node_i++) {
       OccurrenceMatrix occurrences(0);
 
-      for (uint64_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
+      for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
         if (gene_i < n_genes) {
-          uint64_t posterior = data[cell_i][gene_i];
-          uint64_t prior =
+          uint32_t posterior = data[cell_i][gene_i];
+          uint32_t prior =
               mutation_tree.is_ancestor(gene_i, attachment_node_i) ? 1 : 0;
           occurrences[{posterior, prior}]++;
         }
       }
 
-      double attachment_logscore = get_logscore_of_occurrences(occurrences);
+      float attachment_logscore = get_logscore_of_occurrences(occurrences);
       if (attachment_logscore > best_attachment_logscore) {
         best_attachment = attachment_node_i;
         best_attachment_occurrences = occurrences;
@@ -239,12 +239,12 @@ public:
    * @param occurrences The occurrences to compute the likelihood of.
    * @return The log-likelihood for the given occurrences.
    */
-  double get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
-    double logscore = 0.0;
+  float get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
+    float logscore = 0.0;
 #pragma unroll
-    for (uint64_t i_posterior = 0; i_posterior < 3; i_posterior++) {
+    for (uint32_t i_posterior = 0; i_posterior < 3; i_posterior++) {
 #pragma unroll
-      for (uint64_t i_prior = 0; i_prior < 2; i_prior++) {
+      for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
         logscore += occurrences[{i_posterior, i_prior}] *
                     log_error_probabilities[i_posterior][i_prior];
       }
@@ -253,9 +253,9 @@ public:
   }
 
 private:
-  double log_error_probabilities[3][2];
-  double bpriora, bpriorb;
+  float log_error_probabilities[3][2];
+  float bpriora, bpriorb;
   DataEntry data[max_n_cells][max_n_genes];
-  uint64_t n_cells, n_genes;
+  uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE

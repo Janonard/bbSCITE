@@ -28,7 +28,7 @@ namespace ffSCITE {
  * @tparam max_n_nodes The maximal number of nodes in tree,
  * excluding the root.
  */
-template <uint64_t max_n_nodes> class AncestorMatrix {
+template <uint32_t max_n_nodes> class AncestorMatrix {
 public:
   /**
    * @brief Shorthand to the corresponding parent vector type.
@@ -43,9 +43,9 @@ public:
    */
   AncestorMatrix() : ancestor(), n_nodes(max_n_nodes) {
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
 #pragma unroll
-      for (uint64_t j = 0; j < max_n_nodes; j++) {
+      for (uint32_t j = 0; j < max_n_nodes; j++) {
         ancestor[i][j] = (i == j) || (i == max_n_nodes - 1);
       }
     }
@@ -66,20 +66,20 @@ public:
    */
   AncestorMatrix(ParentVectorImpl const &parent_vector)
       : ancestor(), n_nodes(parent_vector.get_n_nodes()) {
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i >= n_nodes) {
         continue;
       }
 
 #pragma unroll
       // First, we assume that node i has no ancestors.
-      for (uint64_t j = 0; j < max_n_nodes; j++) {
+      for (uint32_t j = 0; j < max_n_nodes; j++) {
         ancestor[j][i] = false;
       }
 
       // Then we start from the node i and walk up to the root, marking all
       // nodes on the way as ancestors.
-      uint64_t anc = i;
+      uint32_t anc = i;
       while (anc != parent_vector.get_root()) {
         ancestor[anc][i] = true;
         anc = parent_vector[anc];
@@ -96,7 +96,7 @@ public:
    * @param node_b_i The index of the potential descendant.
    * @return true iff node a is an ancestor of node b.
    */
-  bool is_ancestor(uint64_t node_a_i, uint64_t node_b_i) const {
+  bool is_ancestor(uint32_t node_a_i, uint32_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < n_nodes && node_b_i < n_nodes);
 #endif
@@ -110,7 +110,7 @@ public:
    * @param node_b_i The index of the potential ancestor.
    * @return true iff node a is an ancestor of node b.
    */
-  bool is_descendant(uint64_t node_a_i, uint64_t node_b_i) const {
+  bool is_descendant(uint32_t node_a_i, uint32_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < n_nodes && node_b_i < n_nodes);
 #endif
@@ -128,13 +128,13 @@ public:
    * @param node_i The index of the node who's descendants are queried.
    * @return The descendants bit array.
    */
-  std::array<bool, max_n_nodes> get_descendants(uint64_t node_i) const {
+  std::array<bool, max_n_nodes> get_descendants(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
     std::array<bool, max_n_nodes> descendants;
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < n_nodes) {
         descendants[i] = is_ancestor(node_i, i);
       }
@@ -148,13 +148,13 @@ public:
    * @param node_i The index of the node who's number of descendants is queried.
    * @return The number of descendants.
    */
-  uint64_t get_n_descendants(uint64_t node_i) const {
+  uint32_t get_n_descendants(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
-    uint64_t n_descendants = 0;
+    uint32_t n_descendants = 0;
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < n_nodes && is_ancestor(node_i, i)) {
         n_descendants++;
       }
@@ -173,13 +173,13 @@ public:
    * @param node_i The index of the node who's ancestors are queried.
    * @return The ancestors bit array.
    */
-  std::array<bool, max_n_nodes> get_ancestors(uint64_t node_i) const {
+  std::array<bool, max_n_nodes> get_ancestors(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
     std::array<bool, max_n_nodes> ancestors;
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < n_nodes) {
         ancestors[i] = is_ancestor(i, node_i);
       }
@@ -193,13 +193,13 @@ public:
    * @param node_i The index of the node who's number of ancestors is queried.
    * @return The number of ancestors.
    */
-  uint64_t get_n_ancestors(uint64_t node_i) const {
+  uint32_t get_n_ancestors(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
-    uint64_t n_ancestors = 0;
+    uint32_t n_ancestors = 0;
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < n_nodes && is_ancestor(i, node_i)) {
         n_ancestors++;
       }
@@ -212,12 +212,12 @@ public:
    *
    * @return The number of nodes in the tree.
    */
-  uint64_t get_n_nodes() const { return n_nodes; }
+  uint32_t get_n_nodes() const { return n_nodes; }
 
-  uint64_t get_root() const { return n_nodes - 1; }
+  uint32_t get_root() const { return n_nodes - 1; }
 
 private:
   std::array<std::array<bool, max_n_nodes>, max_n_nodes> ancestor;
-  uint64_t n_nodes;
+  uint32_t n_nodes;
 };
 } // namespace ffSCITE

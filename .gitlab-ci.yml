@@ -7,9 +7,6 @@ stages:
   - benchmark
 
 unit-tests:
-  only:
-    - main
-    - staging
   stage: precheck
   script:
     - "ml fpga devel intel/oneapi bittware/520n Boost/1.76.0-GCC CMake"
@@ -24,9 +21,8 @@ unit-tests:
     - noctua2
 
 synthesis:
-  only:
-    - main
   stage: synthesis
+  when: manual
   dependencies:
     - unit-tests
   script:
@@ -45,18 +41,16 @@ synthesis:
     - noctua2
 
 report:
-  only:
-    - main
-  stage: benchmark # This is only temporary, until the synthesis job takes longer than the report job. Then, it will be "precheck" again
+  stage: synthesis
+  when: manual
   script:
     - "ml fpga devel"
     - "ml intel/oneapi bittware/520n Boost/1.76.0-GCC CMake"
     - "mkdir build"
     - "cd build"
-    - "dpcpp -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv ../src/main.cpp -o ffSCITE"
+    - "dpcpp -std=c++20 -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv ../src/main.cpp -o ffSCITE"
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:30:00 --mem 32G --cpus-per-task=32"
-  dependencies: []
   artifacts:
     paths:
       - "build/ffSCITE.prj/reports"
@@ -65,9 +59,8 @@ report:
     - noctua2
 
 quality benchmark:
-  only:
-    - main
   stage: benchmark
+  when: manual
   dependencies:
     - synthesis
   script:

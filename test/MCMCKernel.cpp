@@ -20,10 +20,10 @@
 
 using namespace ffSCITE;
 
-constexpr uint64_t n_cells = 15;
-constexpr uint64_t n_genes = 4;
+constexpr uint32_t n_cells = 15;
+constexpr uint32_t n_genes = 4;
 
-constexpr double alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
+constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 
@@ -146,7 +146,7 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   std::vector<ChainStateImpl> best_states = std::get<0>(result);
 
   bool correct_tree_found = false;
-  for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {
+  for (uint32_t state_i = 0; state_i < best_states.size(); state_i++) {
     bool is_correct_tree = true;
     is_correct_tree &= best_states[state_i].mutation_tree[0] == 2;
     is_correct_tree &= best_states[state_i].mutation_tree[1] == 2;

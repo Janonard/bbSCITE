@@ -17,8 +17,8 @@
 #include "StateScorer.hpp"
 #include <catch2/catch_all.hpp>
 
-constexpr uint64_t n_cells = 6;
-constexpr uint64_t n_genes = 4;
+constexpr uint32_t n_cells = 6;
+constexpr uint32_t n_genes = 4;
 using ScorerImpl = ffSCITE::StateScorer<n_cells, n_genes,
                                         cl::sycl::access::target::host_buffer>;
 using ParentVectorImpl = ScorerImpl::ParentVectorImpl;
@@ -27,7 +27,7 @@ using ChainStateImpl = ScorerImpl::ChainStateImpl;
 using DataEntry = ScorerImpl::DataEntry;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 
-constexpr double alpha = 6.04e-5, beta = 0.4309, prior_sd = 0.1;
+constexpr float alpha = 0.01, beta = 0.5, prior_sd = 0.1;
 
 void run_with_scorer(std::function<void(ChainStateImpl, ScorerImpl)> function) {
   // Mutation tree:
@@ -87,36 +87,45 @@ void run_with_scorer(std::function<void(ChainStateImpl, ScorerImpl)> function) {
   function(state, scorer);
 }
 
+constexpr float maximal_difference = 1e-6;
+
+bool almost_equal(float x, float y) {
+  bool almost_equal = std::fabs(x-y) <= maximal_difference;
+
+  if (!almost_equal) {
+    // Print the inputs for debugging purposes.
+    std::cerr << x << " != " << y << std::endl;
+  }
+
+  return almost_equal;
+} 
+
 TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
   run_with_scorer([](ChainStateImpl state, ScorerImpl scorer) {
     OccurrenceMatrix occurrences(0);
 
     occurrences[{0, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(1.0 - alpha));
+    REQUIRE(almost_equal(scorer.get_logscore_of_occurrences(occurrences), 2 * std::log(1.0 - alpha)));
 
     occurrences[{0, 0}] = 0;
     occurrences[{1, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(alpha));
+    REQUIRE(almost_equal(scorer.get_logscore_of_occurrences(occurrences), 2 * std::log(alpha)));
 
     occurrences[{1, 0}] = 0;
     occurrences[{2, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 0.0);
+    REQUIRE(almost_equal(scorer.get_logscore_of_occurrences(occurrences), 0.0));
 
     occurrences[{2, 0}] = 0;
     occurrences[{0, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(beta));
+    REQUIRE(almost_equal(scorer.get_logscore_of_occurrences(occurrences), 2 * std::log(beta)));
 
     occurrences[{0, 1}] = 0;
     occurrences[{1, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(1 - beta));
+    REQUIRE(almost_equal(scorer.get_logscore_of_occurrences(occurrences), 2 * std::log(1 - beta)));
 
     occurrences[{1, 1}] = 0;
     occurrences[{2, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 0.0);
+    REQUIRE(almost_equal(scorer.get_logscore_of_occurrences(occurrences), 0.0));
   });
 }
 
@@ -137,7 +146,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 0);
     REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-    REQUIRE(attachment.logscore == 4 * std::log(1 - alpha));
+    REQUIRE(almost_equal(attachment.logscore, 4 * std::log(1 - alpha)));
 
     // Node 1
 
@@ -152,8 +161,8 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 2);
     REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-    REQUIRE(attachment.logscore ==
-            2 * std::log(1 - alpha) + 2 * std::log(1 - beta));
+    REQUIRE(almost_equal(attachment.logscore,
+            2 * std::log(1 - alpha) + 2 * std::log(1 - beta)));
 
     // Node 2
 
@@ -168,7 +177,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 1);
     REQUIRE(int(occurrences[{2, 1}]) == 1);
 
-    REQUIRE(attachment.logscore == std::log(1 - alpha) + std::log(1 - beta));
+    REQUIRE(almost_equal(attachment.logscore, std::log(1 - alpha) + std::log(1 - beta)));
 
     // Node 3
 
@@ -183,7 +192,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 0);
     REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-    REQUIRE(attachment.logscore == 2 * std::log(1 - alpha));
+    REQUIRE(almost_equal(attachment.logscore, 2 * std::log(1 - alpha)));
 
     // Node 4
 
@@ -198,8 +207,8 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 1);
     REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-    REQUIRE(attachment.logscore ==
-            2 * std::log(1 - alpha) + std::log(beta) + std::log(1 - beta));
+    REQUIRE(almost_equal(attachment.logscore,
+            2 * std::log(1 - alpha) + std::log(beta) + std::log(1 - beta)));
 
     // Node 5
 
@@ -214,18 +223,18 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 1);
     REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-    REQUIRE(attachment.logscore ==
-            2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta));
+    REQUIRE(almost_equal(attachment.logscore,
+            2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta)));
   });
 }
 
 TEST_CASE("StateScorer::score_state", "[StateScorer]") {
   run_with_scorer([](ChainStateImpl state, ScorerImpl scorer) {
-    double score = scorer.logscore_state(state);
-    double beta_score = scorer.logscore_beta(state.beta);
+    float score = scorer.logscore_state(state);
+    float beta_score = scorer.logscore_beta(state.beta);
 
-    double true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
+    float true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
                         std::log(beta) + std::log(alpha);
-    REQUIRE(score - beta_score == true_score);
+    REQUIRE(almost_equal(score - beta_score, true_score));
   });
 }

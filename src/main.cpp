@@ -24,11 +24,11 @@
 using namespace ffSCITE;
 
 #ifdef EMULATOR
-constexpr uint64_t max_n_cells = 64;
-constexpr uint64_t max_n_genes = 64;
+constexpr uint32_t max_n_cells = 64;
+constexpr uint32_t max_n_genes = 64;
 #else
-constexpr uint64_t max_n_cells = 16;
-constexpr uint64_t max_n_genes = 16;
+constexpr uint32_t max_n_cells = 16;
+constexpr uint32_t max_n_genes = 16;
 #endif
 
 using URNG = oneapi::dpl::minstd_rand;
@@ -46,11 +46,11 @@ int main(int argc, char **argv) {
 
   // First pass over the input data to check validity and identify number of
   // cells and genes.
-  uint64_t n_cells = 0, n_genes = 0;
+  uint32_t n_cells = 0, n_genes = 0;
   {
     std::ifstream input_file(parameters.get_input_path());
     char c;
-    uint64_t cells_in_line = 0;
+    uint32_t cells_in_line = 0;
 
     while ((c = input_file.get()) != -1) {
       if (c == '0' || c == '1' || c == '2' || c == '3') {
@@ -104,8 +104,8 @@ int main(int argc, char **argv) {
     auto data_ac = data.get_access<cl::sycl::access::mode::discard_write>();
     std::ifstream input_file(parameters.get_input_path());
 
-    for (uint64_t gene_i = 0; gene_i < n_genes; gene_i++) {
-      for (uint64_t cell_i = 0; cell_i < n_cells; cell_i++) {
+    for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
+      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
         int entry;
         input_file >> entry;
         switch (entry) {
@@ -145,19 +145,19 @@ int main(int argc, char **argv) {
   std::vector<ChainStateImpl> best_states = std::get<0>(result);
   cl::sycl::event runtime_event = std::get<1>(result);
 
-  static constexpr double timesteps_per_millisecond = 1000000.0;
-  double start_of_event =
+  static constexpr float timesteps_per_millisecond = 1000000.0;
+  float start_of_event =
       runtime_event.get_profiling_info<
           cl::sycl::info::event_profiling::command_start>() /
       timesteps_per_millisecond;
-  double end_of_event =
+  float end_of_event =
       runtime_event
           .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
       timesteps_per_millisecond;
   std::cout << "Time elapsed: " << end_of_event - start_of_event << " ms"
             << std::endl;
 
-  for (uint64_t state_i = 0; state_i < best_states.size(); state_i++) {
+  for (uint32_t state_i = 0; state_i < best_states.size(); state_i++) {
     // Output the tree as a graphviz file.
     {
       std::stringstream output_path;

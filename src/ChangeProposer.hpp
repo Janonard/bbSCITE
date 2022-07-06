@@ -31,7 +31,7 @@ namespace ffSCITE {
  * tree.
  * @tparam RNG The URNG to retrieve random numbers for the changes from.
  */
-template <uint64_t max_n_genes, typename RNG> class ChangeProposer {
+template <uint32_t max_n_genes, typename RNG> class ChangeProposer {
 public:
   /**
    * @brief Shorthand for the chain state type.
@@ -46,7 +46,7 @@ public:
   /**
    * @brief Shorthand for the maximal number of nodes in the mutation tree.
    */
-  static constexpr uint64_t max_n_nodes = ChainStateImpl::max_n_nodes;
+  static constexpr uint32_t max_n_nodes = ChainStateImpl::max_n_nodes;
 
   /**
    * @brief Initialize the change proposer with user-defined parameters.
@@ -68,8 +68,8 @@ public:
    * @param beta_jump_sd The standard derivation of
    * the beta error changes.
    */
-  ChangeProposer(RNG rng, double prob_beta_change, double prob_prune_n_reattach,
-                 double prob_swap_nodes, double beta_jump_sd)
+  ChangeProposer(RNG rng, float prob_beta_change, float prob_prune_n_reattach,
+                 float prob_swap_nodes, float beta_jump_sd)
       : rng(rng), prob_beta_change(prob_beta_change),
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd) {
@@ -105,7 +105,7 @@ public:
    * @return A random move.
    */
   MoveType sample_move() {
-    double change_type_draw =
+    float change_type_draw =
         oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
       return MoveType::ChangeBeta;
@@ -130,14 +130,14 @@ public:
    *
    * @return Two random nodes
    */
-  std::array<uint64_t, 2> sample_nonroot_nodepair(uint64_t n_nodes) {
-    std::array<uint64_t, 2> sampled_nodes;
+  std::array<uint32_t, 2> sample_nonroot_nodepair(uint32_t n_nodes) {
+    std::array<uint32_t, 2> sampled_nodes;
 
     // excluding n_nodes - 1, the root.
     sampled_nodes[0] =
-        oneapi::dpl::uniform_int_distribution<uint64_t>(0, n_nodes - 2)(rng);
+        oneapi::dpl::uniform_int_distribution<uint32_t>(0, n_nodes - 2)(rng);
     sampled_nodes[1] =
-        oneapi::dpl::uniform_int_distribution<uint64_t>(0, n_nodes - 3)(rng);
+        oneapi::dpl::uniform_int_distribution<uint32_t>(0, n_nodes - 3)(rng);
     if (sampled_nodes[1] >= sampled_nodes[0]) {
       sampled_nodes[1]++;
     }
@@ -161,8 +161,8 @@ public:
    * nondescendants.
    * @return One of the nodes descendants or nondescendants.
    */
-  uint64_t sample_descendant_or_nondescendant(
-      AncestorMatrix<max_n_nodes> const &ancestor_matrix, uint64_t node_i,
+  uint32_t sample_descendant_or_nondescendant(
+      AncestorMatrix<max_n_nodes> const &ancestor_matrix, uint32_t node_i,
       bool sample_descendant, bool include_root) {
     std::array<bool, max_n_nodes> descendant =
         ancestor_matrix.get_descendants(node_i);
@@ -171,17 +171,17 @@ public:
     // continue as if we were to sample a descendant.
     if (!sample_descendant) {
 #pragma unroll
-      for (uint64_t i = 0; i < max_n_nodes; i++) {
+      for (uint32_t i = 0; i < max_n_nodes; i++) {
         descendant[i] = !descendant[i];
       }
     }
 
     // Count the (non)descendants, excluding the root.
-    uint64_t n_descendants = 0;
-    uint64_t sum_upper_bound =
+    uint32_t n_descendants = 0;
+    uint32_t sum_upper_bound =
         ancestor_matrix.get_n_nodes() - (include_root ? 0 : 1);
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < sum_upper_bound && descendant[i]) {
         n_descendants++;
       }
@@ -189,15 +189,15 @@ public:
 
     // Sample the occurrence of the (non)descendant to pick. The resulting node
     // will be the `sampled_occurrence_i`th (non)descendant.
-    uint64_t sampled_occurrence_i =
-        oneapi::dpl::uniform_int_distribution<uint64_t>(0,
+    uint32_t sampled_occurrence_i =
+        oneapi::dpl::uniform_int_distribution<uint32_t>(0,
                                                         n_descendants - 1)(rng);
 
     // Walk through the (non)descendant bitvector and pick the correct node
     // index.
-    uint64_t sampled_node_i = 0;
+    uint32_t sampled_node_i = 0;
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < ancestor_matrix.get_n_nodes() && descendant[i]) {
         if (sampled_occurrence_i == 0) {
           sampled_node_i = i;
@@ -216,9 +216,9 @@ public:
    * @param old_beta The old beta error rate.
    * @return The newly proposed beta error rate.
    */
-  double change_beta(double old_beta) {
-    // Not using double as the normal distribution's output here since it introduced a compiler error as of this writing.
-    double new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
+  float change_beta(float old_beta) {
+    // Not using float as the normal distribution's output here since it introduced a compiler error as of this writing.
+    float new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
                                      0, beta_jump_sd)(rng);
     if (new_beta < 0) {
       new_beta = std::abs(new_beta);
@@ -241,15 +241,15 @@ public:
    * @param ancestor_matrix The current ancestor matrix of the mutation tree.
    * @return The index of the the moved node.
    */
-  uint64_t
+  uint32_t
   prune_and_reattach(ParentVector<max_n_nodes> &parent_vector,
                      AncestorMatrix<max_n_nodes> const &ancestor_matrix) {
     // Pick a node to move.
-    uint64_t node_to_move_i = oneapi::dpl::uniform_int_distribution<uint64_t>(
+    uint32_t node_to_move_i = oneapi::dpl::uniform_int_distribution<uint32_t>(
         0, parent_vector.get_n_nodes() - 2)(rng);
 
     // Sample one of the node's nondescendants, including the root.
-    uint64_t new_parent_i = sample_descendant_or_nondescendant(
+    uint32_t new_parent_i = sample_descendant_or_nondescendant(
         ancestor_matrix, node_to_move_i, false, true);
 
     // Move the node.
@@ -267,8 +267,8 @@ public:
    * @param parent_vector The parent vector to modify.
    * @return The indices of the swapped nodes.
    */
-  std::array<uint64_t, 2> swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
-    std::array<uint64_t, 2> nodes_to_swap =
+  std::array<uint32_t, 2> swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
+    std::array<uint32_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(parent_vector.get_n_nodes());
     parent_vector.swap_nodes(nodes_to_swap[0], nodes_to_swap[1]);
     return nodes_to_swap;
@@ -292,15 +292,15 @@ public:
    * @param out_neighborhood_correction Output: Neighborhood correction factor.
    * @return The two swapped/moved nodes.
    */
-  std::array<uint64_t, 2>
+  std::array<uint32_t, 2>
   swap_subtrees(ParentVector<max_n_nodes> &parent_vector,
                 AncestorMatrix<max_n_nodes> const &ancestor_matrix,
-                double &out_neighborhood_correction) {
+                float &out_neighborhood_correction) {
 
-    std::array<uint64_t, 2> nodes_to_swap =
+    std::array<uint32_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(parent_vector.get_n_nodes());
-    uint64_t node_a_i = nodes_to_swap[0];
-    uint64_t node_b_i = nodes_to_swap[1];
+    uint32_t node_a_i = nodes_to_swap[0];
+    uint32_t node_b_i = nodes_to_swap[1];
 
     bool distinct_lineages =
         !(ancestor_matrix.is_ancestor(node_a_i, node_b_i) ||
@@ -323,11 +323,11 @@ public:
       }
 
       out_neighborhood_correction =
-          double(ancestor_matrix.get_n_descendants(node_a_i)) /
-          double(ancestor_matrix.get_n_descendants(node_b_i));
+          float(ancestor_matrix.get_n_descendants(node_a_i)) /
+          float(ancestor_matrix.get_n_descendants(node_b_i));
 
       // Sample one of node a's descendants.
-      uint64_t new_parent_i = sample_descendant_or_nondescendant(
+      uint32_t new_parent_i = sample_descendant_or_nondescendant(
           ancestor_matrix, node_a_i, true, false);
 
       // Move node a next to node b.
@@ -347,7 +347,7 @@ public:
    * factor.
    */
   void propose_change(ChainState<max_n_genes> &state,
-                      double &out_neighborhood_correction) {
+                      float &out_neighborhood_correction) {
     [[intel::fpga_register]] AncestorMatrix<max_n_nodes> ancestor_matrix(
         state.mutation_tree);
     out_neighborhood_correction = 1.0;
@@ -374,8 +374,8 @@ private:
   RNG rng;
 
   // probabilities for the different move types, prob_swap_subtrees implied.
-  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes;
+  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes;
 
-  double beta_jump_sd;
+  float beta_jump_sd;
 };
 } // namespace ffSCITE

@@ -43,7 +43,7 @@ namespace ffSCITE {
  *
  * @tparam max_n_nodes The maximal number of nodes in the tree.
  */
-template <uint64_t max_n_nodes> class ParentVector {
+template <uint32_t max_n_nodes> class ParentVector {
 public:
   /**
    * @brief Default constructor
@@ -52,7 +52,7 @@ public:
    * connected directly to the root.
    */
   ParentVector() : parent(), n_nodes(max_n_nodes) {
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       parent[i] = get_root();
     }
   }
@@ -66,13 +66,13 @@ public:
    *
    * @param n_nodes The number of nodes in the tree.
    */
-  ParentVector(uint64_t n_nodes) : parent(), n_nodes(n_nodes) {
+  ParentVector(uint32_t n_nodes) : parent(), n_nodes(n_nodes) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
 
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       parent[i] = get_root();
     }
   }
@@ -84,7 +84,7 @@ public:
    *
    * @return The node index of the root.
    */
-  uint64_t get_root() const { return n_nodes - 1; }
+  uint32_t get_root() const { return n_nodes - 1; }
 
   /**
    * @brief Construct a parent vector from a tree's Prüfer Code.
@@ -99,7 +99,7 @@ public:
    * @return The tree represented by the Prüfer Code.
    */
   static ParentVector<max_n_nodes>
-  from_pruefer_code(std::vector<uint64_t> const &pruefer_code) {
+  from_pruefer_code(std::vector<uint32_t> const &pruefer_code) {
     // Algorithm adapted from
     // https://en.wikipedia.org/wiki/Pr%C3%BCfer_sequence, 09th of May 2022,
     // 16:07, since the original reference implementation is sketchy.
@@ -107,20 +107,20 @@ public:
     assert(pruefer_code.size() <= max_n_nodes - 2);
 #endif
     ParentVector<max_n_nodes> pv(pruefer_code.size() + 2);
-    uint64_t n_nodes = pv.n_nodes;
+    uint32_t n_nodes = pv.n_nodes;
 
     // Compute the (resulting) degrees of every node.
-    std::array<uint64_t, max_n_nodes> degree;
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    std::array<uint32_t, max_n_nodes> degree;
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       degree[i] = 1;
     }
-    for (uint64_t i = 0; i < pruefer_code.size(); i++) {
+    for (uint32_t i = 0; i < pruefer_code.size(); i++) {
       degree[pruefer_code[i]]++;
     }
 
     // Build the tree.
-    for (uint64_t i = 0; i < pruefer_code.size(); i++) {
-      for (uint64_t j = 0; j < n_nodes; j++) {
+    for (uint32_t i = 0; i < pruefer_code.size(); i++) {
+      for (uint32_t j = 0; j < n_nodes; j++) {
         if (degree[j] == 1) {
           pv.parent[j] = pruefer_code[i];
           degree[pruefer_code[i]]--;
@@ -132,8 +132,8 @@ public:
 
     // Construct the last edge. v is the root of tree as it's new parent has
     // never been assigned.
-    uint64_t u = 0;
-    for (uint64_t i = 0; i < n_nodes; i++) {
+    uint32_t u = 0;
+    for (uint32_t i = 0; i < n_nodes; i++) {
       if (degree[i] == 1) {
         pv.parent[i] = pv.get_root();
         break;
@@ -157,7 +157,7 @@ public:
    */
   template <typename RNG>
   static ParentVector<max_n_nodes> sample_random_tree(RNG &rng,
-                                                      uint64_t n_nodes) {
+                                                      uint32_t n_nodes) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
@@ -166,22 +166,22 @@ public:
         0, n_nodes - 1);
 
     // Generate a pruefer code for the tree.
-    std::vector<uint64_t> pruefer_code;
-    for (uint64_t i = 0; i < n_nodes - 2; i++) {
+    std::vector<uint32_t> pruefer_code;
+    for (uint32_t i = 0; i < n_nodes - 2; i++) {
       pruefer_code.push_back(int_distribution(rng));
     }
 
     return from_pruefer_code(pruefer_code);
   }
 
-  uint64_t operator[](uint64_t node_i) const { return parent[node_i]; }
+  uint32_t operator[](uint32_t node_i) const { return parent[node_i]; }
 
   /**
    * @brief Get the number of nodes in the tree.
    *
    * @return The number of nodes in the tree.
    */
-  uint64_t get_n_nodes() const { return n_nodes; }
+  uint32_t get_n_nodes() const { return n_nodes; }
 
   /**
    * @brief Check whether node a is a descendant of node b.
@@ -194,7 +194,7 @@ public:
    * @param node_b_i The index of node b.
    * @return true iff node a is a descendant of node b.
    */
-  bool is_descendant(uint64_t node_a_i, uint64_t node_b_i) const {
+  bool is_descendant(uint32_t node_a_i, uint32_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < n_nodes && node_b_i < n_nodes);
 #endif
@@ -220,7 +220,7 @@ public:
    * @param node_a_i One of the nodes to swap.
    * @param node_b_i The other node to swap.
    */
-  void swap_nodes(uint64_t node_a_i, uint64_t node_b_i) {
+  void swap_nodes(uint32_t node_a_i, uint32_t node_b_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i != get_root() && node_b_i != get_root());
 #endif
@@ -230,7 +230,7 @@ public:
     }
 
 #pragma unroll
-    for (uint64_t i = 0; i < max_n_nodes; i++) {
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < n_nodes && i != node_a_i && i != node_b_i) {
         if (parent[i] == node_a_i) {
           parent[i] = node_b_i;
@@ -264,7 +264,7 @@ public:
    * @param node_i The index of the node to move.
    * @param new_parent_i The index of the node's new parent node.
    */
-  void move_subtree(uint64_t node_i, uint64_t new_parent_i) {
+  void move_subtree(uint32_t node_i, uint32_t new_parent_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(!is_descendant(new_parent_i, node_i) && node_i != get_root());
 #endif
@@ -282,15 +282,15 @@ public:
    * @return An array that contains all nodes of the tree in breadth-first
    * order.
    */
-  std::array<uint64_t, max_n_nodes> calc_breadth_first_traversal() const {
-    std::array<uint64_t, max_n_nodes> traversal;
+  std::array<uint32_t, max_n_nodes> calc_breadth_first_traversal() const {
+    std::array<uint32_t, max_n_nodes> traversal;
     traversal[0] = get_root();
-    uint64_t back_of_buffer = 1;
+    uint32_t back_of_buffer = 1;
 
     // Follow the node's edges to fill the traversal.
-    for (uint64_t traversal_i = 0; traversal_i < n_nodes; traversal_i++) {
+    for (uint32_t traversal_i = 0; traversal_i < n_nodes; traversal_i++) {
       // don't look up the root's parent, it is already included in the walk.
-      for (uint64_t j = 0; j < n_nodes - 1; j++) {
+      for (uint32_t j = 0; j < n_nodes - 1; j++) {
         if (parent[j] == traversal[traversal_i]) {
           traversal[back_of_buffer] = j;
           back_of_buffer++;
@@ -314,7 +314,7 @@ public:
    * @param node_a_i The index of one of the nodes to swap.
    * @param node_b_i The index of the other node to swap.
    */
-  void swap_subtrees(uint64_t node_a_i, uint64_t node_b_i) {
+  void swap_subtrees(uint32_t node_a_i, uint32_t node_b_i) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i != get_root() && node_b_i != get_root() &&
            !is_descendant(node_a_i, node_b_i) &&
@@ -338,7 +338,7 @@ public:
       return false;
     }
 #pragma unroll
-    for (uint64_t node_i = 0; node_i < max_n_nodes; node_i++) {
+    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
       if (node_i < n_nodes && parent[node_i] != other.parent[node_i]) {
         return false;
       }
@@ -365,7 +365,7 @@ public:
     stream << "digraph G {" << std::endl;
     stream << "node [color=deeppink4, style=filled, fontcolor=white];"
            << std::endl;
-    for (uint64_t node_i = 0; node_i < n_nodes - 1; node_i++) {
+    for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
       stream << parent[node_i] << " -> " << node_i << ";" << std::endl;
     }
     stream << "}" << std::endl;
@@ -373,17 +373,17 @@ public:
   }
 
   std::string to_newick() const {
-    std::vector<std::vector<uint64_t>> children;
+    std::vector<std::vector<uint32_t>> children;
 
     // Initialize children list
     children.reserve(n_nodes);
-    for (uint64_t node_i = 0; node_i < n_nodes; node_i++) {
-      children.push_back(std::vector<uint64_t>());
+    for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
+      children.push_back(std::vector<uint32_t>());
     }
 
     // Populate children list (not including the root to avoid infinite
     // recursion).
-    for (uint64_t node_i = 0; node_i < n_nodes - 1; node_i++) {
+    for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
       children[parent[node_i]].push_back(node_i);
     }
 
@@ -395,11 +395,11 @@ public:
 
 private:
   void
-  add_node_to_newick_code(std::vector<std::vector<uint64_t>> const &children,
-                          std::stringstream &stream, uint64_t node_i) const {
+  add_node_to_newick_code(std::vector<std::vector<uint32_t>> const &children,
+                          std::stringstream &stream, uint32_t node_i) const {
     if (children[node_i].size() != 0) {
       stream << "(";
-      for (uint64_t i = 0; i < children[node_i].size(); i++) {
+      for (uint32_t i = 0; i < children[node_i].size(); i++) {
         add_node_to_newick_code(children, stream, children[node_i][i]);
         if (i != children[node_i].size() - 1) {
           stream << ",";
@@ -410,7 +410,7 @@ private:
     stream << node_i;
   }
 
-  std::array<uint64_t, max_n_nodes> parent;
-  uint64_t n_nodes;
+  std::array<uint32_t, max_n_nodes> parent;
+  uint32_t n_nodes;
 };
 } // namespace ffSCITE
