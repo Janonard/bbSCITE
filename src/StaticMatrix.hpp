@@ -27,16 +27,16 @@ namespace ffSCITE {
  * @tparam width The width of the matrix
  * @tparam height The height of the matrix
  */
-template <typename T, uint64_t width, uint64_t height> class StaticMatrix {
+template <typename T, uint32_t width, uint32_t height> class StaticMatrix {
 public:
   StaticMatrix() : internal() {}
   ~StaticMatrix() {}
 
   StaticMatrix(T value) : internal() {
 #pragma unroll
-    for (uint64_t c = 0; c < width; c++) {
+    for (uint32_t c = 0; c < width; c++) {
 #pragma unroll
-      for (uint64_t r = 0; r < height; r++) {
+      for (uint32_t r = 0; r < height; r++) {
         internal[c][r] = value;
       }
     }
@@ -46,20 +46,20 @@ public:
   StaticMatrix &
   operator=(StaticMatrix<T, width, height> const &other) = default;
 
-  T const &operator[](std::tuple<uint64_t, uint64_t> idx) const {
+  T const &operator[](std::tuple<uint32_t, uint32_t> idx) const {
     return internal[std::get<0>(idx)][std::get<1>(idx)];
   }
 
-  T &operator[](std::tuple<uint64_t, uint64_t> idx) {
+  T &operator[](std::tuple<uint32_t, uint32_t> idx) {
     return internal[std::get<0>(idx)][std::get<1>(idx)];
   }
 
   StaticMatrix<T, width, height> &
   operator+=(StaticMatrix<T, width, height> rhs) {
 #pragma unroll
-    for (uint64_t c = 0; c < width; c++) {
+    for (uint32_t c = 0; c < width; c++) {
 #pragma unroll
-      for (uint64_t r = 0; r < height; r++) {
+      for (uint32_t r = 0; r < height; r++) {
         internal[c][r] += rhs.internal[c][r];
       }
     }
@@ -68,9 +68,9 @@ public:
 
   StaticMatrix<T, width, height> &operator*=(T scalar) {
 #pragma unroll
-    for (uint64_t c = 0; c < width; c++) {
+    for (uint32_t c = 0; c < width; c++) {
 #pragma unroll
-      for (uint64_t r = 0; r < height; r++) {
+      for (uint32_t r = 0; r < height; r++) {
         internal[c][r] *= scalar;
       }
     }
@@ -81,21 +81,21 @@ private:
   T internal[width][height];
 };
 
-template <typename T, uint64_t width, uint64_t height>
+template <typename T, uint32_t width, uint32_t height>
 StaticMatrix<T, width, height> operator+(StaticMatrix<T, width, height> lhs,
                                          StaticMatrix<T, width, height> rhs) {
   lhs += rhs;
   return lhs;
 }
 
-template <typename T, uint64_t width, uint64_t height>
+template <typename T, uint32_t width, uint32_t height>
 StaticMatrix<T, width, height> operator*(StaticMatrix<T, width, height> lhs,
                                          T scalar) {
   lhs *= scalar;
   return lhs;
 }
 
-template <typename T, uint64_t width, uint64_t height>
+template <typename T, uint32_t width, uint32_t height>
 StaticMatrix<T, width, height> operator*(T scalar,
                                          StaticMatrix<T, width, height> rhs) {
   rhs *= scalar;

@@ -56,7 +56,7 @@ private:
  * @tparam StateScorer The type of the state scoring strategy.
  * @tparam access_target The target from where the states are accessed.
  */
-template <uint64_t max_n_cells, uint64_t max_n_genes, typename RNG>
+template <uint32_t max_n_cells, uint32_t max_n_genes, typename RNG>
 class MCMCKernel {
 public:
   /**
@@ -80,7 +80,7 @@ public:
    * @brief Shorthand for the index buffer accessor type.
    */
   using IndexAccessor =
-      cl::sycl::accessor<uint64_t, 1, cl::sycl::access::mode::read_write>;
+      cl::sycl::accessor<uint32_t, 1, cl::sycl::access::mode::read_write>;
 
   using ChangeProposerImpl = ChangeProposer<max_n_genes, RNG>;
 
@@ -117,7 +117,7 @@ public:
              IndexAccessor n_best_states_ac, MutationDataAccessor data, RNG rng,
              double prob_beta_change, double prob_prune_n_reattach,
              double prob_swap_nodes, double beta_jump_sd, double alpha_mean,
-             double beta_mean, double beta_sd, double gamma, uint64_t n_steps)
+             double beta_mean, double beta_sd, double gamma, uint32_t n_steps)
       : best_states_ac(best_states_ac), current_states_ac(current_states_ac),
         best_score_ac(best_score_ac), current_scores_ac(current_scores_ac),
         n_best_states_ac(n_best_states_ac), prob_beta_change(prob_beta_change),
@@ -144,10 +144,10 @@ public:
                                                           beta_sd, data);
 
     double best_score = -std::numeric_limits<double>::infinity();
-    uint64_t n_best_states = 0;
+    uint32_t n_best_states = 0;
 
-    for (uint64_t i = 0; i < n_steps; i++) {
-      for (uint64_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
+    for (uint32_t i = 0; i < n_steps; i++) {
+      for (uint32_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
            chain_i++) {
         double neighborhood_correction = 1.0;
         [[intel::fpga_register]] ChainStateImpl current_state =
@@ -198,8 +198,8 @@ public:
                  cl::sycl::queue working_queue, Parameters const &parameters) {
     using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, RNG>;
 
-    uint64_t n_cells = data_buffer.get_range()[0];
-    uint64_t n_genes = data_buffer.get_range()[1];
+    uint32_t n_cells = data_buffer.get_range()[0];
+    uint32_t n_genes = data_buffer.get_range()[1];
 
     RNG twister;
     twister.seed(parameters.get_seed());
@@ -207,7 +207,7 @@ public:
     cl::sycl::buffer<ChainStateImpl, 1> best_states_buffer(
         (cl::sycl::range<1>(parameters.get_max_n_best_states())));
     cl::sycl::buffer<double, 1> best_score_buffer((cl::sycl::range<1>(1)));
-    cl::sycl::buffer<uint64_t, 1> n_best_states_buffer((cl::sycl::range<1>(1)));
+    cl::sycl::buffer<uint32_t, 1> n_best_states_buffer((cl::sycl::range<1>(1)));
 
     cl::sycl::buffer<ChainStateImpl, 1> current_states_buffer(
         (cl::sycl::range<1>(parameters.get_n_chains())));
@@ -228,7 +228,7 @@ public:
                                       parameters.get_beta_mean(),
                                       parameters.get_beta_sd(), data_ac);
 
-      for (uint64_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
+      for (uint32_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
         current_states_ac[rep_i] = ChainStateImpl::sample_random_state(
             twister, n_genes, parameters.get_beta_mean());
         current_scores_ac[rep_i] =
@@ -277,7 +277,7 @@ public:
             .template get_access<cl::sycl::access::mode::read>();
     std::vector<ChainStateImpl> best_states_vec;
     best_states_vec.reserve(n_best_states_ac[0]);
-    for (uint64_t i = 0; i < n_best_states_ac[0]; i++) {
+    for (uint32_t i = 0; i < n_best_states_ac[0]; i++) {
       best_states_vec.push_back(best_states_ac[i]);
     }
 
@@ -294,6 +294,6 @@ private:
   double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;
   double alpha_mean, beta_mean, beta_sd;
   double gamma;
-  uint64_t n_steps;
+  uint32_t n_steps;
 };
 } // namespace ffSCITE

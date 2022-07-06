@@ -17,8 +17,8 @@
 #include "StateScorer.hpp"
 #include <catch2/catch_all.hpp>
 
-constexpr uint64_t n_cells = 6;
-constexpr uint64_t n_genes = 4;
+constexpr uint32_t n_cells = 6;
+constexpr uint32_t n_genes = 4;
 using ScorerImpl = ffSCITE::StateScorer<n_cells, n_genes,
                                         cl::sycl::access::target::host_buffer>;
 using ParentVectorImpl = ScorerImpl::ParentVectorImpl;
@@ -27,7 +27,7 @@ using ChainStateImpl = ScorerImpl::ChainStateImpl;
 using DataEntry = ScorerImpl::DataEntry;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 
-constexpr double alpha = 6.04e-5, beta = 0.4309, prior_sd = 0.1;
+constexpr double alpha = 0.01, beta = 0.5, prior_sd = 0.1;
 
 void run_with_scorer(std::function<void(ChainStateImpl, ScorerImpl)> function) {
   // Mutation tree:
@@ -92,13 +92,11 @@ TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
     OccurrenceMatrix occurrences(0);
 
     occurrences[{0, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(1.0 - alpha));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(1.0 - alpha));
 
     occurrences[{0, 0}] = 0;
     occurrences[{1, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(alpha));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(alpha));
 
     occurrences[{1, 0}] = 0;
     occurrences[{2, 0}] = 2;
@@ -106,13 +104,11 @@ TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
 
     occurrences[{2, 0}] = 0;
     occurrences[{0, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(beta));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(beta));
 
     occurrences[{0, 1}] = 0;
     occurrences[{1, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(1 - beta));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(1 - beta));
 
     occurrences[{1, 1}] = 0;
     occurrences[{2, 1}] = 2;
@@ -214,8 +210,7 @@ TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
     REQUIRE(int(occurrences[{1, 1}]) == 1);
     REQUIRE(int(occurrences[{2, 1}]) == 0);
 
-    REQUIRE(attachment.logscore ==
-            2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta));
+    REQUIRE(attachment.logscore == 2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta));
   });
 }
 

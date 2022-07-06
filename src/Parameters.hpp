@@ -333,9 +333,9 @@ public:
    * For every chain, a new random starting state is initialized and @ref
    * get_chain_length steps are executed from this state.
    *
-   * @return uint64_t The number of chains to execute.
+   * @return uint32_t The number of chains to execute.
    */
-  uint64_t get_n_chains() const { return n_chains.value(); }
+  uint32_t get_n_chains() const { return n_chains.value(); }
 
   /**
    * @brief Set the number of chains to execute.
@@ -345,7 +345,7 @@ public:
    *
    * @param n_chains The new number of chains to execute.
    */
-  void set_n_chains(uint64_t n_chains) { this->n_chains = n_chains; }
+  void set_n_chains(uint32_t n_chains) { this->n_chains = n_chains; }
 
   /**
    * @brief Get the number of steps to execute on every chain.
@@ -354,9 +354,9 @@ public:
    * state, computing its likelihood and deciding whether the new state should
    * be the new state of the chain.
    *
-   * @return uint64_t The number of steps to execute on every chain.
+   * @return uint32_t The number of steps to execute on every chain.
    */
-  uint64_t get_chain_length() const { return chain_length.value(); }
+  uint32_t get_chain_length() const { return chain_length.value(); }
 
   /**
    * @brief Set the number of steps to execute on every chain.
@@ -367,7 +367,7 @@ public:
    *
    * @param chain_length The new number of steps to execute on every chain.
    */
-  void set_chain_length(uint64_t chain_length) {
+  void set_chain_length(uint32_t chain_length) {
     this->chain_length = chain_length;
   }
 
@@ -378,9 +378,9 @@ public:
    * can not be reallocated. Therefore, an upper bound for the maximal number of
    * optimal states is needed.
    *
-   * @return uint64_t The maximal number of optimal states to return.
+   * @return uint32_t The maximal number of optimal states to return.
    */
-  uint64_t get_max_n_best_states() const { return max_n_best_states; }
+  uint32_t get_max_n_best_states() const { return max_n_best_states; }
 
   /**
    * @brief Set the maximal number of optimal states to return.
@@ -392,7 +392,7 @@ public:
    * @param max_n_best_states The new maximal number of optimal states to
    * return.
    */
-  void set_max_n_best_states(uint64_t max_n_best_states) {
+  void set_max_n_best_states(uint32_t max_n_best_states) {
     this->max_n_best_states = max_n_best_states;
   }
 
@@ -634,8 +634,8 @@ private:
 
   std::optional<std::string> input_path, output_path_base;
 
-  std::optional<uint64_t> n_chains, chain_length;
-  uint64_t max_n_best_states;
+  std::optional<uint32_t> n_chains, chain_length;
+  uint32_t max_n_best_states;
 
   double alpha_mean, beta_mean, beta_sd;
   double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,

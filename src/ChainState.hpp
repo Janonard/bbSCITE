@@ -26,7 +26,7 @@ namespace ffSCITE {
  *
  * @tparam max_n_genes The maximal number of genes in the dataset.
  */
-template <uint64_t max_n_genes> struct ChainState {
+template <uint32_t max_n_genes> struct ChainState {
 public:
   /**
    * @brief The maximal number of nodes in a mutation tree.
@@ -34,7 +34,7 @@ public:
    * The mutation tree has a node for every gene that may mutate, but also an
    * additional node that represents the totally unmutated state.
    */
-  static constexpr uint64_t max_n_nodes = max_n_genes + 1;
+  static constexpr uint32_t max_n_nodes = max_n_genes + 1;
 
   /**
    * @brief Shorthand for the parent vector type.
@@ -68,7 +68,7 @@ public:
    * @param beta The probability of false negatives for the new state.
    */
   template <typename RNG>
-  static ChainState<max_n_genes> sample_random_state(RNG &rng, uint64_t n_genes,
+  static ChainState<max_n_genes> sample_random_state(RNG &rng, uint32_t n_genes,
                                                      double beta) {
     ParentVectorImpl mutation_tree =
         ParentVectorImpl::sample_random_tree(rng, n_genes + 1);
