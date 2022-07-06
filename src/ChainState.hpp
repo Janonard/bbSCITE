@@ -53,7 +53,7 @@ public:
    * @param mutation_tree The mutation tree to use.
    * @param beta The probability of false negatives for the new state.
    */
-  ChainState(ParentVector<max_n_nodes> mutation_tree, float beta)
+  ChainState(ParentVector<max_n_nodes> mutation_tree, double beta)
       : mutation_tree(mutation_tree), beta(beta) {}
 
   /**
@@ -69,7 +69,7 @@ public:
    */
   template <typename RNG>
   static ChainState<max_n_genes> sample_random_state(RNG &rng, uint32_t n_genes,
-                                                     float beta) {
+                                                     double beta) {
     ParentVectorImpl mutation_tree =
         ParentVectorImpl::sample_random_tree(rng, n_genes + 1);
     return ChainState<max_n_genes>(mutation_tree, beta);
@@ -94,6 +94,6 @@ public:
   /**
    * @brief The (proposed) beta error rate.
    */
-  float beta;
+  double beta;
 };
 } // namespace ffSCITE

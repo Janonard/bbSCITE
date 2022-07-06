@@ -71,10 +71,10 @@ public:
       cl::sycl::accessor<ChainStateImpl, 1, cl::sycl::access::mode::read_write>;
 
   /**
-   * @brief Shorthand for the float buffer accessor type.
+   * @brief Shorthand for the double buffer accessor type.
    */
   using ScoreAccessor =
-      cl::sycl::accessor<float, 1, cl::sycl::access::mode::read_write>;
+      cl::sycl::accessor<double, 1, cl::sycl::access::mode::read_write>;
 
   /**
    * @brief Shorthand for the index buffer accessor type.
@@ -115,9 +115,9 @@ public:
   MCMCKernel(StateAccessor best_states_ac, StateAccessor current_states_ac,
              ScoreAccessor best_score_ac, ScoreAccessor current_scores_ac,
              IndexAccessor n_best_states_ac, MutationDataAccessor data, RNG rng,
-             float prob_beta_change, float prob_prune_n_reattach,
-             float prob_swap_nodes, float beta_jump_sd, float alpha_mean,
-             float beta_mean, float beta_sd, float gamma, uint32_t n_steps)
+             double prob_beta_change, double prob_prune_n_reattach,
+             double prob_swap_nodes, double beta_jump_sd, double alpha_mean,
+             double beta_mean, double beta_sd, double gamma, uint32_t n_steps)
       : best_states_ac(best_states_ac), current_states_ac(current_states_ac),
         best_score_ac(best_score_ac), current_scores_ac(current_scores_ac),
         n_best_states_ac(n_best_states_ac), prob_beta_change(prob_beta_change),
@@ -143,23 +143,23 @@ public:
     [[intel::fpga_register]] StateScorerImpl state_scorer(alpha_mean, beta_mean,
                                                           beta_sd, data);
 
-    float best_score = -std::numeric_limits<float>::infinity();
+    double best_score = -std::numeric_limits<double>::infinity();
     uint32_t n_best_states = 0;
 
     for (uint32_t i = 0; i < n_steps; i++) {
       for (uint32_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
            chain_i++) {
-        float neighborhood_correction = 1.0;
+        double neighborhood_correction = 1.0;
         [[intel::fpga_register]] ChainStateImpl current_state =
             current_states_ac[chain_i];
-        [[intel::fpga_register]] float current_score =
+        [[intel::fpga_register]] double current_score =
             current_scores_ac[chain_i];
 
         [[intel::fpga_register]] ChainStateImpl proposed_state = current_state;
         change_proposer.propose_change(proposed_state, neighborhood_correction);
-        float proposed_score = state_scorer.logscore_state(proposed_state);
+        double proposed_score = state_scorer.logscore_state(proposed_state);
 
-        float acceptance_probability =
+        double acceptance_probability =
             neighborhood_correction *
             std::exp((proposed_score - current_score) * gamma);
         bool accept_move = oneapi::dpl::bernoulli_distribution(
@@ -206,12 +206,12 @@ public:
 
     cl::sycl::buffer<ChainStateImpl, 1> best_states_buffer(
         (cl::sycl::range<1>(parameters.get_max_n_best_states())));
-    cl::sycl::buffer<float, 1> best_score_buffer((cl::sycl::range<1>(1)));
+    cl::sycl::buffer<double, 1> best_score_buffer((cl::sycl::range<1>(1)));
     cl::sycl::buffer<uint32_t, 1> n_best_states_buffer((cl::sycl::range<1>(1)));
 
     cl::sycl::buffer<ChainStateImpl, 1> current_states_buffer(
         (cl::sycl::range<1>(parameters.get_n_chains())));
-    cl::sycl::buffer<float, 1> current_scores_buffer(
+    cl::sycl::buffer<double, 1> current_scores_buffer(
         (cl::sycl::range<1>(parameters.get_n_chains())));
 
     {
@@ -257,7 +257,7 @@ public:
       auto data_ac =
           data_buffer.template get_access<cl::sycl::access::mode::read>(cgh);
 
-      float beta_jump_sd =
+      double beta_jump_sd =
           parameters.get_beta_sd() / parameters.get_beta_jump_scaling_chi();
       MCMCKernel kernel(best_states_ac, current_states_ac, best_score_ac,
                         current_scores_ac, n_best_states_ac, data_ac, twister,
@@ -291,9 +291,9 @@ private:
   MutationDataAccessor data;
 
   RNG rng;
-  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;
-  float alpha_mean, beta_mean, beta_sd;
-  float gamma;
+  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;
+  double alpha_mean, beta_mean, beta_sd;
+  double gamma;
   uint32_t n_steps;
 };
 } // namespace ffSCITE

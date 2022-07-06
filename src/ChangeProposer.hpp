@@ -68,8 +68,8 @@ public:
    * @param beta_jump_sd The standard derivation of
    * the beta error changes.
    */
-  ChangeProposer(RNG rng, float prob_beta_change, float prob_prune_n_reattach,
-                 float prob_swap_nodes, float beta_jump_sd)
+  ChangeProposer(RNG rng, double prob_beta_change, double prob_prune_n_reattach,
+                 double prob_swap_nodes, double beta_jump_sd)
       : rng(rng), prob_beta_change(prob_beta_change),
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd) {
@@ -105,7 +105,7 @@ public:
    * @return A random move.
    */
   MoveType sample_move() {
-    float change_type_draw =
+    double change_type_draw =
         oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
       return MoveType::ChangeBeta;
@@ -216,9 +216,9 @@ public:
    * @param old_beta The old beta error rate.
    * @return The newly proposed beta error rate.
    */
-  float change_beta(float old_beta) {
-    // Not using float as the normal distribution's output here since it introduced a compiler error as of this writing.
-    float new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
+  double change_beta(double old_beta) {
+    // Not using double as the normal distribution's output here since it introduced a compiler error as of this writing.
+    double new_beta = old_beta + oneapi::dpl::normal_distribution<double>(
                                      0, beta_jump_sd)(rng);
     if (new_beta < 0) {
       new_beta = std::abs(new_beta);
@@ -295,7 +295,7 @@ public:
   std::array<uint32_t, 2>
   swap_subtrees(ParentVector<max_n_nodes> &parent_vector,
                 AncestorMatrix<max_n_nodes> const &ancestor_matrix,
-                float &out_neighborhood_correction) {
+                double &out_neighborhood_correction) {
 
     std::array<uint32_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(parent_vector.get_n_nodes());
@@ -323,8 +323,8 @@ public:
       }
 
       out_neighborhood_correction =
-          float(ancestor_matrix.get_n_descendants(node_a_i)) /
-          float(ancestor_matrix.get_n_descendants(node_b_i));
+          double(ancestor_matrix.get_n_descendants(node_a_i)) /
+          double(ancestor_matrix.get_n_descendants(node_b_i));
 
       // Sample one of node a's descendants.
       uint32_t new_parent_i = sample_descendant_or_nondescendant(
@@ -347,7 +347,7 @@ public:
    * factor.
    */
   void propose_change(ChainState<max_n_genes> &state,
-                      float &out_neighborhood_correction) {
+                      double &out_neighborhood_correction) {
     [[intel::fpga_register]] AncestorMatrix<max_n_nodes> ancestor_matrix(
         state.mutation_tree);
     out_neighborhood_correction = 1.0;
@@ -374,8 +374,8 @@ private:
   RNG rng;
 
   // probabilities for the different move types, prob_swap_subtrees implied.
-  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes;
+  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes;
 
-  float beta_jump_sd;
+  double beta_jump_sd;
 };
 } // namespace ffSCITE

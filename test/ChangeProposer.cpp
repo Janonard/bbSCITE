@@ -24,7 +24,7 @@
 using namespace ffSCITE;
 
 constexpr unsigned int n_iterations = 1024;
-constexpr float alpha = 0.05;
+constexpr double alpha = 0.05;
 constexpr uint32_t n_genes = 7;
 constexpr uint32_t n_nodes = 8;
 constexpr unsigned int ulps = 4;
@@ -78,20 +78,20 @@ TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
   // samples from all those subsets. Our null-hypothesis is that this random
   // variable is uniformly distributed and we test this hypothesis with a
   // chi-squared-test.
-  float t = 0;
-  float n_pairs = boost::math::binomial_coefficient<float>(n_nodes - 1, 2);
+  double t = 0;
+  double n_pairs = boost::math::binomial_coefficient<double>(n_nodes - 1, 2);
   for (uint32_t i = 0; i < n_nodes - 1; i++) {
     for (uint32_t j = i + 1; j < n_nodes - 1; j++) {
-      float n_occurrences;
+      double n_occurrences;
       if (sampled_nodes.contains({i, j})) {
         n_occurrences = sampled_nodes[{i, j}];
       } else {
         n_occurrences = 0.0;
       }
 
-      float numerator = n_occurrences - n_iterations / n_pairs;
+      double numerator = n_occurrences - n_iterations / n_pairs;
       numerator *= numerator;
-      float denominator = n_iterations / n_pairs;
+      double denominator = n_iterations / n_pairs;
       t += numerator / denominator;
     }
   }
@@ -150,12 +150,12 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
   // null-hypothesis is that X_v is uniformly distributed, i.e. \forall w \in
   // Desc(v): P(X_v = w) = (|Desc(v)|)^{-1} and we test this hypothesis with a
   // chi-squared-test.
-  float t = 0;
-  const float n_descendants = am.get_n_descendants(5);
+  double t = 0;
+  const double n_descendants = am.get_n_descendants(5);
   for (std::pair<unsigned int, unsigned int> pair : sampled_nodes_for_five) {
-    float numerator = (pair.second - n_iterations / n_descendants);
+    double numerator = (pair.second - n_iterations / n_descendants);
     numerator *= numerator;
-    float denominator = n_iterations / n_descendants;
+    double denominator = n_iterations / n_descendants;
     t += numerator / denominator;
   }
 
@@ -167,7 +167,7 @@ TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
   auto proposer = init_proposer();
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    float sampled_beta = proposer.change_beta(0.0);
+    double sampled_beta = proposer.change_beta(0.0);
     REQUIRE(sampled_beta >= 0.0);
     REQUIRE(sampled_beta <= 1.0);
 
@@ -232,7 +232,7 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
 
   for (uint32_t i = 0; i < n_iterations; i++) {
     ParentVector<n_nodes> pv_copy(pv);
-    float neighborhood_correction = 1.0;
+    double neighborhood_correction = 1.0;
     auto swapped_subtrees =
         proposer.swap_subtrees(pv_copy, am, neighborhood_correction);
 
@@ -252,8 +252,8 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
       REQUIRE(pv_copy[node_a_i] == pv[node_b_i]);
       REQUIRE(am.is_ancestor(node_a_i, pv_copy[node_b_i]));
       REQUIRE(neighborhood_correction ==
-              float(am.get_n_descendants(node_a_i)) /
-                  float(am.get_n_descendants(node_b_i)));
+              double(am.get_n_descendants(node_a_i)) /
+                  double(am.get_n_descendants(node_b_i)));
     } else {
       REQUIRE(pv_copy[node_a_i] == pv[node_b_i]);
       REQUIRE(pv_copy[node_b_i] == pv[node_a_i]);

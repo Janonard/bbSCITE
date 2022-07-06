@@ -23,7 +23,7 @@ using namespace ffSCITE;
 constexpr uint32_t n_cells = 15;
 constexpr uint32_t n_genes = 4;
 
-constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
+constexpr double alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 

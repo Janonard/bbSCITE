@@ -91,7 +91,7 @@ public:
    * @param data An accessor to the mutation input data. The number of cells and
    * genes is inferred from the accessor range.
    */
-  StateScorer(float alpha_mean, float beta_mean, float beta_sd,
+  StateScorer(double alpha_mean, double beta_mean, double beta_sd,
               MutationDataAccessor data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(),
         n_cells(data.get_range()[0]), n_genes(data.get_range()[1]) {
@@ -134,7 +134,7 @@ public:
    * @return The likelihood that the state represents the true mutation history
    * of the sequenced cells.
    */
-  float logscore_state(ChainStateImpl const &state) {
+  double logscore_state(ChainStateImpl const &state) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(state.mutation_tree.get_n_nodes() == n_genes + 1);
 #endif
@@ -153,8 +153,8 @@ public:
       }
     }
 
-    float tree_score = get_logscore_of_occurrences(occurrences);
-    float beta_score = logscore_beta(state.beta);
+    double tree_score = get_logscore_of_occurrences(occurrences);
+    double beta_score = logscore_beta(state.beta);
     return tree_score + beta_score;
   }
 
@@ -166,7 +166,7 @@ public:
    *
    * @param beta The beta error rate to score.
    */
-  float logscore_beta(float beta) {
+  double logscore_beta(double beta) {
     return std::log(std::tgamma(bpriora + bpriorb)) +
            (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
@@ -190,7 +190,7 @@ public:
     /**
      * @brief The log-likelihood that the found attachment is correct.
      */
-    float logscore;
+    double logscore;
   };
 
   /**
@@ -205,7 +205,7 @@ public:
                                  AncestorMatrixImpl mutation_tree) {
     uint32_t best_attachment = mutation_tree.get_root();
     OccurrenceMatrix best_attachment_occurrences(0);
-    float best_attachment_logscore = -std::numeric_limits<float>::infinity();
+    double best_attachment_logscore = -std::numeric_limits<double>::infinity();
 
     for (uint32_t attachment_node_i = 0;
          attachment_node_i < mutation_tree.get_n_nodes(); attachment_node_i++) {
@@ -220,7 +220,7 @@ public:
         }
       }
 
-      float attachment_logscore = get_logscore_of_occurrences(occurrences);
+      double attachment_logscore = get_logscore_of_occurrences(occurrences);
       if (attachment_logscore > best_attachment_logscore) {
         best_attachment = attachment_node_i;
         best_attachment_occurrences = occurrences;
@@ -239,8 +239,8 @@ public:
    * @param occurrences The occurrences to compute the likelihood of.
    * @return The log-likelihood for the given occurrences.
    */
-  float get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
-    float logscore = 0.0;
+  double get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
+    double logscore = 0.0;
 #pragma unroll
     for (uint32_t i_posterior = 0; i_posterior < 3; i_posterior++) {
 #pragma unroll
@@ -253,8 +253,8 @@ public:
   }
 
 private:
-  float log_error_probabilities[3][2];
-  float bpriora, bpriorb;
+  double log_error_probabilities[3][2];
+  double bpriora, bpriorb;
   DataEntry data[max_n_cells][max_n_genes];
   uint32_t n_cells, n_genes;
 };

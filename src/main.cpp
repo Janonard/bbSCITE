@@ -145,12 +145,12 @@ int main(int argc, char **argv) {
   std::vector<ChainStateImpl> best_states = std::get<0>(result);
   cl::sycl::event runtime_event = std::get<1>(result);
 
-  static constexpr float timesteps_per_millisecond = 1000000.0;
-  float start_of_event =
+  static constexpr double timesteps_per_millisecond = 1000000.0;
+  double start_of_event =
       runtime_event.get_profiling_info<
           cl::sycl::info::event_profiling::command_start>() /
       timesteps_per_millisecond;
-  float end_of_event =
+  double end_of_event =
       runtime_event
           .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
       timesteps_per_millisecond;
