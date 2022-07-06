@@ -31,11 +31,7 @@ constexpr uint64_t max_n_cells = 16;
 constexpr uint64_t max_n_genes = 16;
 #endif
 
-#ifdef EMULATOR
 using URNG = oneapi::dpl::minstd_rand0;
-#else
-using URNG = DummyRNG;
-#endif 
 
 using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
 using ChainStateImpl = ChainState<max_n_genes>;

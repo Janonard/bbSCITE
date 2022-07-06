@@ -36,7 +36,7 @@ ProposerImpl init_proposer() {
   oneapi::dpl::minstd_rand0 twister;
   twister.seed(seeder());
 
-  ChangeProposer<n_genes, oneapi::dpl::minstd_rand0> proposer(twister);
+  ProposerImpl proposer(twister);
 
   return proposer;
 }

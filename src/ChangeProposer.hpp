@@ -217,7 +217,7 @@ public:
    * @return The newly proposed beta error rate.
    */
   double change_beta(double old_beta) {
-    double new_beta = old_beta + oneapi::dpl::normal_distribution<double>(
+    double new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
                                      0, beta_jump_sd)(rng);
     if (new_beta < 0) {
       new_beta = std::abs(new_beta);
