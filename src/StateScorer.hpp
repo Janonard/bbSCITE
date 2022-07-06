@@ -113,9 +113,8 @@ public:
         beta_mean;
     bpriorb = bpriora * ((1 / beta_mean) - 1);
 
-#pragma unroll
+    [[intel::loop_coalesce]]
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-#pragma unroll
       for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
         if (cell_i < n_cells && gene_i < n_genes) {
           this->data[cell_i][gene_i] = data[cell_i][gene_i];
