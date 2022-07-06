@@ -28,12 +28,12 @@ constexpr double alpha = 0.05;
 constexpr uint64_t n_genes = 7;
 constexpr uint64_t n_nodes = 8;
 
-using ProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand0>;
+using ProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand>;
 
 ProposerImpl init_proposer() {
   std::random_device seeder;
 
-  oneapi::dpl::minstd_rand0 twister;
+  oneapi::dpl::minstd_rand twister;
   twister.seed(seeder());
 
   ProposerImpl proposer(twister);
