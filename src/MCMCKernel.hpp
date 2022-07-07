@@ -92,6 +92,10 @@ public:
 
   using DataEntry = typename StateScorerImpl::DataEntry;
 
+  using DataMatrix = typename StateScorerImpl::DataMatrix;
+
+  using OccurrenceMatrix = typename StateScorerImpl::OccurrenceMatrix;
+
   using MutationDataAccessor = typename StateScorerImpl::MutationDataAccessor;
 
   /**
@@ -114,14 +118,14 @@ public:
    */
   MCMCKernel(StateAccessor best_states_ac, StateAccessor current_states_ac,
              ScoreAccessor best_score_ac, ScoreAccessor current_scores_ac,
-             IndexAccessor n_best_states_ac, MutationDataAccessor data, RNG rng,
-             double prob_beta_change, double prob_prune_n_reattach,
+             IndexAccessor n_best_states_ac, MutationDataAccessor data_ac,
+             RNG rng, double prob_beta_change, double prob_prune_n_reattach,
              double prob_swap_nodes, double beta_jump_sd, double alpha_mean,
              double beta_mean, double beta_sd, double gamma, uint32_t n_steps)
       : best_states_ac(best_states_ac), current_states_ac(current_states_ac),
         best_score_ac(best_score_ac), current_scores_ac(current_scores_ac),
         n_best_states_ac(n_best_states_ac), prob_beta_change(prob_beta_change),
-        data(data), prob_prune_n_reattach(prob_prune_n_reattach),
+        data_ac(data_ac), prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd),
         alpha_mean(alpha_mean), beta_mean(beta_mean), beta_sd(beta_sd),
         gamma(gamma), n_steps(n_steps) {
@@ -140,8 +144,9 @@ public:
     [[intel::fpga_register]] ChangeProposerImpl change_proposer(
         rng, prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
         beta_jump_sd);
-    [[intel::fpga_register]] StateScorerImpl state_scorer(alpha_mean, beta_mean,
-                                                          beta_sd, data);
+
+    DataMatrix data;
+    StateScorerImpl state_scorer(alpha_mean, beta_mean, beta_sd, data_ac, data);
 
     double best_score = -std::numeric_limits<double>::infinity();
     uint32_t n_best_states = 0;
@@ -152,8 +157,7 @@ public:
         double neighborhood_correction = 1.0;
         [[intel::fpga_register]] ChainStateImpl current_state =
             current_states_ac[chain_i];
-        [[intel::fpga_register]] double current_score =
-            current_scores_ac[chain_i];
+        double current_score = current_scores_ac[chain_i];
 
         [[intel::fpga_register]] ChainStateImpl proposed_state = current_state;
         change_proposer.propose_change(proposed_state, neighborhood_correction);
@@ -223,10 +227,11 @@ public:
               .template get_access<cl::sycl::access::mode::read_write>();
       auto data_ac =
           data_buffer.template get_access<cl::sycl::access::mode::read>();
+      DataMatrix data;
 
       HostStateScorerImpl host_scorer(parameters.get_alpha_mean(),
                                       parameters.get_beta_mean(),
-                                      parameters.get_beta_sd(), data_ac);
+                                      parameters.get_beta_sd(), data_ac, data);
 
       for (uint32_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
         current_states_ac[rep_i] = ChainStateImpl::sample_random_state(
@@ -288,7 +293,7 @@ private:
   StateAccessor best_states_ac, current_states_ac;
   ScoreAccessor best_score_ac, current_scores_ac;
   IndexAccessor n_best_states_ac;
-  MutationDataAccessor data;
+  MutationDataAccessor data_ac;
 
   RNG rng;
   double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;

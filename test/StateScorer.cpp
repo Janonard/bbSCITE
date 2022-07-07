@@ -25,11 +25,14 @@ using ParentVectorImpl = ScorerImpl::ParentVectorImpl;
 using AncestorMatrixImpl = ScorerImpl::AncestorMatrixImpl;
 using ChainStateImpl = ScorerImpl::ChainStateImpl;
 using DataEntry = ScorerImpl::DataEntry;
+using DataMatrix = ScorerImpl::DataMatrix;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 
 constexpr double alpha = 0.01, beta = 0.5, prior_sd = 0.1;
 
-void run_with_scorer(std::function<void(ChainStateImpl, ScorerImpl)> function) {
+void run_with_scorer(
+    std::function<void(ChainStateImpl, ScorerImpl, OccurrenceMatrix)>
+        function) {
   // Mutation tree:
   //
   //  ┌4┐
@@ -39,6 +42,8 @@ void run_with_scorer(std::function<void(ChainStateImpl, ScorerImpl)> function) {
 
   ChainStateImpl state(pv, beta);
 
+  OccurrenceMatrix occurrences(0);
+
   cl::sycl::buffer<DataEntry, 2> data_buffer(
       cl::sycl::range<2>(n_cells, n_genes));
   {
@@ -46,57 +51,85 @@ void run_with_scorer(std::function<void(ChainStateImpl, ScorerImpl)> function) {
 
     // cell 0, attached to node 4 (root)
     data[0][0] = 0;
+    occurrences[{0, 0}]++;
     data[0][1] = 0;
+    occurrences[{0, 0}]++;
     data[0][2] = 0;
+    occurrences[{0, 0}]++;
     data[0][3] = 0;
+    occurrences[{0, 0}]++;
 
     // cell 1, attached to node 1
     data[1][0] = 0;
+    occurrences[{0, 0}]++;
     data[1][1] = 1;
+    occurrences[{1, 1}]++;
     data[1][2] = 1;
+    occurrences[{1, 1}]++;
     data[1][3] = 0;
+    occurrences[{0, 0}]++;
 
     // cell 2, attached to node 1, with missing data
     data[2][0] = 0;
+    occurrences[{0, 0}]++;
     data[2][1] = 1;
+    occurrences[{1, 1}]++;
     data[2][2] = 2;
+    occurrences[{2, 1}]++;
     data[2][3] = 2;
+    occurrences[{2, 0}]++;
 
     // cell 3, attached to node 4, with missing data
     data[3][0] = 2;
+    occurrences[{2, 0}]++;
     data[3][1] = 2;
+    occurrences[{2, 0}]++;
     data[3][2] = 0;
+    occurrences[{0, 0}]++;
     data[3][3] = 0;
+    occurrences[{0, 0}]++;
 
     // cell 4, attached to node 0, with false negatives
     data[4][0] = 1;
+    occurrences[{1, 1}]++;
     data[4][1] = 0;
+    occurrences[{0, 0}]++;
     data[4][2] = 0; // Error in this position
+    occurrences[{0, 1}]++;
     data[4][3] = 0;
+    occurrences[{0, 0}]++;
 
     // cell 5, attached to node 3, with false positive
     data[5][0] = 1; // Error in this position
+    occurrences[{1, 0}]++;
     data[5][1] = 0;
+    occurrences[{0, 0}]++;
     data[5][2] = 0;
+    occurrences[{0, 0}]++;
     data[5][3] = 1;
+    occurrences[{1, 1}]++;
   }
 
-  auto data = data_buffer.get_access<cl::sycl::access::mode::read>();
-  ScorerImpl scorer(alpha, beta, prior_sd, data);
+  auto data_ac = data_buffer.get_access<cl::sycl::access::mode::read>();
+  DataMatrix data;
+  ScorerImpl scorer(alpha, beta, prior_sd, data_ac, data);
 
-  function(state, scorer);
+  function(state, scorer, occurrences);
 }
 
 TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
-  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer) {
+  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer,
+                     OccurrenceMatrix true_occurrences) {
     OccurrenceMatrix occurrences(0);
 
     occurrences[{0, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(1.0 - alpha));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
+            2 * std::log(1.0 - alpha));
 
     occurrences[{0, 0}] = 0;
     occurrences[{1, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(alpha));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
+            2 * std::log(alpha));
 
     occurrences[{1, 0}] = 0;
     occurrences[{2, 0}] = 2;
@@ -104,11 +137,13 @@ TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
 
     occurrences[{2, 0}] = 0;
     occurrences[{0, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(beta));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
+            2 * std::log(beta));
 
     occurrences[{0, 1}] = 0;
     occurrences[{1, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 2 * std::log(1 - beta));
+    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
+            2 * std::log(1 - beta));
 
     occurrences[{1, 1}] = 0;
     occurrences[{2, 1}] = 2;
@@ -116,106 +151,18 @@ TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
   });
 }
 
-TEST_CASE("StateScorer::get_best_attachment", "[StateScorer]") {
-  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer) {
-    AncestorMatrixImpl am(state.mutation_tree);
-
-    // Node 0
-
-    ScorerImpl::Attachment attachment = scorer.get_best_attachment(0, am);
-    REQUIRE(int(attachment.node_i) == 4);
-
-    OccurrenceMatrix occurrences = attachment.occurrences;
-    REQUIRE(int(occurrences[{0, 0}]) == 4);
-    REQUIRE(int(occurrences[{1, 0}]) == 0);
-    REQUIRE(int(occurrences[{2, 0}]) == 0);
-    REQUIRE(int(occurrences[{0, 1}]) == 0);
-    REQUIRE(int(occurrences[{1, 1}]) == 0);
-    REQUIRE(int(occurrences[{2, 1}]) == 0);
-
-    REQUIRE(attachment.logscore == 4 * std::log(1 - alpha));
-
-    // Node 1
-
-    attachment = scorer.get_best_attachment(1, am);
-    REQUIRE(int(attachment.node_i) == 1);
-
-    occurrences = attachment.occurrences;
-    REQUIRE(int(occurrences[{0, 0}]) == 2);
-    REQUIRE(int(occurrences[{1, 0}]) == 0);
-    REQUIRE(int(occurrences[{2, 0}]) == 0);
-    REQUIRE(int(occurrences[{0, 1}]) == 0);
-    REQUIRE(int(occurrences[{1, 1}]) == 2);
-    REQUIRE(int(occurrences[{2, 1}]) == 0);
-
-    REQUIRE(attachment.logscore ==
-            2 * std::log(1 - alpha) + 2 * std::log(1 - beta));
-
-    // Node 2
-
-    attachment = scorer.get_best_attachment(2, am);
-    REQUIRE(int(attachment.node_i) == 1);
-
-    occurrences = attachment.occurrences;
-    REQUIRE(int(occurrences[{0, 0}]) == 1);
-    REQUIRE(int(occurrences[{1, 0}]) == 0);
-    REQUIRE(int(occurrences[{2, 0}]) == 1);
-    REQUIRE(int(occurrences[{0, 1}]) == 0);
-    REQUIRE(int(occurrences[{1, 1}]) == 1);
-    REQUIRE(int(occurrences[{2, 1}]) == 1);
-
-    REQUIRE(attachment.logscore == std::log(1 - alpha) + std::log(1 - beta));
-
-    // Node 3
-
-    attachment = scorer.get_best_attachment(3, am);
-    REQUIRE(int(attachment.node_i) == 4);
-
-    occurrences = attachment.occurrences;
-    REQUIRE(int(occurrences[{0, 0}]) == 2);
-    REQUIRE(int(occurrences[{1, 0}]) == 0);
-    REQUIRE(int(occurrences[{2, 0}]) == 2);
-    REQUIRE(int(occurrences[{0, 1}]) == 0);
-    REQUIRE(int(occurrences[{1, 1}]) == 0);
-    REQUIRE(int(occurrences[{2, 1}]) == 0);
-
-    REQUIRE(attachment.logscore == 2 * std::log(1 - alpha));
-
-    // Node 4
-
-    attachment = scorer.get_best_attachment(4, am);
-    REQUIRE(int(attachment.node_i) == 0);
-
-    occurrences = attachment.occurrences;
-    REQUIRE(int(occurrences[{0, 0}]) == 2);
-    REQUIRE(int(occurrences[{1, 0}]) == 0);
-    REQUIRE(int(occurrences[{2, 0}]) == 0);
-    REQUIRE(int(occurrences[{0, 1}]) == 1);
-    REQUIRE(int(occurrences[{1, 1}]) == 1);
-    REQUIRE(int(occurrences[{2, 1}]) == 0);
-
-    REQUIRE(attachment.logscore ==
-            2 * std::log(1 - alpha) + std::log(beta) + std::log(1 - beta));
-
-    // Node 5
-
-    attachment = scorer.get_best_attachment(5, am);
-    REQUIRE(int(attachment.node_i) == 3);
-
-    occurrences = attachment.occurrences;
-    REQUIRE(int(occurrences[{0, 0}]) == 2);
-    REQUIRE(int(occurrences[{1, 0}]) == 1);
-    REQUIRE(int(occurrences[{2, 0}]) == 0);
-    REQUIRE(int(occurrences[{0, 1}]) == 0);
-    REQUIRE(int(occurrences[{1, 1}]) == 1);
-    REQUIRE(int(occurrences[{2, 1}]) == 0);
-
-    REQUIRE(attachment.logscore == 2 * std::log(1 - alpha) + std::log(alpha) + std::log(1 - beta));
+TEST_CASE("StateScore::logscore_tree", "[StateScorer]") {
+  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer,
+                     OccurrenceMatrix true_occurrences) {
+    double calculated_score = scorer.logscore_tree(state.mutation_tree);
+    double true_score = scorer.get_logscore_of_occurrences(true_occurrences);
+    REQUIRE(calculated_score == true_score);
   });
 }
 
 TEST_CASE("StateScorer::score_state", "[StateScorer]") {
-  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer) {
+  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer,
+                     OccurrenceMatrix true_occurrences) {
     double score = scorer.logscore_state(state);
     double beta_score = scorer.logscore_beta(state.beta);
 
