@@ -236,7 +236,7 @@ public:
 
     for (uint32_t i = 0; i < max_n_nodes; i++) {
       AncestryVector old_vector = ancestor[i];
-      AncestryVector new_vector;
+      AncestryVector new_vector = old_vector;
 
 #pragma unroll
       for (uint32_t j = 0; j < max_n_nodes; j++) {
