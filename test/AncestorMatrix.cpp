@@ -16,8 +16,8 @@
  */
 #include <AncestorMatrix.hpp>
 #include <catch2/catch_all.hpp>
-using PV = ffSCITE::ParentVector<7>;
-using AM = ffSCITE::AncestorMatrix<7>;
+using PV = ffSCITE::ParentVector<8>;
+using AM = ffSCITE::AncestorMatrix<8>;
 
 AM create_test_ancestor_matrix() {
   // Construct a simple, binary tree with three levels and 7 nodes:
@@ -300,4 +300,52 @@ TEST_CASE("AncestorMatrix::get_n_ancestors", "[AncestorMatrix]") {
   REQUIRE(ancestor_matrix.get_n_ancestors(4) == 2);
   REQUIRE(ancestor_matrix.get_n_ancestors(5) == 2);
   REQUIRE(ancestor_matrix.get_n_ancestors(6) == 1);
+}
+
+TEST_CASE("AncestorMatrix::swap_nodes", "[AncestorMatrix]") {
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  PV pv = PV::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  AM original_am(pv);
+
+  pv.swap_nodes(2, 4);
+  AM rebuilt_am(pv);
+
+  AM updated_am = original_am.swap_nodes(2, 4);
+
+  for (uint32_t i = 0; i < 8; i++) {
+    for (uint32_t j = 0; j < 8; j++) {
+      REQUIRE(rebuilt_am.is_ancestor(i, j) == updated_am.is_ancestor(i, j));
+    }
+  }
+}
+
+TEST_CASE("AncestorMatrix::move_subtree", "[AncestorMatrix]") {
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  PV pv = PV::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  AM original_am(pv);
+
+  pv.move_subtree(2, 6);
+  AM rebuilt_am(pv);
+
+  AM updated_am = original_am.move_subtree(2, 6);
+
+  for (uint32_t i = 0; i < 8; i++) {
+    for (uint32_t j = 0; j < 8; j++) {
+      REQUIRE(rebuilt_am.is_ancestor(i, j) == updated_am.is_ancestor(i, j));
+    }
+  }
 }

@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "ParentVector.hpp"
+#include <sycl/ext/intel/ac_types/ac_int.hpp>
 
 namespace ffSCITE {
 /**
@@ -35,21 +36,16 @@ public:
    */
   using ParentVectorImpl = ParentVector<max_n_nodes>;
 
+  using AncestryVector = ac_int<max_n_nodes, false>;
+
   /**
    * @brief Default constructor
    *
    * Instantiate the ancestor matrix of a tree with the maximal number of nodes
    * where all nodes are connected directly to the root.
    */
-  AncestorMatrix() : ancestor(), n_nodes(max_n_nodes) {
-#pragma unroll
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-#pragma unroll
-      for (uint32_t j = 0; j < max_n_nodes; j++) {
-        ancestor[i][j] = (i == j) || (i == max_n_nodes - 1);
-      }
-    }
-  }
+  AncestorMatrix() : ancestor(), n_nodes(max_n_nodes) {}
+  AncestorMatrix(uint32_t n_nodes) : ancestor(), n_nodes(n_nodes) {}
   AncestorMatrix(AncestorMatrix<max_n_nodes> const &other) = default;
   AncestorMatrix<max_n_nodes> &
   operator=(AncestorMatrix<max_n_nodes> const &other) = default;
@@ -207,6 +203,57 @@ public:
     return n_ancestors;
   }
 
+  AncestorMatrix swap_nodes(uint32_t node_a_i, uint32_t node_b_i) const {
+    AncestorMatrix new_am(n_nodes);
+
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      // Also iterating for non-existing nodes. Has no observable effects and is
+      // simpler.
+
+      AncestryVector vector;
+      if (i == node_a_i) {
+        vector = ancestor[node_b_i];
+      } else if (i == node_b_i) {
+        vector = ancestor[node_a_i];
+      } else {
+        vector = ancestor[i];
+      }
+
+      bool swap = vector[node_a_i];
+      vector[node_a_i] = vector[node_b_i];
+      vector[node_b_i] = swap;
+
+      new_am.ancestor[i] = vector;
+    }
+
+    return new_am;
+  }
+
+  AncestorMatrix move_subtree(uint32_t node_i, uint32_t new_parent_i) const {
+    AncestorMatrix new_am(n_nodes);
+
+    AncestryVector moved_node_descendant = ancestor[node_i];
+
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      AncestryVector old_vector = ancestor[i];
+      AncestryVector new_vector;
+
+#pragma unroll
+      for (uint32_t j = 0; j < max_n_nodes; j++) {
+        if (moved_node_descendant[j]) {
+          new_vector[j] = old_vector[new_parent_i] ||
+                          (moved_node_descendant[i] && old_vector[j]);
+        } else {
+          new_vector[j] = old_vector[j];
+        }
+      }
+
+      new_am.ancestor[i] = new_vector;
+    }
+
+    return new_am;
+  }
+
   /**
    * @brief Return the number of nodes in the tree.
    *
@@ -217,7 +264,7 @@ public:
   uint32_t get_root() const { return n_nodes - 1; }
 
 private:
-  std::array<std::array<bool, max_n_nodes>, max_n_nodes> ancestor;
+  std::array<AncestryVector, max_n_nodes> ancestor;
   uint32_t n_nodes;
 };
 } // namespace ffSCITE
