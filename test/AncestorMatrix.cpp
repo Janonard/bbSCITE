@@ -349,3 +349,27 @@ TEST_CASE("AncestorMatrix::move_subtree", "[AncestorMatrix]") {
     }
   }
 }
+
+TEST_CASE("AncestorMatrix::swap_subtrees", "[AncestorMatrix]") {
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  PV pv = PV::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  AM original_am(pv);
+
+  pv.swap_subtrees(2, 6);
+  AM rebuilt_am(pv);
+
+  AM updated_am = original_am.swap_subtrees(2, 5, 6, 7);
+
+  for (uint32_t i = 0; i < 8; i++) {
+    for (uint32_t j = 0; j < 8; j++) {
+      REQUIRE(rebuilt_am.is_ancestor(i, j) == updated_am.is_ancestor(i, j));
+    }
+  }
+}

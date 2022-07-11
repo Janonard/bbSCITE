@@ -9,10 +9,6 @@ stages:
 default:
   before_script:
     - "ml fpga devel intel/oneapi bittware/520n Boost/1.74.0-GCC CMake"
-    - "python3 -m venv .venv"
-    - "source .venv/bin/activate"
-    - "pip install --upgrade pip"
-    - "pip install -r requirements.txt"
     - "mkdir -p build"
     - "cd build"
 

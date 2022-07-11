@@ -230,6 +230,10 @@ public:
   }
 
   AncestorMatrix move_subtree(uint32_t node_i, uint32_t new_parent_i) const {
+#if __SYCL_DEVICE_ONLY__ == 0
+    assert(!ancestor[node_i][new_parent_i]);
+#endif
+
     AncestorMatrix new_am(n_nodes);
 
     AncestryVector moved_node_descendant = ancestor[node_i];
@@ -241,9 +245,58 @@ public:
 #pragma unroll
       for (uint32_t j = 0; j < max_n_nodes; j++) {
         if (moved_node_descendant[j]) {
+          // if (node_i -> j),
+          // we have (i -> j) <=> (j -> new_parent) || (a -> i -> j)
           new_vector[j] = old_vector[new_parent_i] ||
                           (moved_node_descendant[i] && old_vector[j]);
         } else {
+          // otherwise, we have (node_i !-> node_j).
+          // Since this node is unaffected, everything remains the same.
+          new_vector[j] = old_vector[j];
+        }
+      }
+
+      new_am.ancestor[i] = new_vector;
+    }
+
+    return new_am;
+  }
+
+  AncestorMatrix swap_subtrees(uint32_t node_a_i, uint32_t node_a_parent_i,
+                               uint32_t node_b_i,
+                               uint32_t node_b_parent_i) const {
+#if __SYCL_DEVICE_ONLY__ == 0
+    assert(!ancestor[node_a_i][node_b_i] && !ancestor[node_b_i][node_a_i]);
+    assert(ancestor[node_a_parent_i][node_a_i] &&
+           !ancestor[node_a_i][node_a_parent_i]);
+    assert(ancestor[node_b_parent_i][node_b_i] &&
+           !ancestor[node_b_i][node_b_parent_i]);
+#endif
+
+    AncestorMatrix new_am(n_nodes);
+
+    AncestryVector node_a_descendant = ancestor[node_a_i];
+    AncestryVector node_b_descendant = ancestor[node_b_i];
+
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      AncestryVector old_vector = ancestor[i];
+      AncestryVector new_vector = old_vector;
+
+#pragma unroll
+      for (uint32_t j = 0; j < max_n_nodes; j++) {
+        if (node_a_descendant[j] && !node_b_descendant[j]) {
+          // if (a -> j && b !-> j),
+          // we have (i -> j) <=> (j -> parent[b]) || (a -> i -> j)
+          new_vector[j] = old_vector[node_b_parent_i] ||
+                          (node_a_descendant[i] && old_vector[j]);
+        } else if (!node_a_descendant[j] && node_b_descendant[j]) {
+          // if (a !-> j && b -> j),
+          // we have (i -> j) <=> (j -> parent[a]) || (b -> i -> j)
+          new_vector[j] = old_vector[node_a_parent_i] ||
+                          (node_b_descendant[i] && old_vector[j]);
+        } else {
+          // we have (a !-> j && b !-> j), (a -> j && b -> j) is impossible.
+          // In this case, everything remains the same.
           new_vector[j] = old_vector[j];
         }
       }
