@@ -39,7 +39,7 @@ TEST_CASE("MutationTree::get_parent", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 3, 4});
+  Tree tree({2, 2, 4, 4, 4});
 
   REQUIRE(tree.get_parent(0) == 2);
   REQUIRE(tree.get_parent(1) == 2);
@@ -56,7 +56,7 @@ TEST_CASE("MutationTree::is_ancestor", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 3, 4});
+  Tree tree({2, 2, 4, 4, 4});
 
   REQUIRE(tree.is_ancestor(0, 0));
   REQUIRE(!tree.is_ancestor(1, 0));
@@ -97,7 +97,7 @@ TEST_CASE("MutationTree::is_descendant", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 3, 4});
+  Tree tree({2, 2, 4, 4, 4});
 
   REQUIRE(tree.is_descendant(0, 0));
   REQUIRE(!tree.is_descendant(0, 1));
@@ -130,6 +130,185 @@ TEST_CASE("MutationTree::is_descendant", "[MutationTree]") {
   REQUIRE(tree.is_descendant(4, 4));
 }
 
+
+TEST_CASE("MutationTree::get_descendants", "[MutationTree]") {
+  // Construct a simple, binary tree with three levels and 7 nodes:
+  //
+  //  ┌-6-┐
+  // ┌4┐ ┌5┐
+  // 0 1 2 3
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+
+  auto descendant = tree.get_descendants(0);
+  REQUIRE(descendant[0]);
+  REQUIRE(!descendant[1]);
+  REQUIRE(!descendant[2]);
+  REQUIRE(!descendant[3]);
+  REQUIRE(!descendant[4]);
+  REQUIRE(!descendant[5]);
+  REQUIRE(!descendant[6]);
+
+  descendant = tree.get_descendants(1);
+  REQUIRE(!descendant[0]);
+  REQUIRE(descendant[1]);
+  REQUIRE(!descendant[2]);
+  REQUIRE(!descendant[3]);
+  REQUIRE(!descendant[4]);
+  REQUIRE(!descendant[5]);
+  REQUIRE(!descendant[6]);
+
+  descendant = tree.get_descendants(2);
+  REQUIRE(!descendant[0]);
+  REQUIRE(!descendant[1]);
+  REQUIRE(descendant[2]);
+  REQUIRE(!descendant[3]);
+  REQUIRE(!descendant[4]);
+  REQUIRE(!descendant[5]);
+  REQUIRE(!descendant[6]);
+
+  descendant = tree.get_descendants(3);
+  REQUIRE(!descendant[0]);
+  REQUIRE(!descendant[1]);
+  REQUIRE(!descendant[2]);
+  REQUIRE(descendant[3]);
+  REQUIRE(!descendant[4]);
+  REQUIRE(!descendant[5]);
+  REQUIRE(!descendant[6]);
+
+  descendant = tree.get_descendants(4);
+  REQUIRE(descendant[0]);
+  REQUIRE(descendant[1]);
+  REQUIRE(!descendant[2]);
+  REQUIRE(!descendant[3]);
+  REQUIRE(descendant[4]);
+  REQUIRE(!descendant[5]);
+  REQUIRE(!descendant[6]);
+
+  descendant = tree.get_descendants(5);
+  REQUIRE(!descendant[0]);
+  REQUIRE(!descendant[1]);
+  REQUIRE(descendant[2]);
+  REQUIRE(descendant[3]);
+  REQUIRE(!descendant[4]);
+  REQUIRE(descendant[5]);
+  REQUIRE(!descendant[6]);
+
+  descendant = tree.get_descendants(6);
+  REQUIRE(descendant[0]);
+  REQUIRE(descendant[1]);
+  REQUIRE(descendant[2]);
+  REQUIRE(descendant[3]);
+  REQUIRE(descendant[4]);
+  REQUIRE(descendant[5]);
+  REQUIRE(descendant[6]);
+}
+
+TEST_CASE("MutationTree::get_n_descendants", "[MutationTree]") {
+  // Construct a simple, binary tree with three levels and 7 nodes:
+  //
+  //  ┌-6-┐
+  // ┌4┐ ┌5┐
+  // 0 1 2 3
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+
+  REQUIRE(tree.get_n_descendants(0) == 1);
+  REQUIRE(tree.get_n_descendants(1) == 1);
+  REQUIRE(tree.get_n_descendants(2) == 1);
+  REQUIRE(tree.get_n_descendants(3) == 1);
+  REQUIRE(tree.get_n_descendants(4) == 3);
+  REQUIRE(tree.get_n_descendants(5) == 3);
+  REQUIRE(tree.get_n_descendants(6) == 7);
+}
+
+TEST_CASE("MutationTree::get_ancestors", "[MutationTree]") {
+  // Construct a simple, binary tree with three levels and 7 nodes:
+  //
+  //  ┌-6-┐
+  // ┌4┐ ┌5┐
+  // 0 1 2 3
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+
+  auto ancestor = tree.get_ancestors(0);
+  REQUIRE(ancestor[0]);
+  REQUIRE(!ancestor[1]);
+  REQUIRE(!ancestor[2]);
+  REQUIRE(!ancestor[3]);
+  REQUIRE(ancestor[4]);
+  REQUIRE(!ancestor[5]);
+  REQUIRE(ancestor[6]);
+
+  ancestor = tree.get_ancestors(1);
+  REQUIRE(!ancestor[0]);
+  REQUIRE(ancestor[1]);
+  REQUIRE(!ancestor[2]);
+  REQUIRE(!ancestor[3]);
+  REQUIRE(ancestor[4]);
+  REQUIRE(!ancestor[5]);
+  REQUIRE(ancestor[6]);
+
+  ancestor = tree.get_ancestors(2);
+  REQUIRE(!ancestor[0]);
+  REQUIRE(!ancestor[1]);
+  REQUIRE(ancestor[2]);
+  REQUIRE(!ancestor[3]);
+  REQUIRE(!ancestor[4]);
+  REQUIRE(ancestor[5]);
+  REQUIRE(ancestor[6]);
+
+  ancestor = tree.get_ancestors(3);
+  REQUIRE(!ancestor[0]);
+  REQUIRE(!ancestor[1]);
+  REQUIRE(!ancestor[2]);
+  REQUIRE(ancestor[3]);
+  REQUIRE(!ancestor[4]);
+  REQUIRE(ancestor[5]);
+  REQUIRE(ancestor[6]);
+
+  ancestor = tree.get_ancestors(4);
+  REQUIRE(!ancestor[0]);
+  REQUIRE(!ancestor[1]);
+  REQUIRE(!ancestor[2]);
+  REQUIRE(!ancestor[3]);
+  REQUIRE(ancestor[4]);
+  REQUIRE(!ancestor[5]);
+  REQUIRE(ancestor[6]);
+
+  ancestor = tree.get_ancestors(5);
+  REQUIRE(!ancestor[0]);
+  REQUIRE(!ancestor[1]);
+  REQUIRE(!ancestor[2]);
+  REQUIRE(!ancestor[3]);
+  REQUIRE(!ancestor[4]);
+  REQUIRE(ancestor[5]);
+  REQUIRE(ancestor[6]);
+
+  ancestor = tree.get_ancestors(6);
+  REQUIRE(!ancestor[0]);
+  REQUIRE(!ancestor[1]);
+  REQUIRE(!ancestor[2]);
+  REQUIRE(!ancestor[3]);
+  REQUIRE(!ancestor[4]);
+  REQUIRE(!ancestor[5]);
+  REQUIRE(ancestor[6]);
+}
+
+TEST_CASE("MutationTree::get_n_ancestors", "[MutationTree]") {
+  // Construct a simple, binary tree with three levels and 7 nodes:
+  //
+  //  ┌-6-┐
+  // ┌4┐ ┌5┐
+  // 0 1 2 3
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+
+  REQUIRE(tree.get_n_ancestors(0) == 3);
+  REQUIRE(tree.get_n_ancestors(1) == 3);
+  REQUIRE(tree.get_n_ancestors(2) == 3);
+  REQUIRE(tree.get_n_ancestors(3) == 3);
+  REQUIRE(tree.get_n_ancestors(4) == 2);
+  REQUIRE(tree.get_n_ancestors(5) == 2);
+  REQUIRE(tree.get_n_ancestors(6) == 1);
+}
+
 TEST_CASE("MutationTree::from_pruefer_code", "[MutationTree]") {
   // Construct a simple, binary tree with three levels and 15 nodes:
   //
@@ -143,7 +322,7 @@ TEST_CASE("MutationTree::from_pruefer_code", "[MutationTree]") {
   Tree tree = Tree::from_pruefer_code(pruefer_code);
 
   require_tree_equality(
-      tree, Tree({8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 14, 14, 14}));
+      tree, Tree({8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 14}));
 }
 
 TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
@@ -154,7 +333,7 @@ TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree original_tree({2, 2, 4, 3, 4});
+  Tree original_tree({2, 2, 4, 4, 4});
 
   // Identity operation
   Tree identity_tree;
@@ -193,7 +372,7 @@ TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
    * ┌0┐2
    * 3 1
    */
-  require_tree_equality(unrelated_swap_tree, Tree({4, 0, 4, 0, 4}));
+  require_tree_equality(child_swap_tree, Tree({4, 0, 4, 0, 4}));
 }
 
 TEST_CASE("MutationTree::move_subtree", "[MutationTree]") {
@@ -208,7 +387,7 @@ TEST_CASE("MutationTree::move_subtree", "[MutationTree]") {
   Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   Tree modified_tree;
-  original_tree.swap_subtrees(modified_tree, 2, 6);
+  original_tree.move_subtree(modified_tree, 2, 6);
 
   /*
    * Resulting tree:
