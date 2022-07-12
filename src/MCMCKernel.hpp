@@ -155,12 +155,12 @@ public:
       for (uint32_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
            chain_i++) {
         double neighborhood_correction = 1.0;
-        [[intel::fpga_register]] ChainStateImpl current_state =
-            current_states_ac[chain_i];
+        ChainStateImpl current_state = current_states_ac[chain_i];
         double current_score = current_scores_ac[chain_i];
 
-        [[intel::fpga_register]] ChainStateImpl proposed_state = current_state;
-        change_proposer.propose_change(proposed_state, neighborhood_correction);
+        ChainStateImpl proposed_state;
+        change_proposer.propose_change(current_state, proposed_state,
+                                       neighborhood_correction);
         double proposed_score = state_scorer.logscore_state(proposed_state);
 
         double acceptance_probability =

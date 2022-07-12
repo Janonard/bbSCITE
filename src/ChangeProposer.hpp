@@ -15,7 +15,6 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "AncestorMatrix.hpp"
 #include "ChainState.hpp"
 #include <oneapi/dpl/random>
 
@@ -41,7 +40,7 @@ public:
   /**
    * @brief Shorthand for the parent vector type.
    */
-  using ParentVectorImpl = typename ChainStateImpl::ParentVectorImpl;
+  using MutationTreeImpl = typename ChainStateImpl::MutationTreeImpl;
 
   /**
    * @brief Shorthand for the maximal number of nodes in the mutation tree.
@@ -153,7 +152,7 @@ public:
    * or from {v ∈ V | i \not\leadsto v} if `sample_descendants` is false. If
    * `include_root` is false, the root is removed from the sampled set.
    *
-   * @param ancestor_matrix The current ancestor matrix of the mutation tree.
+   * @param tee The current ancestor matrix of the mutation tree.
    * @param node_i The node from who's descendants or nondescendants this method
    * samples.
    * @param sample_descandent True iff the method is supposed to sample
@@ -161,11 +160,11 @@ public:
    * nondescendants.
    * @return One of the nodes descendants or nondescendants.
    */
-  uint32_t sample_descendant_or_nondescendant(
-      AncestorMatrix<max_n_nodes> const &ancestor_matrix, uint32_t node_i,
-      bool sample_descendant, bool include_root) {
-    std::array<bool, max_n_nodes> descendant =
-        ancestor_matrix.get_descendants(node_i);
+  uint32_t sample_descendant_or_nondescendant(MutationTreeImpl const &tree,
+                                              uint32_t node_i,
+                                              bool sample_descendant,
+                                              bool include_root) {
+    std::array<bool, max_n_nodes> descendant = tree.get_descendants(node_i);
 
     // If we have to sample a nondescendant, we invert the bitvector and
     // continue as if we were to sample a descendant.
@@ -178,8 +177,7 @@ public:
 
     // Count the (non)descendants, excluding the root.
     uint32_t n_descendants = 0;
-    uint32_t sum_upper_bound =
-        ancestor_matrix.get_n_nodes() - (include_root ? 0 : 1);
+    uint32_t sum_upper_bound = tree.get_n_nodes() - (include_root ? 0 : 1);
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < sum_upper_bound && descendant[i]) {
@@ -198,7 +196,7 @@ public:
     uint32_t sampled_node_i = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < ancestor_matrix.get_n_nodes() && descendant[i]) {
+      if (i < tree.get_n_nodes() && descendant[i]) {
         if (sampled_occurrence_i == 0) {
           sampled_node_i = i;
           break;
@@ -217,7 +215,8 @@ public:
    * @return The newly proposed beta error rate.
    */
   double change_beta(double old_beta) {
-    // Not using double as the normal distribution's output here since it introduced a compiler error as of this writing.
+    // Not using double as the normal distribution's output here since it
+    // introduced a compiler error as of this writing.
     double new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
                                      0, beta_jump_sd)(rng);
     if (new_beta < 0) {
@@ -241,19 +240,18 @@ public:
    * @param ancestor_matrix The current ancestor matrix of the mutation tree.
    * @return The index of the the moved node.
    */
-  uint32_t
-  prune_and_reattach(ParentVector<max_n_nodes> &parent_vector,
-                     AncestorMatrix<max_n_nodes> const &ancestor_matrix) {
+  uint32_t prune_and_reattach(MutationTreeImpl const &current_tree,
+                              MutationTreeImpl &out_proposed_tree) {
     // Pick a node to move.
     uint32_t node_to_move_i = oneapi::dpl::uniform_int_distribution<uint32_t>(
-        0, parent_vector.get_n_nodes() - 2)(rng);
+        0, current_tree.get_n_nodes() - 2)(rng);
 
     // Sample one of the node's nondescendants, including the root.
     uint32_t new_parent_i = sample_descendant_or_nondescendant(
-        ancestor_matrix, node_to_move_i, false, true);
+        current_tree, node_to_move_i, false, true);
 
     // Move the node.
-    parent_vector.move_subtree(node_to_move_i, new_parent_i);
+    current_tree.move_subtree(out_proposed_tree, node_to_move_i, new_parent_i);
 
     return node_to_move_i;
   }
@@ -267,10 +265,12 @@ public:
    * @param parent_vector The parent vector to modify.
    * @return The indices of the swapped nodes.
    */
-  std::array<uint32_t, 2> swap_nodes(ParentVector<max_n_nodes> &parent_vector) {
+  std::array<uint32_t, 2> swap_nodes(MutationTreeImpl const &current_tree,
+                                     MutationTreeImpl &out_proposed_tree) {
     std::array<uint32_t, 2> nodes_to_swap =
-        sample_nonroot_nodepair(parent_vector.get_n_nodes());
-    parent_vector.swap_nodes(nodes_to_swap[0], nodes_to_swap[1]);
+        sample_nonroot_nodepair(current_tree.get_n_nodes());
+    current_tree.swap_nodes(out_proposed_tree, nodes_to_swap[0],
+                            nodes_to_swap[1]);
     return nodes_to_swap;
   }
 
@@ -292,25 +292,25 @@ public:
    * @param out_neighborhood_correction Output: Neighborhood correction factor.
    * @return The two swapped/moved nodes.
    */
-  std::array<uint32_t, 2>
-  swap_subtrees(ParentVector<max_n_nodes> &parent_vector,
-                AncestorMatrix<max_n_nodes> const &ancestor_matrix,
-                double &out_neighborhood_correction) {
+  std::array<uint32_t, 2> swap_subtrees(MutationTreeImpl const &current_tree,
+                                        MutationTreeImpl &out_proposed_tree,
+                                        double &out_neighborhood_correction) {
 
     std::array<uint32_t, 2> nodes_to_swap =
-        sample_nonroot_nodepair(parent_vector.get_n_nodes());
+        sample_nonroot_nodepair(current_tree.get_n_nodes());
     uint32_t node_a_i = nodes_to_swap[0];
     uint32_t node_b_i = nodes_to_swap[1];
+    uint32_t new_parent_of_a_i, new_parent_of_b_i;
 
-    bool distinct_lineages =
-        !(ancestor_matrix.is_ancestor(node_a_i, node_b_i) ||
-          ancestor_matrix.is_ancestor(node_b_i, node_a_i));
+    bool distinct_lineages = !(current_tree.is_ancestor(node_a_i, node_b_i) ||
+                               current_tree.is_ancestor(node_b_i, node_a_i));
     if (distinct_lineages) {
       // No correction necessary.
       out_neighborhood_correction = 1.0;
 
       // The nodes are from distinct lineages, we can simply swap the subtrees.
-      parent_vector.swap_subtrees(node_a_i, node_b_i);
+      new_parent_of_a_i = current_tree.get_parent(node_b_i);
+      new_parent_of_b_i = current_tree.get_parent(node_a_i);
     } else {
       // The nodes are from a common lineage. We can attach the lower node to
       // the parent of the upper node, but we have to choose something else for
@@ -318,24 +318,29 @@ public:
       // attach the upper node to it.
 
       // Ensure that node a is lower in the tree than node b.
-      if (ancestor_matrix.is_ancestor(node_a_i, node_b_i)) {
+      if (current_tree.is_ancestor(node_a_i, node_b_i)) {
         std::swap(node_a_i, node_b_i);
       }
 
       out_neighborhood_correction =
-          double(ancestor_matrix.get_n_descendants(node_a_i)) /
-          double(ancestor_matrix.get_n_descendants(node_b_i));
+          double(current_tree.get_n_descendants(node_a_i)) /
+          double(current_tree.get_n_descendants(node_b_i));
 
       // Sample one of node a's descendants.
       uint32_t new_parent_i = sample_descendant_or_nondescendant(
-          ancestor_matrix, node_a_i, true, false);
+          current_tree, node_a_i, true, false);
 
       // Move node a next to node b.
-      parent_vector.move_subtree(node_a_i, parent_vector[node_b_i]);
+      new_parent_of_a_i = current_tree.get_parent(node_b_i);
 
       // Move node b to its new parent.
-      parent_vector.move_subtree(node_b_i, new_parent_i);
+      new_parent_of_b_i = new_parent_i;
     }
+
+    MutationTreeImpl intermediate_tree;
+    current_tree.move_subtree(intermediate_tree, node_a_i, new_parent_of_a_i);
+    intermediate_tree.move_subtree(out_proposed_tree, node_b_i,
+                                   new_parent_of_b_i);
     return nodes_to_swap;
   }
 
@@ -346,23 +351,27 @@ public:
    * @param out_neighborhood_correction Output: The neighborhood correction
    * factor.
    */
-  void propose_change(ChainState<max_n_genes> &state,
+  void propose_change(ChainState<max_n_genes> const &current_state,
+                      ChainState<max_n_genes> &proposed_state,
                       double &out_neighborhood_correction) {
-    [[intel::fpga_register]] AncestorMatrix<max_n_nodes> ancestor_matrix(
-        state.mutation_tree);
     out_neighborhood_correction = 1.0;
     switch (sample_move()) {
     case MoveType::ChangeBeta:
-      state.beta = change_beta(state.beta);
+      proposed_state.beta = change_beta(current_state.beta);
+      proposed_state.mutation_tree = current_state.mutation_tree;
       break;
     case MoveType::PruneReattach:
-      prune_and_reattach(state.mutation_tree, ancestor_matrix);
+      proposed_state.beta = current_state.beta;
+      prune_and_reattach(current_state.mutation_tree,
+                         proposed_state.mutation_tree);
       break;
     case MoveType::SwapNodes:
-      swap_nodes(state.mutation_tree);
+      proposed_state.beta = current_state.beta;
+      swap_nodes(current_state.mutation_tree, proposed_state.mutation_tree);
       break;
     case MoveType::SwapSubtrees:
-      swap_subtrees(state.mutation_tree, ancestor_matrix,
+      proposed_state.beta = current_state.beta;
+      swap_subtrees(current_state.mutation_tree, proposed_state.mutation_tree,
                     out_neighborhood_correction);
       break;
     default:

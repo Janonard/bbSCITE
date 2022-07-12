@@ -21,8 +21,7 @@ constexpr uint32_t n_cells = 6;
 constexpr uint32_t n_genes = 4;
 using ScorerImpl = ffSCITE::StateScorer<n_cells, n_genes,
                                         cl::sycl::access::target::host_buffer>;
-using ParentVectorImpl = ScorerImpl::ParentVectorImpl;
-using AncestorMatrixImpl = ScorerImpl::AncestorMatrixImpl;
+using MutationTreeImpl = ScorerImpl::MutationTreeImpl;
 using ChainStateImpl = ScorerImpl::ChainStateImpl;
 using DataEntry = ScorerImpl::DataEntry;
 using DataMatrix = ScorerImpl::DataMatrix;
@@ -38,9 +37,9 @@ void run_with_scorer(
   //  ┌4┐
   // ┌2┐3
   // 0 1
-  ParentVectorImpl pv = ParentVectorImpl::from_pruefer_code({2, 2, 4});
+  MutationTreeImpl tree({2, 2, 4, 4, 4});
 
-  ChainStateImpl state(pv, beta);
+  ChainStateImpl state(tree, beta);
 
   OccurrenceMatrix occurrences(0);
 

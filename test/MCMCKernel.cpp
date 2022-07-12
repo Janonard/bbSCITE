@@ -45,6 +45,8 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
    * There are three cells attached to every node and there are some errors in
    * the data to make it interesting.
    */
+  MutationTree<n_genes + 1> correct_tree({2, 2, 4, 4, 4});
+
   cl::sycl::buffer<DataEntry, 2> data_buffer(
       cl::sycl::range<2>(n_cells, n_genes));
   {
@@ -148,12 +150,8 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   bool correct_tree_found = false;
   for (uint32_t state_i = 0; state_i < best_states.size(); state_i++) {
     bool is_correct_tree = true;
-    is_correct_tree &= best_states[state_i].mutation_tree[0] == 2;
-    is_correct_tree &= best_states[state_i].mutation_tree[1] == 2;
-    is_correct_tree &= best_states[state_i].mutation_tree[2] == 4;
-    is_correct_tree &= best_states[state_i].mutation_tree[3] == 4;
-    is_correct_tree &= best_states[state_i].mutation_tree[4] == 4;
-    correct_tree_found |= is_correct_tree;
+    MutationTree<n_genes + 1> found_tree = best_states[state_i].mutation_tree;
+    correct_tree_found |= found_tree == correct_tree;
   }
   REQUIRE(correct_tree_found);
 }

@@ -15,7 +15,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "ParentVector.hpp"
+#include "MutationTree.hpp"
 
 namespace ffSCITE {
 /**
@@ -39,7 +39,7 @@ public:
   /**
    * @brief Shorthand for the parent vector type.
    */
-  using ParentVectorImpl = ParentVector<max_n_nodes>;
+  using MutationTreeImpl = MutationTree<max_n_nodes>;
 
   ChainState() : mutation_tree(), beta(0.0) {}
   ChainState(ChainState<max_n_genes> const &other) = default;
@@ -53,7 +53,7 @@ public:
    * @param mutation_tree The mutation tree to use.
    * @param beta The probability of false negatives for the new state.
    */
-  ChainState(ParentVector<max_n_nodes> mutation_tree, double beta)
+  ChainState(MutationTreeImpl mutation_tree, double beta)
       : mutation_tree(mutation_tree), beta(beta) {}
 
   /**
@@ -70,8 +70,8 @@ public:
   template <typename RNG>
   static ChainState<max_n_genes> sample_random_state(RNG &rng, uint32_t n_genes,
                                                      double beta) {
-    ParentVectorImpl mutation_tree =
-        ParentVectorImpl::sample_random_tree(rng, n_genes + 1);
+    MutationTreeImpl mutation_tree =
+        MutationTreeImpl::sample_random_tree(rng, n_genes + 1);
     return ChainState<max_n_genes>(mutation_tree, beta);
   }
 
@@ -89,7 +89,7 @@ public:
   /**
    * @brief The (proposed) mutation tree.
    */
-  ParentVector<max_n_nodes> mutation_tree;
+  MutationTreeImpl mutation_tree;
 
   /**
    * @brief The (proposed) beta error rate.

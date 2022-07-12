@@ -15,7 +15,6 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "AncestorMatrix.hpp"
 #include "ChainState.hpp"
 #include "StaticMatrix.hpp"
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
@@ -50,11 +49,7 @@ public:
   /**
    * @brief Shorthand for the parent vector class in use.
    */
-  using ParentVectorImpl = typename ChainStateImpl::ParentVectorImpl;
-  /**
-   * @brief Shorthand for the ancestor matrix class in use.
-   */
-  using AncestorMatrixImpl = AncestorMatrix<max_n_genes + 1>;
+  using MutationTreeImpl = typename ChainStateImpl::MutationTreeImpl;
 
   /**
    * @brief Data type of the entries in the mutation data matrix.
@@ -163,9 +158,7 @@ public:
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
   }
 
-  double logscore_tree(ParentVectorImpl const &tree) {
-    [[intel::fpga_register]] AncestorMatrixImpl am(tree);
-
+  double logscore_tree(MutationTreeImpl const &tree) {
     double best_scores[max_n_cells];
 
     for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
@@ -174,7 +167,7 @@ public:
       }
 
       std::array<bool, max_n_genes + 1> true_mutations =
-          am.get_ancestors(node_i);
+          tree.get_ancestors(node_i);
 
       for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
         if (cell_i >= n_cells) {

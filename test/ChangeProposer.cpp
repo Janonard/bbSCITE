@@ -112,8 +112,7 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
    * ┌2┐3 4
    * 0 1
    */
-  auto pv = ParentVector<n_nodes>::from_pruefer_code({2, 2, 5, 5, 6, 7});
-  AncestorMatrix<n_nodes> am(pv);
+  MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   // We count how often each descendant of five is picked to run a hypthesis
   // test.
@@ -126,21 +125,21 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
 
   for (uint32_t i = 0; i < n_iterations; i++) {
     auto sampled_node =
-        proposer.sample_descendant_or_nondescendant(am, 5, true, false);
-    REQUIRE(am.is_ancestor(5, sampled_node));
+        proposer.sample_descendant_or_nondescendant(tree, 5, true, false);
+    REQUIRE(tree.is_ancestor(5, sampled_node));
     sampled_nodes_for_five[sampled_node]++;
 
     sampled_node =
-        proposer.sample_descendant_or_nondescendant(am, 5, false, true);
-    REQUIRE(!am.is_ancestor(5, sampled_node));
+        proposer.sample_descendant_or_nondescendant(tree, 5, false, true);
+    REQUIRE(!tree.is_ancestor(5, sampled_node));
 
     sampled_node =
-        proposer.sample_descendant_or_nondescendant(am, 6, true, false);
-    REQUIRE(am.is_ancestor(6, sampled_node));
+        proposer.sample_descendant_or_nondescendant(tree, 6, true, false);
+    REQUIRE(tree.is_ancestor(6, sampled_node));
 
     sampled_node =
-        proposer.sample_descendant_or_nondescendant(am, 6, false, false);
-    REQUIRE(!am.is_ancestor(6, sampled_node));
+        proposer.sample_descendant_or_nondescendant(tree, 6, false, false);
+    REQUIRE(!tree.is_ancestor(6, sampled_node));
     REQUIRE(sampled_node != n_nodes - 1);
   }
 
@@ -151,7 +150,7 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
   // Desc(v): P(X_v = w) = (|Desc(v)|)^{-1} and we test this hypothesis with a
   // chi-squared-test.
   double t = 0;
-  const double n_descendants = am.get_n_descendants(5);
+  const double n_descendants = tree.get_n_descendants(5);
   for (std::pair<unsigned int, unsigned int> pair : sampled_nodes_for_five) {
     double numerator = (pair.second - n_iterations / n_descendants);
     numerator *= numerator;
@@ -192,25 +191,26 @@ TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  auto pv = ParentVector<n_nodes>::from_pruefer_code({2, 2, 5, 5, 6, 7});
-  AncestorMatrix<n_nodes> am(pv);
+  MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    ParentVector<n_nodes> pv_copy(pv);
-    unsigned int moved_node_i = proposer.prune_and_reattach(pv_copy, am);
+    MutationTree<n_nodes> proposed_tree;
+    unsigned int moved_node_i =
+        proposer.prune_and_reattach(tree, proposed_tree);
 
     // Simple sanity checks for the move.
     REQUIRE(moved_node_i < n_nodes);
-    REQUIRE(pv_copy[moved_node_i] != moved_node_i);
+    REQUIRE(proposed_tree.get_parent(moved_node_i) != moved_node_i);
 
     // Check that the node has not been attached to one of it's previous
     // descendants.
-    REQUIRE(!am.is_ancestor(moved_node_i, pv_copy[moved_node_i]));
+    REQUIRE(!tree.is_ancestor(moved_node_i,
+                              proposed_tree.get_parent(moved_node_i)));
 
     // Check that nothing else was changed.
     for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
       if (node_i != moved_node_i) {
-        REQUIRE(pv_copy[node_i] == pv[node_i]);
+        REQUIRE(proposed_tree.get_parent(node_i) == tree.get_parent(node_i));
       }
     }
   }
@@ -227,43 +227,42 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  auto pv = ParentVector<n_nodes>::from_pruefer_code({2, 2, 5, 5, 6, 7});
-  AncestorMatrix<n_nodes> am(pv);
+  MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    ParentVector<n_nodes> pv_copy(pv);
+    MutationTree<n_nodes> proposed_tree;
     double neighborhood_correction = 1.0;
     auto swapped_subtrees =
-        proposer.swap_subtrees(pv_copy, am, neighborhood_correction);
+        proposer.swap_subtrees(tree, proposed_tree, neighborhood_correction);
 
     unsigned int node_a_i = swapped_subtrees[0];
     unsigned int node_b_i = swapped_subtrees[1];
 
-    bool common_lineage = am.is_ancestor(node_a_i, node_b_i) ||
-                          am.is_ancestor(node_b_i, node_a_i);
+    bool common_lineage = tree.is_ancestor(node_a_i, node_b_i) ||
+                          tree.is_ancestor(node_b_i, node_a_i);
 
     // Check soundness of the change.
     if (common_lineage) {
       // Ensure that node_a_i is the lower node.
-      if (am.is_ancestor(node_a_i, node_b_i)) {
+      if (tree.is_ancestor(node_a_i, node_b_i)) {
         std::swap(node_a_i, node_b_i);
       }
 
-      REQUIRE(pv_copy[node_a_i] == pv[node_b_i]);
-      REQUIRE(am.is_ancestor(node_a_i, pv_copy[node_b_i]));
+      REQUIRE(proposed_tree.get_parent(node_a_i) == tree.get_parent(node_b_i));
+      REQUIRE(tree.is_ancestor(node_a_i, proposed_tree.get_parent(node_b_i)));
       REQUIRE(neighborhood_correction ==
-              double(am.get_n_descendants(node_a_i)) /
-                  double(am.get_n_descendants(node_b_i)));
+              double(tree.get_n_descendants(node_a_i)) /
+                  double(tree.get_n_descendants(node_b_i)));
     } else {
-      REQUIRE(pv_copy[node_a_i] == pv[node_b_i]);
-      REQUIRE(pv_copy[node_b_i] == pv[node_a_i]);
+      REQUIRE(proposed_tree.get_parent(node_a_i) == tree.get_parent(node_b_i));
+      REQUIRE(proposed_tree.get_parent(node_b_i) == tree.get_parent(node_a_i));
       REQUIRE(neighborhood_correction == 1.0);
     }
 
     // Check that nothing else was changed.
     for (uint32_t i = 0; i < n_nodes; i++) {
       if (i != node_a_i && i != node_b_i) {
-        REQUIRE(pv_copy[i] == pv[i]);
+        REQUIRE(proposed_tree.get_parent(i) == tree.get_parent(i));
       }
     }
   }
