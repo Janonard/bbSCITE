@@ -130,7 +130,6 @@ TEST_CASE("MutationTree::is_descendant", "[MutationTree]") {
   REQUIRE(tree.is_descendant(4, 4));
 }
 
-
 TEST_CASE("MutationTree::get_descendants", "[MutationTree]") {
   // Construct a simple, binary tree with three levels and 7 nodes:
   //
@@ -325,7 +324,7 @@ TEST_CASE("MutationTree::from_pruefer_code", "[MutationTree]") {
       tree, Tree({8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 14}));
 }
 
-TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
+TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
   /*
    * Testing tree:
    *
@@ -337,7 +336,8 @@ TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
 
   // Identity operation
   Tree identity_tree;
-  original_tree.swap_nodes(identity_tree, 2, 2);
+  original_tree.execute_move(identity_tree, ffSCITE::MoveType::SwapNodes, 2, 2,
+                             0, 0);
 
   /*
    * Expected tree:
@@ -350,7 +350,8 @@ TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
 
   // Swap of unrelated nodes
   Tree unrelated_swap_tree;
-  identity_tree.swap_nodes(unrelated_swap_tree, 2, 3);
+  identity_tree.execute_move(unrelated_swap_tree, ffSCITE::MoveType::SwapNodes,
+                             2, 3, 0, 0);
 
   /*
    * Expected tree:
@@ -363,7 +364,8 @@ TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
 
   // Swap of parent and child
   Tree child_swap_tree;
-  unrelated_swap_tree.swap_nodes(child_swap_tree, 0, 3);
+  unrelated_swap_tree.execute_move(child_swap_tree,
+                                   ffSCITE::MoveType::SwapNodes, 0, 3, 0, 0);
 
   /*
    * Expected tree:
@@ -375,7 +377,7 @@ TEST_CASE("MutationTree::swap_nodes", "[MutationTree]") {
   require_tree_equality(child_swap_tree, Tree({4, 0, 4, 0, 4}));
 }
 
-TEST_CASE("MutationTree::move_subtree", "[MutationTree]") {
+TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
   /*
    * Original tree:
    *
@@ -387,7 +389,8 @@ TEST_CASE("MutationTree::move_subtree", "[MutationTree]") {
   Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   Tree modified_tree;
-  original_tree.move_subtree(modified_tree, 2, 6);
+  original_tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, 2,
+                             0, 6, 0);
 
   /*
    * Resulting tree:
@@ -400,7 +403,7 @@ TEST_CASE("MutationTree::move_subtree", "[MutationTree]") {
   require_tree_equality(modified_tree, Tree({2, 2, 6, 5, 6, 7, 7, 7}));
 }
 
-TEST_CASE("MutationTree::swap_subtrees", "[MutationTree]") {
+TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
   /*
    * Original tree:
    *
@@ -412,7 +415,8 @@ TEST_CASE("MutationTree::swap_subtrees", "[MutationTree]") {
   Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   Tree swapped_tree;
-  original_tree.swap_subtrees(swapped_tree, 2, 6);
+  original_tree.execute_move(swapped_tree, ffSCITE::MoveType::SwapSubtrees, 2,
+                             6, 7, 5);
 
   /*
    * Resulting tree:

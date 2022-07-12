@@ -15,6 +15,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+#include "MoveType.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -357,164 +358,154 @@ public:
     return stream.str();
   }
 
-  /**
-   * @brief Swap the positions of two nodes within the tree.
-   *
-   * After this operation, the tree will have the same topology as before, but
-   * node b will be where node a used to be, and vice versa. None of these nodes
-   * may be the root of the tree since the root is not movable.
-   *
-   * @param node_a_i One of the nodes to swap.
-   * @param node_b_i The other node to swap.
-   */
-  void swap_nodes(MutationTree<max_n_nodes> &out_tree, uint32_t node_a_i,
-                  uint32_t node_b_i) const {
+  void execute_move(MutationTree<max_n_nodes> &out_tree, MoveType move_type,
+                    uint32_t node_a_i, uint32_t node_b_i,
+                    uint32_t node_a_target_i, uint32_t node_b_target_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i != get_root() && node_b_i != get_root());
 #endif
     out_tree.n_nodes = n_nodes;
 
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      uint32_t new_parent;
-
-      if (i == node_a_i) {
-        if (node_a_i == parent[node_b_i]) {
-          new_parent = node_b_i;
-        } else {
-          new_parent = parent[node_b_i];
-        }
-      } else if (i == node_b_i) {
-        if (node_b_i == parent[node_a_i]) {
-          new_parent = node_a_i;
-        } else {
-          new_parent = parent[node_a_i];
-        }
+    // Prepare/set the attachment targets for those move types we can deduce the
+    // targets for.
+    switch (move_type) {
+    case MoveType::SwapNodes:
+      if (node_a_i == parent[node_b_i]) {
+        node_a_target_i = node_b_i;
       } else {
-        if (parent[i] == node_a_i) {
-          new_parent = node_b_i;
-        } else if (parent[i] == node_b_i) {
-          new_parent = node_a_i;
-        } else {
-          new_parent = parent[i];
-        }
+        node_a_target_i = parent[node_b_i];
       }
 
-      AncestryVector ancestry_vector;
-      if (i == node_a_i) {
-        ancestry_vector = ancestor[node_b_i];
-      } else if (i == node_b_i) {
-        ancestry_vector = ancestor[node_a_i];
+      if (node_b_i == parent[node_a_i]) {
+        node_b_target_i = node_a_i;
       } else {
-        ancestry_vector = ancestor[i];
+        node_b_target_i = parent[node_a_i];
       }
-
-      bool swap = ancestry_vector[node_a_i];
-      ancestry_vector[node_a_i] = ancestry_vector[node_b_i];
-      ancestry_vector[node_b_i] = swap;
-
-      out_tree.parent[i] = new_parent;
-      out_tree.ancestor[i] = ancestry_vector;
+      break;
+    default:
+      break;
     }
-  }
-
-  /**
-   * @brief Move the subtree below a node to a new parent.
-   *
-   * After that, the moved node's parent will be the requested new parent, but
-   * apart from that, the tree will remain the same. If the method is not
-   * compiled for a SYCL device, it will assert that the new parent is not a
-   * descendant of the node to move, since this would detach one part of the
-   * tree and introduce a cycle. The node to move must also not be the root of
-   * the tree, as the root is not movable.
-   *
-   * @param node_i The index of the node to move.
-   * @param new_parent_i The index of the node's new parent node.
-   */
-  void move_subtree(MutationTree<max_n_nodes> &out_tree, uint32_t node_i,
-                    uint32_t new_parent_i) const {
-#if __SYCL_DEVICE_ONLY__ == 0
-    assert(!is_descendant(new_parent_i, node_i) && node_i != get_root());
-#endif
-    out_tree.n_nodes = n_nodes;
-
-    std::array<uint32_t, max_n_nodes> pv = parent;
-    pv[node_i] = new_parent_i;
-    out_tree.parent = pv;
-
-    AncestryVector moved_node_descendant = ancestor[node_i];
-
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      AncestryVector old_vector = ancestor[i];
-      AncestryVector new_vector = old_vector;
-
-#pragma unroll
-      for (uint32_t j = 0; j < max_n_nodes; j++) {
-        if (moved_node_descendant[j]) {
-          // if (node_i -> j),
-          // we have (i -> j) <=> (j -> new_parent) || (a -> i -> j)
-          new_vector[j] = old_vector[new_parent_i] ||
-                          (moved_node_descendant[i] && old_vector[j]);
-        } else {
-          // otherwise, we have (node_i !-> node_j).
-          // Since this node is unaffected, everything remains the same.
-          new_vector[j] = old_vector[j];
-        }
-      }
-
-      out_tree.ancestor[i] = new_vector;
-    }
-  }
-
-  /**
-   * @brief Swap two subtrees in the tree.
-   *
-   * This operation takes the subtree below node a, hangs it next to node b, and
-   * then hangs the subtree below node b to where node a used to be. If the
-   * method is not compiled for a SYCL device, it will assert that the node a
-   * and b are not descendants of each other, since this would detach one part
-   * of the tree and introduce a cycle. None of these nodes may be the root of
-   * the tree, since the root is not movable.
-   *
-   * @param node_a_i The index of one of the nodes to swap.
-   * @param node_b_i The index of the other node to swap.
-   */
-  void swap_subtrees(MutationTree<max_n_nodes> &out_tree, uint32_t node_a_i,
-                     uint32_t node_b_i) {
-#if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_a_i != get_root() && node_b_i != get_root());
-    assert(!is_descendant(node_a_i, node_b_i));
-    assert(!is_descendant(node_b_i, node_a_i));
-#endif
-    out_tree.n_nodes = n_nodes;
-
-    std::array<uint32_t, max_n_nodes> pv = parent;
-    std::swap(pv[node_a_i], pv[node_b_i]);
-    out_tree.parent = pv;
 
     AncestryVector node_a_descendant = ancestor[node_a_i];
     AncestryVector node_b_descendant = ancestor[node_b_i];
 
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      AncestryVector old_vector = ancestor[i];
-      AncestryVector new_vector = old_vector;
+      // Find the new parent node.
+      uint32_t old_parent = parent[i];
+      uint32_t new_parent;
 
-#pragma unroll
-      for (uint32_t j = 0; j < max_n_nodes; j++) {
-        if (node_a_descendant[j] && !node_b_descendant[j]) {
-          // if (a -> j && b !-> j),
-          // we have (i -> j) <=> (j -> parent[b]) || (a -> i -> j)
-          new_vector[j] = old_vector[parent[node_b_i]] ||
-                          (node_a_descendant[i] && old_vector[j]);
-        } else if (!node_a_descendant[j] && node_b_descendant[j]) {
-          // if (a !-> j && b -> j),
-          // we have (i -> j) <=> (j -> parent[a]) || (b -> i -> j)
-          new_vector[j] = old_vector[parent[node_a_i]] ||
-                          (node_b_descendant[i] && old_vector[j]);
+      switch (move_type) {
+      case MoveType::ChangeBeta:
+        new_parent = old_parent;
+        break;
+
+      case MoveType::SwapNodes:
+        if (i == node_a_i) {
+          new_parent = node_a_target_i;
+        } else if (i == node_b_i) {
+          new_parent = node_b_target_i;
         } else {
-          // we have (a !-> j && b !-> j), (a -> j && b -> j) is impossible.
-          // In this case, everything remains the same.
-          new_vector[j] = old_vector[j];
+          if (old_parent == node_a_i) {
+            new_parent = node_b_i;
+          } else if (old_parent == node_b_i) {
+            new_parent = node_a_i;
+          } else {
+            new_parent = old_parent;
+          }
         }
+        break;
+
+      case MoveType::PruneReattach:
+        if (i == node_a_i) {
+          new_parent = node_a_target_i;
+        } else {
+          new_parent = old_parent;
+        }
+        break;
+
+      case MoveType::SwapSubtrees:
+        if (i == node_a_i) {
+          new_parent = node_a_target_i;
+        } else if (i == node_b_i) {
+          new_parent = node_b_target_i;
+        } else {
+          new_parent = old_parent;
+        }
+        break;
+
+      default:
+        new_parent = old_parent;
+        break;
+      }
+
+      out_tree.parent[i] = new_parent;
+
+      // Compute the new ancestry vector.
+      AncestryVector old_vector = ancestor[i];
+      AncestryVector new_vector;
+
+      // Declaring the swap variable for the "Swap Nodes" move here since you
+      // can't declare it inside the switch statement.
+      bool swap;
+
+      switch (move_type) {
+      case MoveType::ChangeBeta:
+        new_vector = old_vector;
+        break;
+
+      case MoveType::SwapNodes:
+        if (i == node_a_i) {
+          new_vector = node_b_descendant;
+        } else if (i == node_b_i) {
+          new_vector = node_a_descendant;
+        } else {
+          new_vector = old_vector;
+        }
+
+        swap = new_vector[node_a_i];
+        new_vector[node_a_i] = new_vector[node_b_i];
+        new_vector[node_b_i] = swap;
+        break;
+
+      case MoveType::PruneReattach:
+#pragma unroll
+        for (uint32_t j = 0; j < max_n_nodes; j++) {
+          if (node_a_descendant[j]) {
+            // if (a -> j),
+            // we have (i -> j) <=> (j -> a_target) || (a -> i -> j)
+            new_vector[j] = old_vector[node_a_target_i] ||
+                            (node_a_descendant[i] && old_vector[j]);
+          } else {
+            // otherwise, we have (a !-> node_j).
+            // Since this node is unaffected, everything remains the same.
+            new_vector[j] = old_vector[j];
+          }
+        }
+        break;
+
+      case MoveType::SwapSubtrees:
+#pragma unroll
+        for (uint32_t j = 0; j < max_n_nodes; j++) {
+          if (node_a_descendant[j] && !node_b_descendant[j]) {
+            // if (a -> j && b !-> j),
+            // we have (i -> j) <=> (j -> b_target) || (a -> i -> j)
+            new_vector[j] = old_vector[node_a_target_i] ||
+                            (node_a_descendant[i] && old_vector[j]);
+          } else if (!node_a_descendant[j] && node_b_descendant[j]) {
+            // if (a !-> j && b -> j),
+            // we have (i -> j) <=> (j -> a_target) || (b -> i -> j)
+            new_vector[j] = old_vector[node_b_target_i] ||
+                            (node_b_descendant[i] && old_vector[j]);
+          } else {
+            // we have (a !-> j && b !-> j), (a -> j && b -> j) is impossible.
+            // In this case, everything remains the same.
+            new_vector[j] = old_vector[j];
+          }
+        }
+        break;
+
+      default:
+        break;
       }
 
       out_tree.ancestor[i] = new_vector;

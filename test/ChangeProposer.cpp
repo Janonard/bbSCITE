@@ -180,7 +180,8 @@ TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
   }
 }
 
-TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
+TEST_CASE("ChangeProposer::sample_prune_and_reattach_parameters",
+          "[ChangeProposer]") {
   auto proposer = init_proposer();
 
   /*
@@ -194,29 +195,22 @@ TEST_CASE("ChangeProposer::prune_and_reattach", "[ChangeProposer]") {
   MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    MutationTree<n_nodes> proposed_tree;
-    unsigned int moved_node_i =
-        proposer.prune_and_reattach(tree, proposed_tree);
+    std::array<uint32_t, 2> parameters =
+        proposer.sample_prune_and_reattach_parameters(tree);
+    uint32_t node_a_i = parameters[0];
+    uint32_t target_i = parameters[1];
 
     // Simple sanity checks for the move.
-    REQUIRE(moved_node_i < n_nodes);
-    REQUIRE(proposed_tree.get_parent(moved_node_i) != moved_node_i);
+    REQUIRE(node_a_i < n_nodes);
+    REQUIRE(target_i < n_nodes);
 
-    // Check that the node has not been attached to one of it's previous
-    // descendants.
-    REQUIRE(!tree.is_ancestor(moved_node_i,
-                              proposed_tree.get_parent(moved_node_i)));
-
-    // Check that nothing else was changed.
-    for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
-      if (node_i != moved_node_i) {
-        REQUIRE(proposed_tree.get_parent(node_i) == tree.get_parent(node_i));
-      }
-    }
+    // Check that the node will not be attached to one of it's descendants.
+    // Otherwise, this would form a loop.
+    REQUIRE(!tree.is_ancestor(node_a_i, target_i));
   }
 }
 
-TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
+TEST_CASE("ChangeProposer::sample_treeswap_parameters", "[ChangeProposer]") {
   auto proposer = init_proposer();
 
   /*
@@ -232,11 +226,13 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
   for (uint32_t i = 0; i < n_iterations; i++) {
     MutationTree<n_nodes> proposed_tree;
     double neighborhood_correction = 1.0;
-    auto swapped_subtrees =
-        proposer.swap_subtrees(tree, proposed_tree, neighborhood_correction);
+    std::array<uint32_t, 4> parameters =
+        proposer.sample_treeswap_parameters(tree, neighborhood_correction);
 
-    unsigned int node_a_i = swapped_subtrees[0];
-    unsigned int node_b_i = swapped_subtrees[1];
+    uint32_t node_a_i = parameters[0];
+    uint32_t node_b_i = parameters[1];
+    uint32_t node_a_target_i = parameters[2];
+    uint32_t node_b_target_i = parameters[3];
 
     bool common_lineage = tree.is_ancestor(node_a_i, node_b_i) ||
                           tree.is_ancestor(node_b_i, node_a_i);
@@ -246,24 +242,18 @@ TEST_CASE("ChangeProposer::swap_subtrees", "[ChangeProposer]") {
       // Ensure that node_a_i is the lower node.
       if (tree.is_ancestor(node_a_i, node_b_i)) {
         std::swap(node_a_i, node_b_i);
+        std::swap(node_a_target_i, node_b_target_i);
       }
 
-      REQUIRE(proposed_tree.get_parent(node_a_i) == tree.get_parent(node_b_i));
-      REQUIRE(tree.is_ancestor(node_a_i, proposed_tree.get_parent(node_b_i)));
+      REQUIRE(node_a_target_i == tree.get_parent(node_b_i));
+      REQUIRE(tree.is_ancestor(node_a_i, node_b_target_i));
       REQUIRE(neighborhood_correction ==
               double(tree.get_n_descendants(node_a_i)) /
                   double(tree.get_n_descendants(node_b_i)));
     } else {
-      REQUIRE(proposed_tree.get_parent(node_a_i) == tree.get_parent(node_b_i));
-      REQUIRE(proposed_tree.get_parent(node_b_i) == tree.get_parent(node_a_i));
+      REQUIRE(node_a_target_i == tree.get_parent(node_b_i));
+      REQUIRE(node_b_target_i == tree.get_parent(node_a_i));
       REQUIRE(neighborhood_correction == 1.0);
-    }
-
-    // Check that nothing else was changed.
-    for (uint32_t i = 0; i < n_nodes; i++) {
-      if (i != node_a_i && i != node_b_i) {
-        REQUIRE(proposed_tree.get_parent(i) == tree.get_parent(i));
-      }
     }
   }
 }

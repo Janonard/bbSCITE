@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "ChainState.hpp"
+#include "MoveType.hpp"
 #include <oneapi/dpl/random>
 
 namespace ffSCITE {
@@ -87,16 +88,6 @@ public:
         prob_swap_nodes(0.5), beta_jump_sd(0.1) {}
 
   RNG &get_rng() { return rng; }
-
-  /**
-   * @brief The different move types that the proposer may propose.
-   */
-  enum class MoveType {
-    ChangeBeta,
-    PruneReattach,
-    SwapNodes,
-    SwapSubtrees,
-  };
 
   /**
    * @brief Sample one of the possible moves with the defined distribution.
@@ -228,20 +219,8 @@ public:
     return new_beta;
   }
 
-  /**
-   * @brief Propose a prune-and-reattach move.
-   *
-   * This method picks a non-root node in the mutation tree, detaches it from
-   * it's current parent and attaches to another node (which may not be a
-   * descendant of the moved node). Note that this modifies the referenced
-   * parent vector.
-   *
-   * @param parent_vector The parent vector to modify.
-   * @param ancestor_matrix The current ancestor matrix of the mutation tree.
-   * @return The index of the the moved node.
-   */
-  uint32_t prune_and_reattach(MutationTreeImpl const &current_tree,
-                              MutationTreeImpl &out_proposed_tree) {
+  std::array<uint32_t, 2>
+  sample_prune_and_reattach_parameters(MutationTreeImpl const &current_tree) {
     // Pick a node to move.
     uint32_t node_to_move_i = oneapi::dpl::uniform_int_distribution<uint32_t>(
         0, current_tree.get_n_nodes() - 2)(rng);
@@ -250,52 +229,12 @@ public:
     uint32_t new_parent_i = sample_descendant_or_nondescendant(
         current_tree, node_to_move_i, false, true);
 
-    // Move the node.
-    current_tree.move_subtree(out_proposed_tree, node_to_move_i, new_parent_i);
-
-    return node_to_move_i;
+    return {node_to_move_i, new_parent_i};
   }
 
-  /**
-   * @brief Propose a swap-nodes move.
-   *
-   * This method picks two non-root nodes in the mutation tree and swaps their
-   * labels. The structure will remain the same, just two nodes are swapped.
-   *
-   * @param parent_vector The parent vector to modify.
-   * @return The indices of the swapped nodes.
-   */
-  std::array<uint32_t, 2> swap_nodes(MutationTreeImpl const &current_tree,
-                                     MutationTreeImpl &out_proposed_tree) {
-    std::array<uint32_t, 2> nodes_to_swap =
-        sample_nonroot_nodepair(current_tree.get_n_nodes());
-    current_tree.swap_nodes(out_proposed_tree, nodes_to_swap[0],
-                            nodes_to_swap[1]);
-    return nodes_to_swap;
-  }
-
-  /**
-   * @brief Propose a swap-subtrees move.
-   *
-   * This method picks two non-root nodes in the mutation tree and swaps their
-   * complete subtrees. If these nodes are not ancestors of each other, this
-   * involves only swapping the parent vector entries. However, if of the
-   * sampled nodes i and j the node i is an ancestor of the node j, then the
-   * method samples one of the descendants j and attaches i to instead of the
-   * parent of j.
-   *
-   * If the sampled nodes are related, the neighborhood correction factor is set
-   * accordingly, otherwise it is set to 1.0.
-   *
-   * @param parent_vector The parent vector to modify.
-   * @param ancestor_matrix The current ancestor matrix of the mutation tree.
-   * @param out_neighborhood_correction Output: Neighborhood correction factor.
-   * @return The two swapped/moved nodes.
-   */
-  std::array<uint32_t, 2> swap_subtrees(MutationTreeImpl const &current_tree,
-                                        MutationTreeImpl &out_proposed_tree,
-                                        double &out_neighborhood_correction) {
-
+  std::array<uint32_t, 4>
+  sample_treeswap_parameters(MutationTreeImpl const &current_tree,
+                             double &out_neighborhood_correction) {
     std::array<uint32_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(current_tree.get_n_nodes());
     uint32_t node_a_i = nodes_to_swap[0];
@@ -326,22 +265,15 @@ public:
           double(current_tree.get_n_descendants(node_a_i)) /
           double(current_tree.get_n_descendants(node_b_i));
 
-      // Sample one of node a's descendants.
-      uint32_t new_parent_i = sample_descendant_or_nondescendant(
-          current_tree, node_a_i, true, false);
-
       // Move node a next to node b.
       new_parent_of_a_i = current_tree.get_parent(node_b_i);
 
-      // Move node b to its new parent.
-      new_parent_of_b_i = new_parent_i;
+      // Sample one of node a's descendants.
+      new_parent_of_b_i = sample_descendant_or_nondescendant(
+          current_tree, node_a_i, true, false);
     }
 
-    MutationTreeImpl intermediate_tree;
-    current_tree.move_subtree(intermediate_tree, node_a_i, new_parent_of_a_i);
-    intermediate_tree.move_subtree(out_proposed_tree, node_b_i,
-                                   new_parent_of_b_i);
-    return nodes_to_swap;
+    return {node_a_i, node_b_i, new_parent_of_a_i, new_parent_of_b_i};
   }
 
   /**
@@ -354,29 +286,48 @@ public:
   void propose_change(ChainState<max_n_genes> const &current_state,
                       ChainState<max_n_genes> &proposed_state,
                       double &out_neighborhood_correction) {
-    out_neighborhood_correction = 1.0;
-    switch (sample_move()) {
-    case MoveType::ChangeBeta:
+    MoveType move_type = sample_move();
+
+    if (move_type == MoveType::ChangeBeta) {
       proposed_state.beta = change_beta(current_state.beta);
-      proposed_state.mutation_tree = current_state.mutation_tree;
-      break;
-    case MoveType::PruneReattach:
+    } else {
       proposed_state.beta = current_state.beta;
-      prune_and_reattach(current_state.mutation_tree,
-                         proposed_state.mutation_tree);
-      break;
-    case MoveType::SwapNodes:
-      proposed_state.beta = current_state.beta;
-      swap_nodes(current_state.mutation_tree, proposed_state.mutation_tree);
-      break;
-    case MoveType::SwapSubtrees:
-      proposed_state.beta = current_state.beta;
-      swap_subtrees(current_state.mutation_tree, proposed_state.mutation_tree,
-                    out_neighborhood_correction);
-      break;
-    default:
-      break;
     }
+
+    uint32_t node_a_i, node_b_i, node_a_target_i, node_b_target_i;
+
+    if (move_type == MoveType::ChangeBeta) {
+      node_a_i = node_b_i = node_a_target_i = node_b_target_i = 0;
+
+      out_neighborhood_correction = 1.0;
+    } else if (move_type == MoveType::PruneReattach) {
+      std::array<uint32_t, 2> parameters =
+          sample_prune_and_reattach_parameters(current_state.mutation_tree);
+      node_a_i = parameters[0];
+      node_a_target_i = parameters[1];
+      node_b_i = node_b_target_i = 0;
+
+      out_neighborhood_correction = 1.0;
+    } else if (move_type == MoveType::SwapNodes) {
+      std::array<uint32_t, 2> parameters =
+          sample_nonroot_nodepair(current_state.mutation_tree.get_n_nodes());
+      node_a_i = parameters[0];
+      node_b_i = parameters[1];
+      node_a_target_i = node_b_target_i = 0;
+
+      out_neighborhood_correction = 1.0;
+    } else {
+      std::array<uint32_t, 4> parameters = sample_treeswap_parameters(
+          current_state.mutation_tree, out_neighborhood_correction);
+      node_a_i = parameters[0];
+      node_b_i = parameters[1];
+      node_a_target_i = parameters[2];
+      node_b_target_i = parameters[3];
+    }
+
+    current_state.mutation_tree.execute_move(proposed_state.mutation_tree,
+                                             move_type, node_a_i, node_b_i,
+                                             node_a_target_i, node_b_target_i);
   }
 
 private:
