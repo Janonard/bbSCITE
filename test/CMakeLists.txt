@@ -8,7 +8,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-set(UNIT_TEST_SOURCES AncestorMatrix.cpp ChangeProposer.cpp MCMCKernel.cpp ParentVector.cpp StateScorer.cpp StaticMatrix.cpp)
+set(UNIT_TEST_SOURCES ChangeProposer.cpp MCMCKernel.cpp MutationTree.cpp TreeScorer.cpp StaticMatrix.cpp)
 
 add_executable(unit_test ${UNIT_TEST_SOURCES})
 

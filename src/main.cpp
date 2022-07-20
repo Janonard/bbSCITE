@@ -34,7 +34,7 @@ constexpr uint32_t max_n_genes = 16;
 using URNG = oneapi::dpl::minstd_rand;
 
 using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
-using ChainStateImpl = ChainState<max_n_genes>;
+using MutationTreeImpl = MutationTree<max_n_genes>;
 
 int main(int argc, char **argv) {
   // Load the CLI parameters.
@@ -140,9 +140,9 @@ int main(int argc, char **argv) {
       cl::sycl::property::queue::enable_profiling{}};
   cl::sycl::queue working_queue(device, queue_properties);
 
-  // Running the simulation and retrieving the best states.
+  // Running the simulation and retrieving the best trees.
   auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters);
-  std::vector<ChainStateImpl> best_states = std::get<0>(result);
+  std::vector<MutationTreeImpl> best_trees = std::get<0>(result);
   cl::sycl::event runtime_event = std::get<1>(result);
 
   static constexpr double timesteps_per_millisecond = 1000000.0;
@@ -157,35 +157,35 @@ int main(int argc, char **argv) {
   std::cout << "Time elapsed: " << end_of_event - start_of_event << " ms"
             << std::endl;
 
-  for (uint32_t state_i = 0; state_i < best_states.size(); state_i++) {
+  for (uint32_t tree_i = 0; tree_i < best_trees.size(); tree_i++) {
     // Output the tree as a graphviz file.
     {
       std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << state_i
+      output_path << parameters.get_output_path_base() << "_ml" << tree_i
                   << ".gv";
 
       std::ofstream output_file(output_path.str());
-      output_file << best_states[state_i].mutation_tree.to_graphviz();
+      output_file << best_trees[tree_i].to_graphviz();
     }
 
     // Output the tree in newick format
     {
       std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << state_i
+      output_path << parameters.get_output_path_base() << "_ml" << tree_i
                   << ".newick";
 
       std::ofstream output_file(output_path.str());
-      output_file << best_states[state_i].mutation_tree.to_newick();
+      output_file << best_trees[tree_i].to_newick();
     }
 
     // Output the found beta value for the tree
     {
       std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << state_i
+      output_path << parameters.get_output_path_base() << "_ml" << tree_i
                   << "_beta.txt";
 
       std::ofstream output_file(output_path.str());
-      output_file << best_states[state_i].beta << std::endl;
+      output_file << best_trees[tree_i].get_beta() << std::endl;
     }
   }
 }

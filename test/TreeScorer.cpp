@@ -14,16 +14,14 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#include "StateScorer.hpp"
+#include "TreeScorer.hpp"
 #include <catch2/catch_all.hpp>
 
 constexpr uint32_t n_cells = 6;
 constexpr uint32_t n_genes = 4;
-using ScorerImpl = ffSCITE::StateScorer<n_cells, n_genes,
-                                        cl::sycl::access::target::host_buffer>;
-using ParentVectorImpl = ScorerImpl::ParentVectorImpl;
-using AncestorMatrixImpl = ScorerImpl::AncestorMatrixImpl;
-using ChainStateImpl = ScorerImpl::ChainStateImpl;
+using ScorerImpl = ffSCITE::TreeScorer<n_cells, n_genes,
+                                       cl::sycl::access::target::host_buffer>;
+using MutationTreeImpl = ScorerImpl::MutationTreeImpl;
 using DataEntry = ScorerImpl::DataEntry;
 using DataMatrix = ScorerImpl::DataMatrix;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
@@ -31,16 +29,14 @@ using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 constexpr double alpha = 0.01, beta = 0.5, prior_sd = 0.1;
 
 void run_with_scorer(
-    std::function<void(ChainStateImpl, ScorerImpl, OccurrenceMatrix)>
+    std::function<void(MutationTreeImpl, ScorerImpl, OccurrenceMatrix)>
         function) {
   // Mutation tree:
   //
   //  ┌4┐
   // ┌2┐3
   // 0 1
-  ParentVectorImpl pv = ParentVectorImpl::from_pruefer_code({2, 2, 4});
-
-  ChainStateImpl state(pv, beta);
+  MutationTreeImpl tree({2, 2, 4, 4, 4}, beta);
 
   OccurrenceMatrix occurrences(0);
 
@@ -114,11 +110,11 @@ void run_with_scorer(
   DataMatrix data;
   ScorerImpl scorer(alpha, beta, prior_sd, data_ac, data);
 
-  function(state, scorer, occurrences);
+  function(tree, scorer, occurrences);
 }
 
-TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
-  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer,
+TEST_CASE("TreeScorer::get_logscore_of_occurrences", "[TreeScorer]") {
+  run_with_scorer([](MutationTreeImpl tree, ScorerImpl scorer,
                      OccurrenceMatrix true_occurrences) {
     OccurrenceMatrix occurrences(0);
 
@@ -151,20 +147,11 @@ TEST_CASE("StateScorer::get_logscore_of_occurrences", "[StateScorer]") {
   });
 }
 
-TEST_CASE("StateScore::logscore_tree", "[StateScorer]") {
-  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer,
+TEST_CASE("TreeScorer::logscore_tree", "[TreeScorer]") {
+  run_with_scorer([](MutationTreeImpl tree, ScorerImpl scorer,
                      OccurrenceMatrix true_occurrences) {
-    double calculated_score = scorer.logscore_tree(state.mutation_tree);
-    double true_score = scorer.get_logscore_of_occurrences(true_occurrences);
-    REQUIRE(calculated_score == true_score);
-  });
-}
-
-TEST_CASE("StateScorer::score_state", "[StateScorer]") {
-  run_with_scorer([](ChainStateImpl state, ScorerImpl scorer,
-                     OccurrenceMatrix true_occurrences) {
-    double score = scorer.logscore_state(state);
-    double beta_score = scorer.logscore_beta(state.beta);
+    double score = scorer.logscore_tree(tree);
+    double beta_score = scorer.logscore_beta(tree.get_beta());
 
     double true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
                         std::log(beta) + std::log(alpha);
