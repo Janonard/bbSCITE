@@ -86,19 +86,18 @@ def score_tree(args: argparse.Namespace):
 
 
 def quality_test(args: argparse.Namespace):
-    def get_best_likelihood(dir: Path) -> float:
+    def get_likelihood(dir: Path) -> float:
         """
         Get the best likelihood obtained by one executable for one input.
         """
-        likelihood_paths = list(dir.glob("*/likelihood.txt"))
-        likelihood_files = [open(path, mode="r") for path in likelihood_paths]
-        likelihoods = [float(file.readline()) for file in likelihood_files]
-        return max(likelihoods)
+        path = dir / Path("likelihood.txt")
+        with open(path, mode="r") as file:
+            return float(file.readline())
 
     # For every input, store the difference in the likelihood produced by ffSCITE and SCITE for that input.
     differences = [
-        get_best_likelihood(input_dir / Path("ffSCITE")) -
-        get_best_likelihood(input_dir / Path("SCITE"))
+        get_likelihood(input_dir / Path("ffSCITE")) -
+        get_likelihood(input_dir / Path("SCITE"))
         for input_dir in args.basedir.iterdir()
     ]
 
