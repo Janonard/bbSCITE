@@ -29,11 +29,10 @@ template <uint32_t max_n_nodes> class MutationTree {
 public:
   using AncestryVector = ac_int<max_n_nodes, false>;
 
-  MutationTree() : parent(), ancestor(), n_nodes(max_n_nodes) {}
+  MutationTree() : ancestor(), n_nodes(max_n_nodes) {}
 
-  MutationTree(uint32_t n_nodes) : parent(), ancestor(), n_nodes(n_nodes) {
+  MutationTree(uint32_t n_nodes) : ancestor(), n_nodes(n_nodes) {
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      parent[i] = get_root();
       for (uint32_t j = 0; j < max_n_nodes; j++) {
         ancestor[j][i] = (i == j || j == get_root()) ? true : false;
       }
@@ -41,7 +40,7 @@ public:
   }
 
   MutationTree(std::vector<uint32_t> parent_vector)
-      : parent(), ancestor(), n_nodes(parent_vector.size()) {
+      : ancestor(), n_nodes(parent_vector.size()) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
@@ -53,9 +52,6 @@ public:
       }
 
       if (i < n_nodes) {
-        // Copy the parent vector value
-        parent[i] = parent_vector[i];
-
         // Then we start from the node i and walk up to the root, marking all
         // nodes on the way as ancestors.
         uint32_t anc = i;
@@ -65,8 +61,6 @@ public:
           // Otherwise, there is a circle in the graph!
           assert(anc != i);
         }
-      } else {
-        parent[i] = get_root();
       }
 
       // Lastly, also mark the root as our ancestor.
@@ -161,11 +155,40 @@ public:
 
   uint32_t get_root() const { return n_nodes - 1; }
 
+  bool is_parent(uint32_t parent, uint32_t child) const {
+#if __SYCL_DEVICE_ONLY__ == 0
+    assert(parent < n_nodes && child < n_nodes);
+#endif
+    if (!ancestor[parent][child]) {
+      return false;
+    }
+
+    if (parent == child) {
+      return child == get_root();
+    }
+
+    #pragma unroll
+    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
+      if (node_i >= n_nodes || node_i == child) {
+        continue;
+      }
+      if (ancestor[node_i][parent] != ancestor[node_i][child]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   uint32_t get_parent(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
-    return parent[node_i];
+    for (uint32_t parent = 0; parent < max_n_nodes; parent++) {
+      if (is_parent(parent, node_i)) {
+        return parent;
+      }
+    }
+    return 0; // Illegal option, will not occur if the tree is correct.
   }
 
   uint32_t get_n_nodes() const { return n_nodes; }
@@ -304,8 +327,11 @@ public:
     }
 #pragma unroll
     for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
-      if (node_i < n_nodes && parent[node_i] != other.parent[node_i]) {
-        return false;
+      for (uint32_t node_j = 0; node_j < max_n_nodes; node_j++) {
+        if (node_i < n_nodes && node_j < n_nodes &&
+            ancestor[node_i][node_j] != other.ancestor[node_i][node_j]) {
+          return false;
+        }
       }
     }
     return true;
@@ -331,7 +357,7 @@ public:
     stream << "node [color=deeppink4, style=filled, fontcolor=white];"
            << std::endl;
     for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
-      stream << parent[node_i] << " -> " << node_i << ";" << std::endl;
+      stream << get_parent(node_i) << " -> " << node_i << ";" << std::endl;
     }
     stream << "}" << std::endl;
     return stream.str();
@@ -349,7 +375,7 @@ public:
     // Populate children list (not including the root to avoid infinite
     // recursion).
     for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
-      children[parent[node_i]].push_back(node_i);
+      children[get_parent(node_i)].push_back(node_i);
     }
 
     std::stringstream stream;
@@ -368,78 +394,27 @@ public:
 
     // Prepare/set the attachment targets for those move types we can deduce the
     // targets for.
-    switch (move_type) {
-    case MoveType::SwapNodes:
-      if (node_a_i == parent[node_b_i]) {
+    if (move_type == MoveType::SwapNodes) {
+      uint32_t node_a_parent = get_parent(node_a_i);
+      uint32_t node_b_parent = get_parent(node_b_i);
+
+      if (node_a_i == node_b_parent) {
         node_a_target_i = node_b_i;
       } else {
-        node_a_target_i = parent[node_b_i];
+        node_a_target_i = node_b_parent;
       }
 
-      if (node_b_i == parent[node_a_i]) {
+      if (node_b_i == node_a_parent) {
         node_b_target_i = node_a_i;
       } else {
-        node_b_target_i = parent[node_a_i];
+        node_b_target_i = node_a_parent;
       }
-      break;
-    default:
-      break;
     }
 
     AncestryVector node_a_descendant = ancestor[node_a_i];
     AncestryVector node_b_descendant = ancestor[node_b_i];
 
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      // Find the new parent node.
-      uint32_t old_parent = parent[i];
-      uint32_t new_parent;
-
-      switch (move_type) {
-      case MoveType::ChangeBeta:
-        new_parent = old_parent;
-        break;
-
-      case MoveType::SwapNodes:
-        if (i == node_a_i) {
-          new_parent = node_a_target_i;
-        } else if (i == node_b_i) {
-          new_parent = node_b_target_i;
-        } else {
-          if (old_parent == node_a_i) {
-            new_parent = node_b_i;
-          } else if (old_parent == node_b_i) {
-            new_parent = node_a_i;
-          } else {
-            new_parent = old_parent;
-          }
-        }
-        break;
-
-      case MoveType::PruneReattach:
-        if (i == node_a_i) {
-          new_parent = node_a_target_i;
-        } else {
-          new_parent = old_parent;
-        }
-        break;
-
-      case MoveType::SwapSubtrees:
-        if (i == node_a_i) {
-          new_parent = node_a_target_i;
-        } else if (i == node_b_i) {
-          new_parent = node_b_target_i;
-        } else {
-          new_parent = old_parent;
-        }
-        break;
-
-      default:
-        new_parent = old_parent;
-        break;
-      }
-
-      out_tree.parent[i] = new_parent;
-
       // Compute the new ancestry vector.
       AncestryVector old_vector = ancestor[i];
       AncestryVector new_vector;
@@ -529,7 +504,6 @@ private:
     stream << node_i;
   }
 
-  std::array<uint32_t, max_n_nodes> parent;
   std::array<AncestryVector, max_n_nodes> ancestor;
   uint32_t n_nodes;
 };
