@@ -239,6 +239,22 @@ public:
         sample_nonroot_nodepair(current_tree.get_n_nodes());
     uint32_t node_a_i = nodes_to_swap[0];
     uint32_t node_b_i = nodes_to_swap[1];
+
+    uint32_t parent_of_a;
+    uint32_t parent_of_b;
+
+    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
+      if (node_i >= current_tree.get_n_nodes()) {
+        continue;
+      }
+      if (current_tree.is_parent(node_i, node_a_i)) {
+        parent_of_a = node_i;
+      }
+      if (current_tree.is_parent(node_i, node_b_i)) {
+        parent_of_b = node_i;
+      }
+    }
+
     uint32_t new_parent_of_a_i, new_parent_of_b_i;
 
     bool distinct_lineages = !(current_tree.is_ancestor(node_a_i, node_b_i) ||
@@ -248,8 +264,8 @@ public:
       out_neighborhood_correction = 1.0;
 
       // The nodes are from distinct lineages, we can simply swap the subtrees.
-      new_parent_of_a_i = current_tree.get_parent(node_b_i);
-      new_parent_of_b_i = current_tree.get_parent(node_a_i);
+      new_parent_of_a_i = parent_of_b;
+      new_parent_of_b_i = parent_of_a;
     } else {
       // The nodes are from a common lineage. We can attach the lower node to
       // the parent of the upper node, but we have to choose something else for
@@ -259,6 +275,7 @@ public:
       // Ensure that node a is lower in the tree than node b.
       if (current_tree.is_ancestor(node_a_i, node_b_i)) {
         std::swap(node_a_i, node_b_i);
+        std::swap(parent_of_a, parent_of_b);
       }
 
       out_neighborhood_correction =
@@ -266,7 +283,7 @@ public:
           double(current_tree.get_n_descendants(node_b_i));
 
       // Move node a next to node b.
-      new_parent_of_a_i = current_tree.get_parent(node_b_i);
+      new_parent_of_a_i = parent_of_b;
 
       // Sample one of node a's descendants.
       new_parent_of_b_i = sample_descendant_or_nondescendant(
@@ -294,6 +311,15 @@ public:
       proposed_state.beta = current_state.beta;
     }
 
+    // Computing the parameters for every possible move to avoid divergent
+    // loops.
+    std::array<uint32_t, 2> prune_and_reattach_parameters =
+        sample_prune_and_reattach_parameters(current_state.mutation_tree);
+    std::array<uint32_t, 2> swap_nodes_parameters =
+        sample_nonroot_nodepair(current_state.mutation_tree.get_n_nodes());
+    std::array<uint32_t, 4> treeswap_parameters = sample_treeswap_parameters(
+        current_state.mutation_tree, out_neighborhood_correction);
+
     uint32_t node_a_i, node_b_i, node_a_target_i, node_b_target_i;
 
     if (move_type == MoveType::ChangeBeta) {
@@ -301,28 +327,22 @@ public:
 
       out_neighborhood_correction = 1.0;
     } else if (move_type == MoveType::PruneReattach) {
-      std::array<uint32_t, 2> parameters =
-          sample_prune_and_reattach_parameters(current_state.mutation_tree);
-      node_a_i = parameters[0];
-      node_a_target_i = parameters[1];
+      node_a_i = prune_and_reattach_parameters[0];
+      node_a_target_i = prune_and_reattach_parameters[1];
       node_b_i = node_b_target_i = 0;
 
       out_neighborhood_correction = 1.0;
     } else if (move_type == MoveType::SwapNodes) {
-      std::array<uint32_t, 2> parameters =
-          sample_nonroot_nodepair(current_state.mutation_tree.get_n_nodes());
-      node_a_i = parameters[0];
-      node_b_i = parameters[1];
+      node_a_i = swap_nodes_parameters[0];
+      node_b_i = swap_nodes_parameters[1];
       node_a_target_i = node_b_target_i = 0;
 
       out_neighborhood_correction = 1.0;
     } else {
-      std::array<uint32_t, 4> parameters = sample_treeswap_parameters(
-          current_state.mutation_tree, out_neighborhood_correction);
-      node_a_i = parameters[0];
-      node_b_i = parameters[1];
-      node_a_target_i = parameters[2];
-      node_b_target_i = parameters[3];
+      node_a_i = treeswap_parameters[0];
+      node_b_i = treeswap_parameters[1];
+      node_a_target_i = treeswap_parameters[2];
+      node_b_target_i = treeswap_parameters[3];
     }
 
     current_state.mutation_tree.execute_move(proposed_state.mutation_tree,
