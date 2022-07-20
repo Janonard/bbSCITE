@@ -29,7 +29,7 @@ constexpr unsigned long chain_length = 1000000;
 
 using MCMCKernelImpl = MCMCKernel<n_cells, n_genes, oneapi::dpl::minstd_rand>;
 using DataEntry = MCMCKernelImpl::DataEntry;
-using ChainStateImpl = MCMCKernelImpl::ChainStateImpl;
+using MutationTreeImpl = MCMCKernelImpl::MutationTreeImpl;
 
 TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   /*
@@ -45,7 +45,7 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
    * There are three cells attached to every node and there are some errors in
    * the data to make it interesting.
    */
-  MutationTree<n_genes + 1> correct_tree({2, 2, 4, 4, 4});
+  MutationTree<n_genes> correct_tree({2, 2, 4, 4, 4}, beta);
 
   cl::sycl::buffer<DataEntry, 2> data_buffer(
       cl::sycl::range<2>(n_cells, n_genes));
@@ -145,12 +145,12 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
 
   auto result =
       MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
-  std::vector<ChainStateImpl> best_states = std::get<0>(result);
+  std::vector<MutationTreeImpl> best_trees = std::get<0>(result);
 
   bool correct_tree_found = false;
-  for (uint32_t state_i = 0; state_i < best_states.size(); state_i++) {
+  for (uint32_t tree_i = 0; tree_i < best_trees.size(); tree_i++) {
     bool is_correct_tree = true;
-    MutationTree<n_genes + 1> found_tree = best_states[state_i].mutation_tree;
+    MutationTree<n_genes> found_tree = best_trees[tree_i];
     correct_tree_found |= found_tree == correct_tree;
   }
   REQUIRE(correct_tree_found);

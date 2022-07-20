@@ -15,17 +15,18 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "ChainState.hpp"
+#include "MutationTree.hpp"
 #include "StaticMatrix.hpp"
+#include <CL/sycl.hpp>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
 
 namespace ffSCITE {
 /**
- * @brief Class that calculates the likelihood of a state, relative to given
+ * @brief Class that calculates the likelihood of a tree, relative to given
  * mutation data.
  *
  * An object of this class takes mutation data from single cell sequencing and
- * computes how likely it is that a given chain state (combination of error rate
+ * computes how likely it is that a given chain tree (combination of error rate
  * and mutation tree) is correct. Logically, this is done by finding the most
  * likely attachment node for every cell and multiplying the likelihoods for
  * every cell. However, in order to eliminate expensive power operations, the
@@ -40,16 +41,12 @@ namespace ffSCITE {
 template <uint32_t max_n_cells, uint32_t max_n_genes,
           cl::sycl::access::target access_target =
               cl::sycl::access::target::device>
-class StateScorer {
+class TreeScorer {
 public:
-  /**
-   * @brief Shorthand for the chain state class in use.
-   */
-  using ChainStateImpl = ChainState<max_n_genes>;
   /**
    * @brief Shorthand for the parent vector class in use.
    */
-  using MutationTreeImpl = typename ChainStateImpl::MutationTreeImpl;
+  using MutationTreeImpl = MutationTree<max_n_genes>;
 
   /**
    * @brief Data type of the entries in the mutation data matrix.
@@ -76,9 +73,9 @@ public:
                          access_target>;
 
   /**
-   * @brief Initialize a new state scorer
+   * @brief Initialize a new tree scorer
    *
-   * This new state scorer uses the initial assumptions over the alpha and beta
+   * This new tree scorer uses the initial assumptions over the alpha and beta
    * error rates and also load the mutation data.
    *
    * @param alpha_mean The initial assumption of the alpha error rate (false
@@ -89,8 +86,8 @@ public:
    * @param data An accessor to the mutation input data. The number of cells and
    * genes is inferred from the accessor range.
    */
-  StateScorer(double alpha_mean, double beta_mean, double beta_sd,
-              MutationDataAccessor data_ac, DataMatrix &data)
+  TreeScorer(double alpha_mean, double beta_mean, double beta_sd,
+             MutationDataAccessor data_ac, DataMatrix &data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data),
         n_cells(data_ac.get_range()[0]), n_genes(data_ac.get_range()[1]) {
     // mutation not observed, not present
@@ -121,44 +118,20 @@ public:
     }
   }
 
-  /**
-   * @brief Compute the likelihood score of the given state.
-   *
-   * This is done by finding the most likely attachment point for every cell and
-   * then multiplying the likelihoods of every cell-gene-combination.
-   *
-   * @param state The state to score.
-   * @return The likelihood that the state represents the true mutation history
-   * of the sequenced cells.
-   */
-  double logscore_state(ChainStateImpl const &state) {
-#if __SYCL_DEVICE_ONLY__ == 0
-    assert(state.mutation_tree.get_n_nodes() == n_genes + 1);
-#endif
-
-    log_error_probabilities[0][1] = std::log(state.beta);
-    log_error_probabilities[1][1] = std::log(1.0 - state.beta);
-
-    double tree_score = logscore_tree(state.mutation_tree);
-    double beta_score = logscore_beta(state.beta);
-    return tree_score + beta_score;
-  }
-
-  /**
-   * @brief Compute the likelihood of the beta error rate being correct.
-   *
-   * This is based on the a-priori assumption of the beta error rate and it's
-   * assumed standard derivation.
-   *
-   * @param beta The beta error rate to score.
-   */
-  double logscore_beta(double beta) {
+  double logscore_beta(double beta) const {
     return std::log(std::tgamma(bpriora + bpriorb)) +
            (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
   }
 
   double logscore_tree(MutationTreeImpl const &tree) {
+#if __SYCL_DEVICE_ONLY__ == 0
+    assert(tree.get_n_nodes() == n_genes + 1);
+#endif
+
+    log_error_probabilities[0][1] = std::log(tree.get_beta());
+    log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
+
     double best_scores[max_n_cells];
 
     for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
@@ -199,7 +172,9 @@ public:
       }
     }
 
-    return tree_score;
+    double beta_score = logscore_beta(tree.get_beta());
+
+    return tree_score + beta_score;
   }
 
   /**

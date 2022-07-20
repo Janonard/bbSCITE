@@ -17,7 +17,7 @@
 #include <MutationTree.hpp>
 #include <catch2/catch_all.hpp>
 
-using Tree = ffSCITE::MutationTree<15>;
+using Tree = ffSCITE::MutationTree<14>;
 
 void require_tree_equality(Tree const &a, Tree const &b) {
   REQUIRE(a.get_n_nodes() == b.get_n_nodes());
@@ -39,7 +39,7 @@ TEST_CASE("MutationTree::get_parent", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 4, 4});
+  Tree tree({2, 2, 4, 4, 4}, 0.42);
 
   REQUIRE(tree.get_parent(0) == 2);
   REQUIRE(tree.get_parent(1) == 2);
@@ -56,7 +56,7 @@ TEST_CASE("MutationTree::is_ancestor", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 4, 4});
+  Tree tree({2, 2, 4, 4, 4}, 0.42);
 
   REQUIRE(tree.is_ancestor(0, 0));
   REQUIRE(!tree.is_ancestor(1, 0));
@@ -97,7 +97,7 @@ TEST_CASE("MutationTree::is_descendant", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 4, 4});
+  Tree tree({2, 2, 4, 4, 4}, 0.42);
 
   REQUIRE(tree.is_descendant(0, 0));
   REQUIRE(!tree.is_descendant(0, 1));
@@ -136,7 +136,7 @@ TEST_CASE("MutationTree::get_descendants", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
 
   auto descendant = tree.get_descendants(0);
   REQUIRE(descendant[0]);
@@ -208,7 +208,7 @@ TEST_CASE("MutationTree::get_n_descendants", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
 
   REQUIRE(tree.get_n_descendants(0) == 1);
   REQUIRE(tree.get_n_descendants(1) == 1);
@@ -225,7 +225,7 @@ TEST_CASE("MutationTree::get_ancestors", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
 
   auto ancestor = tree.get_ancestors(0);
   REQUIRE(ancestor[0]);
@@ -297,7 +297,7 @@ TEST_CASE("MutationTree::get_n_ancestors", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6});
+  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
 
   REQUIRE(tree.get_n_ancestors(0) == 3);
   REQUIRE(tree.get_n_ancestors(1) == 3);
@@ -318,10 +318,11 @@ TEST_CASE("MutationTree::from_pruefer_code", "[MutationTree]") {
   std::vector<uint32_t> pruefer_code = {8,  8,  9,  9,  10, 10, 11,
                                         11, 12, 12, 13, 13, 14};
 
-  Tree tree = Tree::from_pruefer_code(pruefer_code);
+  Tree tree = Tree::from_pruefer_code(pruefer_code, 0.42);
 
   require_tree_equality(
-      tree, Tree({8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 14}));
+      tree,
+      Tree({8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 14}, 0.42));
 }
 
 TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
@@ -332,7 +333,7 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree original_tree({2, 2, 4, 4, 4});
+  Tree original_tree({2, 2, 4, 4, 4}, 0.42);
 
   // Identity operation
   Tree identity_tree;
@@ -346,7 +347,7 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  require_tree_equality(identity_tree, Tree({2, 2, 4, 4, 4}));
+  require_tree_equality(identity_tree, Tree({2, 2, 4, 4, 4}, 0.42));
 
   // Swap of unrelated nodes
   Tree unrelated_swap_tree;
@@ -360,7 +361,7 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌3┐2
    * 0 1
    */
-  require_tree_equality(unrelated_swap_tree, Tree({3, 3, 4, 4, 4}));
+  require_tree_equality(unrelated_swap_tree, Tree({3, 3, 4, 4, 4}, 0.42));
 
   // Swap of parent and child
   Tree child_swap_tree;
@@ -374,7 +375,7 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌0┐2
    * 3 1
    */
-  require_tree_equality(child_swap_tree, Tree({4, 0, 4, 0, 4}));
+  require_tree_equality(child_swap_tree, Tree({4, 0, 4, 0, 4}, 0.42));
 }
 
 TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
@@ -386,7 +387,7 @@ TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
 
   Tree modified_tree;
   original_tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, 2,
@@ -400,7 +401,7 @@ TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
    *  3 4┌2┐
    *     0 1
    */
-  require_tree_equality(modified_tree, Tree({2, 2, 6, 5, 6, 7, 7, 7}));
+  require_tree_equality(modified_tree, Tree({2, 2, 6, 5, 6, 7, 7, 7}, 0.42));
 }
 
 TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
@@ -412,7 +413,7 @@ TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
 
   Tree swapped_tree;
   original_tree.execute_move(swapped_tree, ffSCITE::MoveType::SwapSubtrees, 2,
@@ -426,7 +427,7 @@ TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
    * ┌6 3 0 1
    * 4
    */
-  require_tree_equality(swapped_tree, Tree({2, 2, 7, 5, 6, 7, 5, 7}));
+  require_tree_equality(swapped_tree, Tree({2, 2, 7, 5, 6, 7, 5, 7}, 0.42));
 }
 
 const std::string required_graphviz_tree =
@@ -450,7 +451,7 @@ TEST_CASE("MutationTree::to_graphviz", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree tree = Tree::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  Tree tree = Tree::from_pruefer_code({2, 2, 5, 5, 6, 7}, 0.42);
 
   std::string graphviz_string = tree.to_graphviz();
   REQUIRE(graphviz_string == required_graphviz_tree);
@@ -467,7 +468,7 @@ TEST_CASE("MutationTree::to_newick", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree tree = Tree::from_pruefer_code({2, 2, 5, 5, 6, 7});
+  Tree tree = Tree::from_pruefer_code({2, 2, 5, 5, 6, 7}, 0.42);
 
   std::string newick_string = tree.to_newick();
   REQUIRE(newick_string == required_newick_tree);

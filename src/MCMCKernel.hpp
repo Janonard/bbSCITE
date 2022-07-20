@@ -17,58 +17,37 @@
 #pragma once
 #include "ChangeProposer.hpp"
 #include "Parameters.hpp"
-#include "StateScorer.hpp"
+#include "TreeScorer.hpp"
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-class DummyRNG {
-public:
-  using result_type = uint32_t;
-
-  DummyRNG() : state(0) {}
-
-  uint32_t operator()() {
-    state++;
-    return state;
-  }
-
-  uint32_t min() { return 0; }
-
-  uint32_t max() { return std::numeric_limits<uint32_t>::max(); }
-
-  void seed(uint32_t seed) { state = seed; }
-
-private:
-  uint32_t state;
-};
-
 /**
  * @brief SYCL kernel that simulates a SCITE markov chain.
  *
- * It picks up a chain with a given current and best states, simulates the chain
- * from this point for a set number of iterations and writes the resulting state
- * back. It takes a change proposer and a state scorer as it's type argument so
+ * It picks up a chain with a given current and best trees, simulates the chain
+ * from this point for a set number of iterations and writes the resulting tree
+ * back. It takes a change proposer and a tree scorer as it's type argument so
  * that they can easily be swapped out to test different approaches.
  *
  * @tparam max_n_cells The maximum number of cells supported by the kernel.
  * @tparam max_n_genes The maximum number of genes supported by the kernel.
  * @tparam ChangeProposer The type of the change proposing strategy.
- * @tparam StateScorer The type of the state scoring strategy.
- * @tparam access_target The target from where the states are accessed.
+ * @tparam TreeScorer The type of the tree scoring strategy.
+ * @tparam access_target The target from where the trees are accessed.
  */
 template <uint32_t max_n_cells, uint32_t max_n_genes, typename RNG>
 class MCMCKernel {
 public:
   /**
-   * @brief Shorthand for the used chain state.
+   * @brief Shorthand for the used tree.
    */
-  using ChainStateImpl = ChainState<max_n_genes>;
+  using MutationTreeImpl = MutationTree<max_n_genes>;
 
   /**
-   * @brief Shorthand for the chain state buffer accessor type.
+   * @brief Shorthand for the tree buffer accessor type.
    */
-  using StateAccessor =
-      cl::sycl::accessor<ChainStateImpl, 1, cl::sycl::access::mode::read_write>;
+  using TreeAccessor = cl::sycl::accessor<MutationTreeImpl, 1,
+                                          cl::sycl::access::mode::read_write>;
 
   /**
    * @brief Shorthand for the double buffer accessor type.
@@ -84,59 +63,40 @@ public:
 
   using ChangeProposerImpl = ChangeProposer<max_n_genes, RNG>;
 
-  using StateScorerImpl = StateScorer<max_n_cells, max_n_genes>;
+  using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
 
-  using HostStateScorerImpl =
-      StateScorer<max_n_cells, max_n_genes,
-                  cl::sycl::access::target::host_buffer>;
+  using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
+                                        cl::sycl::access::target::host_buffer>;
 
-  using DataEntry = typename StateScorerImpl::DataEntry;
+  using DataEntry = typename TreeScorerImpl::DataEntry;
 
-  using DataMatrix = typename StateScorerImpl::DataMatrix;
+  using DataMatrix = typename TreeScorerImpl::DataMatrix;
 
-  using OccurrenceMatrix = typename StateScorerImpl::OccurrenceMatrix;
+  using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
 
-  using MutationDataAccessor = typename StateScorerImpl::MutationDataAccessor;
+  using MutationDataAccessor = typename TreeScorerImpl::MutationDataAccessor;
 
-  /**
-   * @brief Initialize the MCMC kernel instance.
-   *
-   * @param change_proposer The configured instance of the change proposer to
-   * use.
-   * @param state_scorer The configured instance of the state scorer to
-   * use.
-   * @param gamma A factor for the width of the optimization space
-   * exploration.
-   * @param best_states_ac Accessor to the buffer for the optimal states.
-   * @param best_score_ac Accessor to the score of the optimal states.
-   * @param current_states_ac Accessor to the current states of the
-   * chains.
-   * @param current_scores_ac Accessor to the scores of the current states of
-   * the chains.
-   * @param n_best_states_ac Accessor to the number of best states.
-   * @param n_steps The number of steps to execute.
-   */
-  MCMCKernel(StateAccessor best_states_ac, StateAccessor current_states_ac,
+  MCMCKernel(TreeAccessor best_trees_ac, TreeAccessor current_trees_ac,
              ScoreAccessor best_score_ac, ScoreAccessor current_scores_ac,
-             IndexAccessor n_best_states_ac, MutationDataAccessor data_ac,
+             IndexAccessor n_best_trees_ac, MutationDataAccessor data_ac,
              RNG rng, double prob_beta_change, double prob_prune_n_reattach,
              double prob_swap_nodes, double beta_jump_sd, double alpha_mean,
              double beta_mean, double beta_sd, double gamma, uint32_t n_steps)
-      : best_states_ac(best_states_ac), current_states_ac(current_states_ac),
+      : best_trees_ac(best_trees_ac), current_trees_ac(current_trees_ac),
         best_score_ac(best_score_ac), current_scores_ac(current_scores_ac),
-        n_best_states_ac(n_best_states_ac), prob_beta_change(prob_beta_change),
+        n_best_trees_ac(n_best_trees_ac), prob_beta_change(prob_beta_change),
         data_ac(data_ac), prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd),
         alpha_mean(alpha_mean), beta_mean(beta_mean), beta_sd(beta_sd),
         gamma(gamma), n_steps(n_steps) {
     assert(best_score_ac.get_range()[0] == 1);
-    assert(current_states_ac.get_range() == current_scores_ac.get_range());
+    assert(current_trees_ac.get_range() == current_scores_ac.get_range());
   }
 
   /**
    * @brief Run the MCMC chain.
    *
-   * This will read the current and best states from device memory, execute the
+   * This will read the current and best trees from device memory, execute the
    * configured number of steps for every chain and writes the results back.
    */
   void operator()() const {
@@ -146,22 +106,22 @@ public:
         beta_jump_sd);
 
     DataMatrix data;
-    StateScorerImpl state_scorer(alpha_mean, beta_mean, beta_sd, data_ac, data);
+    TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, data_ac, data);
 
     double best_score = -std::numeric_limits<double>::infinity();
-    uint32_t n_best_states = 0;
+    uint32_t n_best_trees = 0;
 
     for (uint32_t i = 0; i < n_steps; i++) {
-      for (uint32_t chain_i = 0; chain_i < current_states_ac.get_range()[0];
+      for (uint32_t chain_i = 0; chain_i < current_trees_ac.get_range()[0];
            chain_i++) {
         double neighborhood_correction = 1.0;
-        ChainStateImpl current_state = current_states_ac[chain_i];
+        MutationTreeImpl current_tree = current_trees_ac[chain_i];
         double current_score = current_scores_ac[chain_i];
 
-        ChainStateImpl proposed_state;
-        change_proposer.propose_change(current_state, proposed_state,
+        MutationTreeImpl proposed_tree;
+        change_proposer.propose_change(current_tree, proposed_tree,
                                        neighborhood_correction);
-        double proposed_score = state_scorer.logscore_state(proposed_state);
+        double proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
         double acceptance_probability =
             neighborhood_correction *
@@ -169,20 +129,20 @@ public:
         bool accept_move = oneapi::dpl::bernoulli_distribution(
             acceptance_probability)(change_proposer.get_rng());
         if (accept_move) {
-          current_states_ac[chain_i] = proposed_state;
+          current_trees_ac[chain_i] = proposed_tree;
           current_scores_ac[chain_i] = proposed_score;
         }
 
-        if (proposed_score > best_score || n_best_states == 0) {
-          best_states_ac[0] = proposed_state;
+        if (proposed_score > best_score || n_best_trees == 0) {
+          best_trees_ac[0] = proposed_tree;
           best_score = proposed_score;
-          n_best_states = 1;
+          n_best_trees = 1;
         }
       }
     }
 
     best_score_ac[0] = best_score;
-    n_best_states_ac[0] = n_best_states;
+    n_best_trees_ac[0] = n_best_trees;
   }
 
   /**
@@ -193,11 +153,11 @@ public:
    * @param working_queue The configured SYCL queue to execute the simulation
    * with.
    * @param parameters The configuration parameters of the simulation
-   * @return std::vector<ChainStateImpl> A vector with all of the optimal
-   * states.
+   * @return std::vector<MutationTreeImpl> A vector with all of the optimal
+   * trees.
    * @return cl::sycl::event The SYCL event of the MCMC kernel execution.
    */
-  static std::tuple<std::vector<ChainStateImpl>, cl::sycl::event>
+  static std::tuple<std::vector<MutationTreeImpl>, cl::sycl::event>
   run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
                  cl::sycl::queue working_queue, Parameters const &parameters) {
     using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, RNG>;
@@ -208,19 +168,19 @@ public:
     RNG twister;
     twister.seed(parameters.get_seed());
 
-    cl::sycl::buffer<ChainStateImpl, 1> best_states_buffer(
-        (cl::sycl::range<1>(parameters.get_max_n_best_states())));
+    cl::sycl::buffer<MutationTreeImpl, 1> best_trees_buffer(
+        (cl::sycl::range<1>(parameters.get_max_n_best_trees())));
     cl::sycl::buffer<double, 1> best_score_buffer((cl::sycl::range<1>(1)));
-    cl::sycl::buffer<uint32_t, 1> n_best_states_buffer((cl::sycl::range<1>(1)));
+    cl::sycl::buffer<uint32_t, 1> n_best_trees_buffer((cl::sycl::range<1>(1)));
 
-    cl::sycl::buffer<ChainStateImpl, 1> current_states_buffer(
+    cl::sycl::buffer<MutationTreeImpl, 1> current_trees_buffer(
         (cl::sycl::range<1>(parameters.get_n_chains())));
     cl::sycl::buffer<double, 1> current_scores_buffer(
         (cl::sycl::range<1>(parameters.get_n_chains())));
 
     {
-      auto current_states_ac =
-          current_states_buffer
+      auto current_trees_ac =
+          current_trees_buffer
               .template get_access<cl::sycl::access::mode::read_write>();
       auto current_scores_ac =
           current_scores_buffer
@@ -229,31 +189,31 @@ public:
           data_buffer.template get_access<cl::sycl::access::mode::read>();
       DataMatrix data;
 
-      HostStateScorerImpl host_scorer(parameters.get_alpha_mean(),
-                                      parameters.get_beta_mean(),
-                                      parameters.get_beta_sd(), data_ac, data);
+      HostTreeScorerImpl host_scorer(parameters.get_alpha_mean(),
+                                     parameters.get_beta_mean(),
+                                     parameters.get_beta_sd(), data_ac, data);
 
       for (uint32_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
-        current_states_ac[rep_i] = ChainStateImpl::sample_random_state(
+        current_trees_ac[rep_i] = MutationTreeImpl::sample_random_tree(
             twister, n_genes, parameters.get_beta_mean());
         current_scores_ac[rep_i] =
-            host_scorer.logscore_state(current_states_ac[rep_i]);
+            host_scorer.logscore_tree(current_trees_ac[rep_i]);
       }
     }
 
     cl::sycl::event event = working_queue.submit([&](cl::sycl::handler &cgh) {
-      auto best_states_ac =
-          best_states_buffer
+      auto best_trees_ac =
+          best_trees_buffer
               .template get_access<cl::sycl::access::mode::read_write>(cgh);
       auto best_score_ac =
           best_score_buffer
               .template get_access<cl::sycl::access::mode::read_write>(cgh);
-      auto n_best_states_ac =
-          n_best_states_buffer
+      auto n_best_trees_ac =
+          n_best_trees_buffer
               .template get_access<cl::sycl::access::mode::read_write>(cgh);
 
-      auto current_states_ac =
-          current_states_buffer
+      auto current_trees_ac =
+          current_trees_buffer
               .template get_access<cl::sycl::access::mode::read_write>(cgh);
       auto current_scores_ac =
           current_scores_buffer
@@ -264,8 +224,8 @@ public:
 
       double beta_jump_sd =
           parameters.get_beta_sd() / parameters.get_beta_jump_scaling_chi();
-      MCMCKernel kernel(best_states_ac, current_states_ac, best_score_ac,
-                        current_scores_ac, n_best_states_ac, data_ac, twister,
+      MCMCKernel kernel(best_trees_ac, current_trees_ac, best_score_ac,
+                        current_scores_ac, n_best_trees_ac, data_ac, twister,
                         parameters.get_prob_beta_change(),
                         parameters.get_prob_prune_n_reattach(),
                         parameters.get_prob_swap_nodes(), beta_jump_sd,
@@ -275,24 +235,23 @@ public:
       cgh.single_task(kernel);
     });
 
-    auto best_states_ac =
-        best_states_buffer.template get_access<cl::sycl::access::mode::read>();
-    auto n_best_states_ac =
-        n_best_states_buffer
-            .template get_access<cl::sycl::access::mode::read>();
-    std::vector<ChainStateImpl> best_states_vec;
-    best_states_vec.reserve(n_best_states_ac[0]);
-    for (uint32_t i = 0; i < n_best_states_ac[0]; i++) {
-      best_states_vec.push_back(best_states_ac[i]);
+    auto best_trees_ac =
+        best_trees_buffer.template get_access<cl::sycl::access::mode::read>();
+    auto n_best_trees_ac =
+        n_best_trees_buffer.template get_access<cl::sycl::access::mode::read>();
+    std::vector<MutationTreeImpl> best_trees_vec;
+    best_trees_vec.reserve(n_best_trees_ac[0]);
+    for (uint32_t i = 0; i < n_best_trees_ac[0]; i++) {
+      best_trees_vec.push_back(best_trees_ac[i]);
     }
 
-    return {best_states_vec, event};
+    return {best_trees_vec, event};
   }
 
 private:
-  StateAccessor best_states_ac, current_states_ac;
+  TreeAccessor best_trees_ac, current_trees_ac;
   ScoreAccessor best_score_ac, current_scores_ac;
-  IndexAccessor n_best_states_ac;
+  IndexAccessor n_best_trees_ac;
   MutationDataAccessor data_ac;
 
   RNG rng;

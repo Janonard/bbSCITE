@@ -25,13 +25,16 @@
 #include <vector>
 
 namespace ffSCITE {
-template <uint32_t max_n_nodes> class MutationTree {
+template <uint32_t max_n_genes> class MutationTree {
 public:
+  static constexpr uint32_t max_n_nodes = max_n_genes + 1;
+
   using AncestryVector = ac_int<max_n_nodes, false>;
 
-  MutationTree() : ancestor(), n_nodes(max_n_nodes) {}
+  MutationTree() : ancestor(), n_nodes(max_n_nodes), beta(1.0) {}
 
-  MutationTree(uint32_t n_nodes) : ancestor(), n_nodes(n_nodes) {
+  MutationTree(uint32_t n_nodes, double beta)
+      : ancestor(), n_nodes(n_nodes), beta(beta) {
     for (uint32_t i = 0; i < max_n_nodes; i++) {
       for (uint32_t j = 0; j < max_n_nodes; j++) {
         ancestor[j][i] = (i == j || j == get_root()) ? true : false;
@@ -39,8 +42,8 @@ public:
     }
   }
 
-  MutationTree(std::vector<uint32_t> parent_vector)
-      : ancestor(), n_nodes(parent_vector.size()) {
+  MutationTree(std::vector<uint32_t> parent_vector, double beta)
+      : ancestor(), n_nodes(parent_vector.size()), beta(beta) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
@@ -69,10 +72,18 @@ public:
   }
 
   MutationTree(MutationTree const &other) = default;
-  MutationTree &operator=(MutationTree const &other) = default;
 
-  static MutationTree<max_n_nodes>
-  from_pruefer_code(std::vector<uint32_t> const &pruefer_code) {
+  MutationTree<max_n_genes> &operator=(MutationTree<max_n_genes> const &other) {
+    n_nodes = other.n_nodes;
+    beta = other.beta;
+    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
+      ancestor[node_i] = other.ancestor[node_i];
+    }
+    return *this;
+  }
+
+  static MutationTree<max_n_genes>
+  from_pruefer_code(std::vector<uint32_t> const &pruefer_code, double beta) {
     // Algorithm adapted from
     // https://en.wikipedia.org/wiki/Pr%C3%BCfer_sequence, 09th of May 2022,
     // 16:07, since the original reference implementation is sketchy.
@@ -119,7 +130,7 @@ public:
       }
     }
 
-    return MutationTree<max_n_nodes>(parent_vector);
+    return MutationTree<max_n_genes>(parent_vector, beta);
   }
 
   /**
@@ -135,8 +146,9 @@ public:
    * @return A random, uniformly distributed tree.
    */
   template <typename RNG>
-  static MutationTree<max_n_nodes> sample_random_tree(RNG &rng,
-                                                      uint32_t n_nodes) {
+  static MutationTree<max_n_genes>
+  sample_random_tree(RNG &rng, uint32_t n_genes, double beta) {
+    uint32_t n_nodes = n_genes + 1;
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
@@ -150,7 +162,7 @@ public:
       pruefer_code.push_back(int_distribution(rng));
     }
 
-    return from_pruefer_code(pruefer_code);
+    return from_pruefer_code(pruefer_code, beta);
   }
 
   uint32_t get_root() const { return n_nodes - 1; }
@@ -167,7 +179,7 @@ public:
       return child == get_root();
     }
 
-    #pragma unroll
+#pragma unroll
     for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
       if (node_i >= n_nodes || node_i == child) {
         continue;
@@ -321,8 +333,8 @@ public:
    * @return true The two trees are equal.
    * @return false The two trees are not equal.
    */
-  bool operator==(MutationTree<max_n_nodes> const &other) const {
-    if (n_nodes != other.n_nodes) {
+  bool operator==(MutationTree<max_n_genes> const &other) const {
+    if (n_nodes != other.n_nodes || beta != other.beta) {
       return false;
     }
 #pragma unroll
@@ -347,7 +359,7 @@ public:
    * @return true The two trees are not equal.
    * @return false The two trees are equal.
    */
-  bool operator!=(MutationTree<max_n_nodes> const &other) const {
+  bool operator!=(MutationTree<max_n_genes> const &other) const {
     return !operator==(other);
   }
 
@@ -384,9 +396,9 @@ public:
     return stream.str();
   }
 
-  void execute_move(MutationTree<max_n_nodes> &out_tree, MoveType move_type,
-                    uint32_t v, uint32_t w,
-                    uint32_t v_target, uint32_t w_target) const {
+  void execute_move(MutationTree<max_n_genes> &out_tree, MoveType move_type,
+                    uint32_t v, uint32_t w, uint32_t v_target,
+                    uint32_t w_target) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(v != get_root() && w != get_root());
 #endif
@@ -429,8 +441,8 @@ public:
           if (v_descendant[y]) {
             // if (v -> y),
             // we have (x -> y) <=> (y -> v_target) || (v -> x -> y)
-            new_vector[y] = old_vector[v_target] ||
-                            (v_descendant[x] && old_vector[y]);
+            new_vector[y] =
+                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
           } else {
             // otherwise, we have (v !-> y).
             // Since this node is unaffected, everything remains the same.
@@ -445,13 +457,13 @@ public:
           if (v_descendant[y] && !w_descendant[y]) {
             // if (v -> y && w !-> y),
             // we have (x -> y) <=> (y -> v_target) || (v -> x -> y)
-            new_vector[y] = old_vector[v_target] ||
-                            (v_descendant[x] && old_vector[y]);
+            new_vector[y] =
+                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
           } else if (!v_descendant[y] && w_descendant[y]) {
             // if (v !-> y && w -> y),
             // we have (x -> y) <=> (y -> w_target) || (w -> x -> y)
-            new_vector[y] = old_vector[w_target] ||
-                            (w_descendant[x] && old_vector[y]);
+            new_vector[y] =
+                old_vector[w_target] || (w_descendant[x] && old_vector[y]);
           } else {
             // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
             // In this case, everything remains the same.
@@ -467,6 +479,10 @@ public:
       out_tree.ancestor[x] = new_vector;
     }
   }
+
+  double get_beta() const { return beta; }
+
+  void set_beta(double new_beta) { beta = new_beta; }
 
 private:
   void
@@ -487,5 +503,6 @@ private:
 
   std::array<AncestryVector, max_n_nodes> ancestor;
   uint32_t n_nodes;
+  double beta;
 };
 } // namespace ffSCITE

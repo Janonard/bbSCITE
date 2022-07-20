@@ -15,8 +15,8 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "ChainState.hpp"
 #include "MoveType.hpp"
+#include "MutationTree.hpp"
 #include <oneapi/dpl/random>
 
 namespace ffSCITE {
@@ -34,19 +34,14 @@ namespace ffSCITE {
 template <uint32_t max_n_genes, typename RNG> class ChangeProposer {
 public:
   /**
-   * @brief Shorthand for the chain state type.
-   */
-  using ChainStateImpl = ChainState<max_n_genes>;
-
-  /**
    * @brief Shorthand for the parent vector type.
    */
-  using MutationTreeImpl = typename ChainStateImpl::MutationTreeImpl;
+  using MutationTreeImpl = MutationTree<max_n_genes>;
 
   /**
    * @brief Shorthand for the maximal number of nodes in the mutation tree.
    */
-  static constexpr uint32_t max_n_nodes = ChainStateImpl::max_n_nodes;
+  static constexpr uint32_t max_n_nodes = MutationTreeImpl::max_n_nodes;
 
   /**
    * @brief Initialize the change proposer with user-defined parameters.
@@ -300,25 +295,25 @@ public:
    * @param out_neighborhood_correction Output: The neighborhood correction
    * factor.
    */
-  void propose_change(ChainState<max_n_genes> const &current_state,
-                      ChainState<max_n_genes> &proposed_state,
+  void propose_change(MutationTree<max_n_genes> const &current_tree,
+                      MutationTree<max_n_genes> &proposed_tree,
                       double &out_neighborhood_correction) {
     MoveType move_type = sample_move();
 
     if (move_type == MoveType::ChangeBeta) {
-      proposed_state.beta = change_beta(current_state.beta);
+      proposed_tree.set_beta(change_beta(current_tree.get_beta()));
     } else {
-      proposed_state.beta = current_state.beta;
+      proposed_tree.set_beta(current_tree.get_beta());
     }
 
     // Computing the parameters for every possible move to avoid divergent
     // loops.
     std::array<uint32_t, 2> prune_and_reattach_parameters =
-        sample_prune_and_reattach_parameters(current_state.mutation_tree);
+        sample_prune_and_reattach_parameters(current_tree);
     std::array<uint32_t, 2> swap_nodes_parameters =
-        sample_nonroot_nodepair(current_state.mutation_tree.get_n_nodes());
-    std::array<uint32_t, 4> treeswap_parameters = sample_treeswap_parameters(
-        current_state.mutation_tree, out_neighborhood_correction);
+        sample_nonroot_nodepair(current_tree.get_n_nodes());
+    std::array<uint32_t, 4> treeswap_parameters =
+        sample_treeswap_parameters(current_tree, out_neighborhood_correction);
 
     uint32_t node_a_i, node_b_i, node_a_target_i, node_b_target_i;
 
@@ -345,9 +340,8 @@ public:
       node_b_target_i = treeswap_parameters[3];
     }
 
-    current_state.mutation_tree.execute_move(proposed_state.mutation_tree,
-                                             move_type, node_a_i, node_b_i,
-                                             node_a_target_i, node_b_target_i);
+    current_tree.execute_move(proposed_tree, move_type, node_a_i, node_b_i,
+                              node_a_target_i, node_b_target_i);
   }
 
 private:

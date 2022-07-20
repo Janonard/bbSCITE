@@ -41,7 +41,7 @@ public:
   Parameters()
       : input_path(std::nullopt), output_path_base(std::nullopt),
         n_chains(std::nullopt), chain_length(std::nullopt),
-        max_n_best_states(128), alpha_mean(6.04e-5), beta_mean(0.4309),
+        max_n_best_trees(128), alpha_mean(6.04e-5), beta_mean(0.4309),
         beta_sd(0.1), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
         prob_swap_nodes(0.4), prob_swap_subtrees(0.05),
         beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {}
@@ -228,7 +228,7 @@ public:
         }
       } else if (strcmp(argv[i], "-max_treelist_size") == 0) {
         if (i + 1 < argc) {
-          max_n_best_states = atoi(argv[++i]);
+          max_n_best_trees = atoi(argv[++i]);
         } else {
           std::cerr
               << "Error: Missing argument to parameter -max_treelist_size."
@@ -330,8 +330,8 @@ public:
   /**
    * @brief Get the number of chains to execute.
    *
-   * For every chain, a new random starting state is initialized and @ref
-   * get_chain_length steps are executed from this state.
+   * For every chain, a new random starting tree is initialized and @ref
+   * get_chain_length steps are executed from this tree.
    *
    * @return uint32_t The number of chains to execute.
    */
@@ -340,8 +340,8 @@ public:
   /**
    * @brief Set the number of chains to execute.
    *
-   * For every chain, a new random starting state is initialized and @ref
-   * get_chain_length steps are executed from this state.
+   * For every chain, a new random starting tree is initialized and @ref
+   * get_chain_length steps are executed from this tree.
    *
    * @param n_chains The new number of chains to execute.
    */
@@ -351,8 +351,8 @@ public:
    * @brief Get the number of steps to execute on every chain.
    *
    * A single step involves proposing a random modification to the current
-   * state, computing its likelihood and deciding whether the new state should
-   * be the new state of the chain.
+   * tree, computing its likelihood and deciding whether the new tree should
+   * be the new tree of the chain.
    *
    * @return uint32_t The number of steps to execute on every chain.
    */
@@ -362,8 +362,8 @@ public:
    * @brief Set the number of steps to execute on every chain.
    *
    * A single step involves proposing a random modification to the current
-   * state, computing its likelihood and deciding whether the new state should
-   * be the new state of the chain.
+   * tree, computing its likelihood and deciding whether the new tree should
+   * be the new tree of the chain.
    *
    * @param chain_length The new number of steps to execute on every chain.
    */
@@ -372,28 +372,28 @@ public:
   }
 
   /**
-   * @brief Get the maximal number of optimal states to return.
+   * @brief Get the maximal number of optimal trees to return.
    *
-   * The buffer for the optimal states list has to be allocated in advance and
+   * The buffer for the optimal trees list has to be allocated in advance and
    * can not be reallocated. Therefore, an upper bound for the maximal number of
-   * optimal states is needed.
+   * optimal trees is needed.
    *
-   * @return uint32_t The maximal number of optimal states to return.
+   * @return uint32_t The maximal number of optimal trees to return.
    */
-  uint32_t get_max_n_best_states() const { return max_n_best_states; }
+  uint32_t get_max_n_best_trees() const { return max_n_best_trees; }
 
   /**
-   * @brief Set the maximal number of optimal states to return.
+   * @brief Set the maximal number of optimal trees to return.
    *
-   * The buffer for the optimal states list has to be allocated in advance and
+   * The buffer for the optimal trees list has to be allocated in advance and
    * can not be reallocated. Therefore, an upper bound for the maximal number of
-   * optimal states is needed.
+   * optimal trees is needed.
    *
-   * @param max_n_best_states The new maximal number of optimal states to
+   * @param max_n_best_trees The new maximal number of optimal trees to
    * return.
    */
-  void set_max_n_best_states(uint32_t max_n_best_states) {
-    this->max_n_best_states = max_n_best_states;
+  void set_max_n_best_trees(uint32_t max_n_best_trees) {
+    this->max_n_best_trees = max_n_best_trees;
   }
 
   /**
@@ -635,7 +635,7 @@ private:
   std::optional<std::string> input_path, output_path_base;
 
   std::optional<uint32_t> n_chains, chain_length;
-  uint32_t max_n_best_states;
+  uint32_t max_n_best_trees;
 
   double alpha_mean, beta_mean, beta_sd;
   double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,

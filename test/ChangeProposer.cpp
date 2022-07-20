@@ -30,6 +30,7 @@ constexpr uint32_t n_nodes = 8;
 constexpr unsigned int ulps = 4;
 
 using ProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand>;
+using MutationTreeImpl = MutationTree<n_genes>;
 
 ProposerImpl init_proposer() {
   std::random_device seeder;
@@ -112,7 +113,7 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
    * ┌2┐3 4
    * 0 1
    */
-  MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
+  MutationTreeImpl tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
 
   // We count how often each descendant of five is picked to run a hypthesis
   // test.
@@ -192,7 +193,7 @@ TEST_CASE("ChangeProposer::sample_prune_and_reattach_parameters",
    * ┌2┐3 4
    * 0 1
    */
-  MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
+  MutationTreeImpl tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
 
   for (uint32_t i = 0; i < n_iterations; i++) {
     std::array<uint32_t, 2> parameters =
@@ -221,10 +222,10 @@ TEST_CASE("ChangeProposer::sample_treeswap_parameters", "[ChangeProposer]") {
    * ┌2┐3 4
    * 0 1
    */
-  MutationTree<n_nodes> tree({2, 2, 5, 5, 6, 7, 7, 7});
+  MutationTreeImpl tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    MutationTree<n_nodes> proposed_tree;
+    MutationTreeImpl proposed_tree;
     double neighborhood_correction = 1.0;
     std::array<uint32_t, 4> parameters =
         proposer.sample_treeswap_parameters(tree, neighborhood_correction);
