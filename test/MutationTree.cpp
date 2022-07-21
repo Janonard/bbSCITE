@@ -25,8 +25,6 @@ void require_tree_equality(Tree const &a, Tree const &b) {
   REQUIRE(a.get_n_nodes() == b.get_n_nodes());
 
   for (uint32_t i = 0; i < a.get_n_nodes(); i++) {
-    REQUIRE(a.get_parent(i) == b.get_parent(i));
-
     for (uint32_t j = 0; j < a.get_n_nodes(); j++) {
       REQUIRE(a.is_ancestor(i, j) == b.is_ancestor(i, j));
     }
@@ -565,9 +563,9 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       tree = modified_tree;
     }
 
-    // ========
-    // Treeswap
-    // ========
+    // ================================
+    // Treeswap, with distinct lineages
+    // ================================
     {
       uint32_t v = non_root_distribution(twister);
       uint32_t w = non_root_distribution(twister);
@@ -579,6 +577,37 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
 
       uint32_t v_target = parent_vector[w];
       uint32_t w_target = parent_vector[v];
+
+      // Execute the move on the tree
+      Tree modified_tree;
+      tree.execute_move(modified_tree, ffSCITE::MoveType::SwapSubtrees, v, w,
+                        v_target, w_target);
+
+      // Execute the move on the parent vector
+      parent_vector[v] = v_target;
+      parent_vector[w] = w_target;
+
+      // Verify the results
+      Tree true_tree(parent_vector, 0.42);
+      require_tree_equality(modified_tree, true_tree);
+      tree = modified_tree;
+    }
+
+    // ==============================
+    // Treeswap, with common lineages
+    // ==============================
+    {
+      uint32_t v = non_root_distribution(twister);
+      uint32_t w = non_root_distribution(twister);
+      while (!tree.is_ancestor(w, v)) {
+        w = non_root_distribution(twister);
+      }
+
+      uint32_t v_target = parent_vector[w];
+      uint32_t w_target = non_root_distribution(twister);
+      while (!tree.is_ancestor(v, w_target)) {
+        w_target = non_root_distribution(twister);
+      }
 
       // Execute the move on the tree
       Tree modified_tree;
