@@ -147,11 +147,14 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
       MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
   std::vector<MutationTreeImpl> best_trees = std::get<0>(result);
 
-  bool correct_tree_found = false;
-  for (uint32_t tree_i = 0; tree_i < best_trees.size(); tree_i++) {
-    bool is_correct_tree = true;
-    MutationTree<n_genes> found_tree = best_trees[tree_i];
-    correct_tree_found |= found_tree == correct_tree;
-  }
-  REQUIRE(correct_tree_found);
+  REQUIRE(best_trees.size() >= 1);
+
+  MCMCKernelImpl::DataMatrix data;
+  MCMCKernelImpl::HostTreeScorerImpl host_scorer(
+      alpha, beta, beta_sd,
+      data_buffer.get_access<cl::sycl::access::mode::read>(), data);
+  double correct_score = host_scorer.logscore_tree(correct_tree);
+  double found_score = host_scorer.logscore_tree(best_trees[0]);
+
+  REQUIRE(correct_score == found_score);
 }
