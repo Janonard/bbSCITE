@@ -447,7 +447,7 @@ public:
         for (uint32_t y = 0; y < max_n_nodes; y++) {
           if (v_descendant[y]) {
             // if (v -> y),
-            // we have (x -> y) <=> (y -> v_target) || (v -> x -> y)
+            // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
             new_vector[y] =
                 old_vector[v_target] || (v_descendant[x] && old_vector[y]);
           } else {
@@ -463,12 +463,12 @@ public:
         for (uint32_t y = 0; y < max_n_nodes; y++) {
           if (v_descendant[y] && !w_descendant[y]) {
             // if (v -> y && w !-> y),
-            // we have (x -> y) <=> (y -> v_target) || (v -> x -> y)
+            // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
             new_vector[y] =
                 old_vector[v_target] || (v_descendant[x] && old_vector[y]);
           } else if (!v_descendant[y] && w_descendant[y]) {
             // if (v !-> y && w -> y),
-            // we have (x -> y) <=> (y -> w_target) || (w -> x -> y)
+            // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
             new_vector[y] =
                 old_vector[w_target] || (w_descendant[x] && old_vector[y]);
           } else {
