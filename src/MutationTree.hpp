@@ -84,6 +84,13 @@ public:
 
   static MutationTree<max_n_genes>
   from_pruefer_code(std::vector<uint32_t> const &pruefer_code, double beta) {
+    std::vector<uint32_t> parent_vector =
+        pruefer_code_to_parent_vector(pruefer_code);
+    return MutationTree(parent_vector, beta);
+  }
+
+  static std::vector<uint32_t>
+  pruefer_code_to_parent_vector(std::vector<uint32_t> const &pruefer_code) {
     // Algorithm adapted from
     // https://en.wikipedia.org/wiki/Pr%C3%BCfer_sequence, 09th of May 2022,
     // 16:07, since the original reference implementation is sketchy.
@@ -130,7 +137,7 @@ public:
       }
     }
 
-    return MutationTree<max_n_genes>(parent_vector, beta);
+    return parent_vector;
   }
 
   /**

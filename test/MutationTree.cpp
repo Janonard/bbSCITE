@@ -17,7 +17,9 @@
 #include <MutationTree.hpp>
 #include <catch2/catch_all.hpp>
 
-using Tree = ffSCITE::MutationTree<14>;
+constexpr uint32_t max_n_genes = 64;
+constexpr uint32_t max_n_nodes = max_n_genes + 1;
+using Tree = ffSCITE::MutationTree<max_n_genes>;
 
 void require_tree_equality(Tree const &a, Tree const &b) {
   REQUIRE(a.get_n_nodes() == b.get_n_nodes());
@@ -308,7 +310,7 @@ TEST_CASE("MutationTree::get_n_ancestors", "[MutationTree]") {
   REQUIRE(tree.get_n_ancestors(6) == 1);
 }
 
-TEST_CASE("MutationTree::from_pruefer_code", "[MutationTree]") {
+TEST_CASE("MutationTree::pruefer_code_to_parent_vector", "[MutationTree]") {
   // Construct a simple, binary tree with three levels and 15 nodes:
   //
   //     ┌--14--┐
@@ -318,11 +320,11 @@ TEST_CASE("MutationTree::from_pruefer_code", "[MutationTree]") {
   std::vector<uint32_t> pruefer_code = {8,  8,  9,  9,  10, 10, 11,
                                         11, 12, 12, 13, 13, 14};
 
-  Tree tree = Tree::from_pruefer_code(pruefer_code, 0.42);
+  std::vector<uint32_t> parent_vector =
+      Tree::pruefer_code_to_parent_vector(pruefer_code);
 
-  require_tree_equality(
-      tree,
-      Tree({8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 14}, 0.42));
+  REQUIRE(parent_vector == std::vector<uint32_t>({8, 8, 9, 9, 10, 10, 11, 11,
+                                                  12, 12, 13, 13, 14, 14, 14}));
 }
 
 TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
@@ -472,4 +474,125 @@ TEST_CASE("MutationTree::to_newick", "[MutationTree]") {
 
   std::string newick_string = tree.to_newick();
   REQUIRE(newick_string == required_newick_tree);
+}
+
+TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
+  std::mt19937 twister;
+  twister.seed(std::random_device()());
+
+  constexpr uint32_t n_operations = 1000;
+
+  std::uniform_int_distribution<uint32_t> node_distribution(0, max_n_nodes - 1);
+  std::uniform_int_distribution<uint32_t> non_root_distribution(0, max_n_nodes -
+                                                                       2);
+
+  std::vector<uint32_t> pruefer_code;
+  pruefer_code.reserve(max_n_nodes - 2);
+  for (uint32_t i = 0; i < max_n_nodes - 2; i++) {
+    pruefer_code.push_back(node_distribution(twister));
+  }
+
+  std::vector<uint32_t> parent_vector =
+      Tree::pruefer_code_to_parent_vector(pruefer_code);
+  Tree tree(parent_vector, 0.42);
+
+  for (uint32_t i_operation = 0; i_operation < n_operations; i_operation++) {
+    // =========
+    // Node swap
+    // =========
+    {
+      uint32_t v = non_root_distribution(twister);
+      uint32_t w = non_root_distribution(twister);
+      while (v == w) {
+        w = non_root_distribution(twister);
+      }
+
+      // Execute the move on the tree
+      Tree modified_tree;
+      tree.execute_move(modified_tree, ffSCITE::MoveType::SwapNodes, v, w, 0,
+                        0);
+
+      // Execute the move on the parent vector
+      for (uint32_t i_node = 0; i_node < max_n_nodes; i_node++) {
+        if (i_node != v && i_node != w) {
+          if (parent_vector[i_node] == v) {
+            parent_vector[i_node] = w;
+          } else if (parent_vector[i_node] == w) {
+            parent_vector[i_node] = v;
+          }
+        }
+      }
+      if (parent_vector[v] == w) {
+        parent_vector[v] = parent_vector[w];
+        parent_vector[w] = v;
+      } else if (parent_vector[w] == v) {
+        parent_vector[w] = parent_vector[v];
+        parent_vector[v] = w;
+      } else {
+        std::swap(parent_vector[v], parent_vector[w]);
+      }
+
+      // Verify the results
+      Tree true_tree(parent_vector, 0.42);
+      require_tree_equality(modified_tree, true_tree);
+      tree = modified_tree;
+    }
+
+    // ==================
+    // Prune and reattach
+    // ==================
+    {
+      uint32_t v = non_root_distribution(twister);
+      uint32_t v_target = node_distribution(twister);
+
+      // Check that v_target is not a descendant of v, and resample v_target if
+      // this is the case.
+      while (tree.is_descendant(v_target, v)) {
+        v_target = node_distribution(twister);
+      }
+
+      // Execute the move on the tree
+      Tree modified_tree;
+      tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, v, 0,
+                        v_target, 0);
+
+      // Execute the move on the parent vector
+      parent_vector[v] = v_target;
+
+      // Verify the results
+      Tree true_tree(parent_vector, 0.42);
+      require_tree_equality(modified_tree, true_tree);
+      tree = modified_tree;
+    }
+
+    // ========
+    // Treeswap
+    // ========
+    {
+      uint32_t v = non_root_distribution(twister);
+      uint32_t w = non_root_distribution(twister);
+
+      while (tree.is_descendant(parent_vector[w], v) ||
+             tree.is_descendant(parent_vector[v], w)) {
+        w = non_root_distribution(twister);
+      }
+
+      uint32_t v_target = parent_vector[w];
+      uint32_t w_target = parent_vector[v];
+
+      // Execute the move on the tree
+      Tree modified_tree;
+      tree.execute_move(modified_tree, ffSCITE::MoveType::SwapSubtrees, v, w,
+                        v_target, w_target);
+
+      // Execute the move on the parent vector
+      parent_vector[v] = v_target;
+      parent_vector[w] = w_target;
+
+      // Verify the results
+      Tree true_tree(parent_vector, 0.42);
+      require_tree_equality(modified_tree, true_tree);
+      tree = modified_tree;
+    }
+  }
 }
