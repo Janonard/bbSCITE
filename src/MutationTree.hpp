@@ -37,7 +37,7 @@ public:
       : ancestor(), n_nodes(n_nodes), beta(beta) {
     for (uint32_t i = 0; i < max_n_nodes; i++) {
       for (uint32_t j = 0; j < max_n_nodes; j++) {
-        ancestor[j][i] = (i == j || j == get_root()) ? true : false;
+        ancestor[j][i] = i == j || j == get_root();
       }
     }
   }
@@ -62,7 +62,7 @@ public:
           ancestor[anc][i] = true;
           anc = parent_vector[anc];
           // Otherwise, there is a circle in the graph!
-          assert(anc != i);
+          assert(anc != i && anc < n_nodes);
         }
       }
 
@@ -461,20 +461,48 @@ public:
       case MoveType::SwapSubtrees:
 #pragma unroll
         for (uint32_t y = 0; y < max_n_nodes; y++) {
-          if (v_descendant[y] && !w_descendant[y]) {
-            // if (v -> y && w !-> y),
-            // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-            new_vector[y] =
-                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
-          } else if (!v_descendant[y] && w_descendant[y]) {
-            // if (v !-> y && w -> y),
-            // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
-            new_vector[y] =
-                old_vector[w_target] || (w_descendant[x] && old_vector[y]);
+          if (w_descendant[v]) {
+            ac_int<2, false> class_x;
+            if (v_descendant[x]) {
+              class_x = 2;
+            } else if (w_descendant[x]) {
+              class_x = 1;
+            } else {
+              class_x = 0;
+            }
+
+            ac_int<2, false> class_y;
+            if (v_descendant[y]) {
+              class_y = 2;
+            } else if (w_descendant[y]) {
+              class_y = 1;
+            } else {
+              class_y = 0;
+            }
+
+            if ((class_x == class_y) || (class_x == 0 && (class_y == 1 || class_y == 2))) {
+              new_vector[y] = old_vector[y];
+            } else if (class_x == 2 && class_y == 1) {
+              new_vector[y] = old_vector[w_target];
+            } else {
+              new_vector[y] = false;
+            }
           } else {
-            // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
-            // In this case, everything remains the same.
-            new_vector[y] = old_vector[y];
+            if (v_descendant[y] && !w_descendant[y]) {
+              // if (v -> y && w !-> y),
+              // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+              new_vector[y] =
+                  old_vector[v_target] || (v_descendant[x] && old_vector[y]);
+            } else if (!v_descendant[y] && w_descendant[y]) {
+              // if (v !-> y && w -> y),
+              // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
+              new_vector[y] =
+                  old_vector[w_target] || (w_descendant[x] && old_vector[y]);
+            } else {
+              // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
+              // In this case, everything remains the same.
+              new_vector[y] = old_vector[y];
+            }
           }
         }
         break;
