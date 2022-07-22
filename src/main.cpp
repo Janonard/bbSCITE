@@ -23,13 +23,8 @@
 
 using namespace ffSCITE;
 
-#ifdef EMULATOR
 constexpr uint32_t max_n_cells = 64;
-constexpr uint32_t max_n_genes = 64;
-#else
-constexpr uint32_t max_n_cells = 16;
-constexpr uint32_t max_n_genes = 16;
-#endif
+constexpr uint32_t max_n_genes = 63;
 
 using URNG = oneapi::dpl::minstd_rand;
 
