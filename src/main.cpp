@@ -35,6 +35,7 @@ using URNG = oneapi::dpl::minstd_rand;
 
 using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
 using MutationTreeImpl = MutationTree<max_n_genes>;
+using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 
 int main(int argc, char **argv) {
   // Load the CLI parameters.
@@ -142,8 +143,9 @@ int main(int argc, char **argv) {
 
   // Running the simulation and retrieving the best trees.
   auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters);
-  std::vector<MutationTreeImpl> best_trees = std::get<0>(result);
-  cl::sycl::event runtime_event = std::get<1>(result);
+  std::vector<AncestorMatrix> best_am = std::get<0>(result);
+  std::vector<double> best_beta = std::get<1>(result);
+  cl::sycl::event runtime_event = std::get<2>(result);
 
   static constexpr double timesteps_per_millisecond = 1000000.0;
   double start_of_event =
@@ -157,7 +159,9 @@ int main(int argc, char **argv) {
   std::cout << "Time elapsed: " << end_of_event - start_of_event << " ms"
             << std::endl;
 
-  for (uint32_t tree_i = 0; tree_i < best_trees.size(); tree_i++) {
+  for (uint32_t tree_i = 0; tree_i < best_am.size(); tree_i++) {
+    MutationTreeImpl tree(best_am[tree_i], n_genes, best_beta[tree_i]);
+
     // Output the tree as a graphviz file.
     {
       std::stringstream output_path;
@@ -165,7 +169,7 @@ int main(int argc, char **argv) {
                   << ".gv";
 
       std::ofstream output_file(output_path.str());
-      output_file << best_trees[tree_i].to_graphviz();
+      output_file << tree.to_graphviz();
     }
 
     // Output the tree in newick format
@@ -175,7 +179,7 @@ int main(int argc, char **argv) {
                   << ".newick";
 
       std::ofstream output_file(output_path.str());
-      output_file << best_trees[tree_i].to_newick();
+      output_file << tree.to_newick();
     }
 
     // Output the found beta value for the tree
@@ -185,7 +189,7 @@ int main(int argc, char **argv) {
                   << "_beta.txt";
 
       std::ofstream output_file(output_path.str());
-      output_file << best_trees[tree_i].get_beta() << std::endl;
+      output_file << best_beta[tree_i] << std::endl;
     }
   }
 }

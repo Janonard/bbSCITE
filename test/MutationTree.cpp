@@ -21,13 +21,16 @@
 constexpr uint32_t max_n_genes = 64;
 constexpr uint32_t max_n_nodes = max_n_genes + 1;
 using Tree = ffSCITE::MutationTree<max_n_genes>;
+using AncestorMatrix = Tree::AncestorMatrix;
 
-void require_tree_equality(Tree const &a, Tree const &b) {
-  REQUIRE(a.get_n_nodes() == b.get_n_nodes());
+void require_tree_equality(Tree const &a,
+                           std::vector<uint32_t> const &parent_vector) {
+  REQUIRE(parent_vector.size() == a.get_n_nodes());
+  AncestorMatrix b = Tree::parent_vector_to_ancestor_matrix(parent_vector);
 
   for (uint32_t i = 0; i < a.get_n_nodes(); i++) {
     for (uint32_t j = 0; j < a.get_n_nodes(); j++) {
-      REQUIRE(a.is_ancestor(i, j) == b.is_ancestor(i, j));
+      REQUIRE(a.is_ancestor(i, j) == b[i][j]);
     }
   }
 }
@@ -40,7 +43,8 @@ TEST_CASE("MutationTree::get_parent", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 4, 4}, 0.42);
+  AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
+  Tree tree(am, 4, 0.42);
 
   REQUIRE(tree.get_parent(0) == 2);
   REQUIRE(tree.get_parent(1) == 2);
@@ -57,7 +61,8 @@ TEST_CASE("MutationTree::is_ancestor", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 4, 4}, 0.42);
+  AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
+  Tree tree(am, 4, 0.42);
 
   REQUIRE(tree.is_ancestor(0, 0));
   REQUIRE(!tree.is_ancestor(1, 0));
@@ -98,7 +103,8 @@ TEST_CASE("MutationTree::is_descendant", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree tree({2, 2, 4, 4, 4}, 0.42);
+  AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
+  Tree tree(am, 4, 0.42);
 
   REQUIRE(tree.is_descendant(0, 0));
   REQUIRE(!tree.is_descendant(0, 1));
@@ -137,7 +143,9 @@ TEST_CASE("MutationTree::get_descendants", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({4, 4, 5, 5, 6, 6, 6});
+  Tree tree(am, 6, 0.42);
 
   auto descendant = tree.get_descendants(0);
   REQUIRE(descendant[0]);
@@ -209,7 +217,9 @@ TEST_CASE("MutationTree::get_n_descendants", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({4, 4, 5, 5, 6, 6, 6});
+  Tree tree(am, 6, 0.42);
 
   REQUIRE(tree.get_n_descendants(0) == 1);
   REQUIRE(tree.get_n_descendants(1) == 1);
@@ -226,7 +236,9 @@ TEST_CASE("MutationTree::get_ancestors", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({4, 4, 5, 5, 6, 6, 6});
+  Tree tree(am, 6, 0.42);
 
   auto ancestor = tree.get_ancestors(0);
   REQUIRE(ancestor[0]);
@@ -298,7 +310,9 @@ TEST_CASE("MutationTree::get_n_ancestors", "[MutationTree]") {
   //  ┌-6-┐
   // ┌4┐ ┌5┐
   // 0 1 2 3
-  Tree tree = Tree({4, 4, 5, 5, 6, 6, 6}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({4, 4, 5, 5, 6, 6, 6});
+  Tree tree(am, 6, 0.42);
 
   REQUIRE(tree.get_n_ancestors(0) == 3);
   REQUIRE(tree.get_n_ancestors(1) == 3);
@@ -326,6 +340,34 @@ TEST_CASE("MutationTree::pruefer_code_to_parent_vector", "[MutationTree]") {
                                                   12, 12, 13, 13, 14, 14, 14}));
 }
 
+TEST_CASE("MutationTree::parent_vector_to_ancestor_matrix", "[MutationTree]") {
+  // Construct a simple, binary tree with three levels and 15 nodes:
+  //
+  //     ┌--14--┐
+  //  ┌-12┐    ┌13-┐
+  // ┌8┐ ┌9┐ ┌10┐ ┌11┐
+  // 0 1 2 3 4  5 6  7
+  std::vector<uint32_t> parent_vector = {8,  8,  9,  9,  10, 10, 11, 11,
+                                         12, 12, 13, 13, 14, 14, 14};
+  AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix(parent_vector);
+
+  REQUIRE(am[0] == 0b000000000000001);
+  REQUIRE(am[1] == 0b000000000000010);
+  REQUIRE(am[2] == 0b000000000000100);
+  REQUIRE(am[3] == 0b000000000001000);
+  REQUIRE(am[4] == 0b000000000010000);
+  REQUIRE(am[5] == 0b000000000100000);
+  REQUIRE(am[6] == 0b000000001000000);
+  REQUIRE(am[7] == 0b000000010000000);
+  REQUIRE(am[8] == 0b000000100000011);
+  REQUIRE(am[9] == 0b000001000001100);
+  REQUIRE(am[10] == 0b000010000110000);
+  REQUIRE(am[11] == 0b000100011000000);
+  REQUIRE(am[12] == 0b001001100001111);
+  REQUIRE(am[13] == 0b010110011110000);
+  REQUIRE(am[14] % (1 << 15) == 0b111111111111111);
+}
+
 TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
   /*
    * Testing tree:
@@ -334,12 +376,13 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  Tree original_tree({2, 2, 4, 4, 4}, 0.42);
+  AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
+  Tree tree(am, 4, 0.42);
 
   // Identity operation
-  Tree identity_tree;
-  original_tree.execute_move(identity_tree, ffSCITE::MoveType::SwapNodes, 2, 2,
-                             0, 0);
+  AncestorMatrix identity_am;
+  Tree identity_tree(identity_am, 5, 0.42);
+  tree.execute_move(identity_tree, ffSCITE::MoveType::SwapNodes, 2, 2, 0, 0);
 
   /*
    * Expected tree:
@@ -348,10 +391,11 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌2┐3
    * 0 1
    */
-  require_tree_equality(identity_tree, Tree({2, 2, 4, 4, 4}, 0.42));
+  require_tree_equality(identity_tree, {2, 2, 4, 4, 4});
 
   // Swap of unrelated nodes
-  Tree unrelated_swap_tree;
+  AncestorMatrix unrelated_swap_am;
+  Tree unrelated_swap_tree(unrelated_swap_am, 5, 0.42);
   identity_tree.execute_move(unrelated_swap_tree, ffSCITE::MoveType::SwapNodes,
                              2, 3, 0, 0);
 
@@ -362,10 +406,11 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌3┐2
    * 0 1
    */
-  require_tree_equality(unrelated_swap_tree, Tree({3, 3, 4, 4, 4}, 0.42));
+  require_tree_equality(unrelated_swap_tree, {3, 3, 4, 4, 4});
 
   // Swap of parent and child
-  Tree child_swap_tree;
+  AncestorMatrix child_swap_am;
+  Tree child_swap_tree(child_swap_am, 5, 0.42);
   unrelated_swap_tree.execute_move(child_swap_tree,
                                    ffSCITE::MoveType::SwapNodes, 0, 3, 0, 0);
 
@@ -376,7 +421,7 @@ TEST_CASE("MutationTree::execute_move (SwapNodes)", "[MutationTree]") {
    * ┌0┐2
    * 3 1
    */
-  require_tree_equality(child_swap_tree, Tree({4, 0, 4, 0, 4}, 0.42));
+  require_tree_equality(child_swap_tree, {4, 0, 4, 0, 4});
 }
 
 TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
@@ -388,11 +433,14 @@ TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
 
-  Tree modified_tree;
-  original_tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, 2,
-                             0, 6, 0);
+  AncestorMatrix modified_am;
+  Tree modified_tree(modified_am, 8, 0.42);
+  tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, 2, 0, 6,
+                    0);
 
   /*
    * Resulting tree:
@@ -402,7 +450,7 @@ TEST_CASE("MutationTree::execute_move (Prune and Reattach)", "[MutationTree]") {
    *  3 4┌2┐
    *     0 1
    */
-  require_tree_equality(modified_tree, Tree({2, 2, 6, 5, 6, 7, 7, 7}, 0.42));
+  require_tree_equality(modified_tree, {2, 2, 6, 5, 6, 7, 7, 7});
 }
 
 TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
@@ -414,11 +462,13 @@ TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree original_tree({2, 2, 5, 5, 6, 7, 7, 7}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
 
-  Tree swapped_tree;
-  original_tree.execute_move(swapped_tree, ffSCITE::MoveType::SwapSubtrees, 2,
-                             6, 7, 5);
+  AncestorMatrix swapped_am;
+  Tree swapped_tree(swapped_am, 8, 0.42);
+  tree.execute_move(swapped_tree, ffSCITE::MoveType::SwapSubtrees, 2, 6, 7, 5);
 
   /*
    * Resulting tree:
@@ -428,7 +478,7 @@ TEST_CASE("MutationTree::execute_move (Swap Subtrees)", "[MutationTree]") {
    * ┌6 3 0 1
    * 4
    */
-  require_tree_equality(swapped_tree, Tree({2, 2, 7, 5, 6, 7, 5, 7}, 0.42));
+  require_tree_equality(swapped_tree, {2, 2, 7, 5, 6, 7, 5, 7});
 }
 
 const std::string required_graphviz_tree =
@@ -452,7 +502,9 @@ TEST_CASE("MutationTree::to_graphviz", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree tree = Tree::from_pruefer_code({2, 2, 5, 5, 6, 7}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
 
   std::string graphviz_string = tree.to_graphviz();
   REQUIRE(graphviz_string == required_graphviz_tree);
@@ -469,7 +521,9 @@ TEST_CASE("MutationTree::to_newick", "[MutationTree]") {
    * ┌2┐3 4
    * 0 1
    */
-  Tree tree = Tree::from_pruefer_code({2, 2, 5, 5, 6, 7}, 0.42);
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
 
   std::string newick_string = tree.to_newick();
   REQUIRE(newick_string == required_newick_tree);
@@ -483,16 +537,13 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
 
   constexpr uint32_t n_operations = 1000;
 
-  std::uniform_int_distribution<uint32_t> node_distribution(0, max_n_nodes - 1);
-  std::vector<uint32_t> pruefer_code;
-  pruefer_code.reserve(max_n_nodes - 2);
-  for (uint32_t i = 0; i < max_n_nodes - 2; i++) {
-    pruefer_code.push_back(node_distribution(twister));
-  }
-
+  std::vector<uint32_t> pruefer_code =
+      Tree::sample_random_pruefer_code(twister, max_n_genes);
   std::vector<uint32_t> parent_vector =
       Tree::pruefer_code_to_parent_vector(pruefer_code);
-  Tree tree(parent_vector, 0.42);
+  AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix(parent_vector);
+
+  Tree tree(am, max_n_genes, 0.42);
 
   for (uint32_t i_operation = 0; i_operation < n_operations; i_operation++) {
     // =========
@@ -505,7 +556,8 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       uint32_t w = nodes_to_swap[1];
 
       // Execute the move on the tree
-      Tree modified_tree;
+      AncestorMatrix modified_am;
+      Tree modified_tree(modified_am, max_n_genes, 0.42);
       tree.execute_move(modified_tree, ffSCITE::MoveType::SwapNodes, v, w, 0,
                         0);
 
@@ -530,9 +582,8 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       }
 
       // Verify the results
-      Tree true_tree(parent_vector, 0.42);
-      require_tree_equality(modified_tree, true_tree);
-      tree = modified_tree;
+      require_tree_equality(modified_tree, parent_vector);
+      am = modified_am;
     }
 
     // ==================
@@ -545,7 +596,8 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       uint32_t v_target = params[1];
 
       // Execute the move on the tree
-      Tree modified_tree;
+      AncestorMatrix modified_am;
+      Tree modified_tree(modified_am, max_n_genes, 0.42);
       tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, v, 0,
                         v_target, 0);
 
@@ -553,9 +605,8 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       parent_vector[v] = v_target;
 
       // Verify the results
-      Tree true_tree(parent_vector, 0.42);
-      require_tree_equality(modified_tree, true_tree);
-      tree = modified_tree;
+      require_tree_equality(modified_tree, parent_vector);
+      am = modified_am;
     }
 
     // ========
@@ -581,7 +632,8 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       }
 
       // Execute the move on the tree
-      Tree modified_tree;
+      AncestorMatrix modified_am;
+      Tree modified_tree(modified_am, max_n_genes, 0.42);
       tree.execute_move(modified_tree, ffSCITE::MoveType::SwapSubtrees, v, w,
                         v_target, w_target);
 
@@ -590,9 +642,8 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
       parent_vector[w] = w_target;
 
       // Verify the results
-      Tree true_tree(parent_vector, 0.42);
-      require_tree_equality(modified_tree, true_tree);
-      tree = modified_tree;
+      require_tree_equality(modified_tree, parent_vector);
+      am = modified_am;
     }
   }
 }

@@ -30,24 +30,21 @@ public:
   static constexpr uint32_t max_n_nodes = max_n_genes + 1;
 
   using AncestryVector = ac_int<max_n_nodes, false>;
+  using AncestorMatrix = std::array<AncestryVector, max_n_nodes>;
 
-  MutationTree() : ancestor(), n_nodes(max_n_nodes), beta(1.0) {}
+  MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, double beta)
+      : ancestor(ancestor), n_nodes(n_genes + 1), beta(beta) {}
 
-  MutationTree(uint32_t n_nodes, double beta)
-      : ancestor(), n_nodes(n_nodes), beta(beta) {
-    for (uint32_t j = 0; j < max_n_nodes; j++) {
-      ancestor[j] = 0;
-      for (uint32_t i = 0; i < max_n_nodes; i++) {
-        ancestor[j][i] = i == j || j == get_root();
-      }
-    }
-  }
+  MutationTree(MutationTree const &other) = default;
+  MutationTree<max_n_genes> &
+  operator=(MutationTree<max_n_genes> const &other) = default;
 
-  MutationTree(std::vector<uint32_t> parent_vector, double beta)
-      : ancestor(), n_nodes(parent_vector.size()), beta(beta) {
-#if __SYCL_DEVICE_ONLY__ == 0
-    assert(n_nodes <= max_n_nodes);
-#endif
+  static AncestorMatrix
+  parent_vector_to_ancestor_matrix(std::vector<uint32_t> const &parent_vector) {
+    AncestorMatrix ancestor;
+    uint32_t n_nodes = parent_vector.size();
+    uint32_t root = n_nodes - 1;
+
     for (uint32_t j = 0; j < max_n_nodes; j++) {
       // Zero all vectors. This is equivalent to setting everything to false.
       ancestor[j] = 0;
@@ -58,7 +55,7 @@ public:
         // Then we start from the node i and walk up to the root, marking all
         // nodes on the way as ancestors.
         uint32_t anc = i;
-        while (anc != get_root()) {
+        while (anc != root) {
           ancestor[anc][i] = true;
           anc = parent_vector[anc];
           // Otherwise, there is a circle in the graph!
@@ -67,26 +64,10 @@ public:
       }
 
       // Lastly, also mark the root as our ancestor.
-      ancestor[get_root()][i] = true;
+      ancestor[root][i] = true;
     }
-  }
 
-  MutationTree(MutationTree const &other) = default;
-
-  MutationTree<max_n_genes> &operator=(MutationTree<max_n_genes> const &other) {
-    n_nodes = other.n_nodes;
-    beta = other.beta;
-    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
-      ancestor[node_i] = other.ancestor[node_i];
-    }
-    return *this;
-  }
-
-  static MutationTree<max_n_genes>
-  from_pruefer_code(std::vector<uint32_t> const &pruefer_code, double beta) {
-    std::vector<uint32_t> parent_vector =
-        pruefer_code_to_parent_vector(pruefer_code);
-    return MutationTree(parent_vector, beta);
+    return ancestor;
   }
 
   static std::vector<uint32_t>
@@ -153,8 +134,8 @@ public:
    * @return A random, uniformly distributed tree.
    */
   template <typename RNG>
-  static MutationTree<max_n_genes>
-  sample_random_tree(RNG &rng, uint32_t n_genes, double beta) {
+  static std::vector<uint32_t> sample_random_pruefer_code(RNG &rng,
+                                                          uint32_t n_genes) {
     uint32_t n_nodes = n_genes + 1;
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
@@ -169,7 +150,7 @@ public:
       pruefer_code.push_back(int_distribution(rng));
     }
 
-    return from_pruefer_code(pruefer_code, beta);
+    return pruefer_code;
   }
 
   uint32_t get_root() const { return n_nodes - 1; }
@@ -530,7 +511,7 @@ private:
     stream << node_i;
   }
 
-  std::array<AncestryVector, max_n_nodes> ancestor;
+  std::array<AncestryVector, max_n_nodes> &ancestor;
   uint32_t n_nodes;
   double beta;
 };

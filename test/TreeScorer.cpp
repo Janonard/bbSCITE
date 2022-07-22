@@ -22,6 +22,7 @@ constexpr uint32_t n_genes = 4;
 using ScorerImpl = ffSCITE::TreeScorer<n_cells, n_genes,
                                        cl::sycl::access::target::host_buffer>;
 using MutationTreeImpl = ScorerImpl::MutationTreeImpl;
+using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 using DataEntry = ScorerImpl::DataEntry;
 using DataMatrix = ScorerImpl::DataMatrix;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
@@ -36,7 +37,9 @@ void run_with_scorer(
   //  ┌4┐
   // ┌2┐3
   // 0 1
-  MutationTreeImpl tree({2, 2, 4, 4, 4}, beta);
+  AncestorMatrix am =
+      MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
+  MutationTreeImpl tree(am, 4, beta);
 
   OccurrenceMatrix occurrences(0);
 

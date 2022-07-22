@@ -28,6 +28,7 @@ constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 
 using MCMCKernelImpl = MCMCKernel<n_cells, n_genes, oneapi::dpl::minstd_rand>;
+using AncestorMatrix = MCMCKernelImpl::AncestorMatrix;
 using DataEntry = MCMCKernelImpl::DataEntry;
 using MutationTreeImpl = MCMCKernelImpl::MutationTreeImpl;
 
@@ -45,7 +46,9 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
    * There are three cells attached to every node and there are some errors in
    * the data to make it interesting.
    */
-  MutationTree<n_genes> correct_tree({2, 2, 4, 4, 4}, beta);
+  AncestorMatrix am =
+      MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
+  MutationTreeImpl correct_tree(am, 4, beta);
 
   cl::sycl::buffer<DataEntry, 2> data_buffer(
       cl::sycl::range<2>(n_cells, n_genes));
@@ -145,16 +148,19 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
 
   auto result =
       MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
-  std::vector<MutationTreeImpl> best_trees = std::get<0>(result);
+  std::vector<AncestorMatrix> best_am = std::get<0>(result);
+  std::vector<double> best_beta = std::get<1>(result);
+  MutationTreeImpl found_tree(best_am[0], n_genes, best_beta[0]);
 
-  REQUIRE(best_trees.size() >= 1);
+  REQUIRE(best_am.size() >= 1);
+  REQUIRE(best_am.size() == best_beta.size());
 
   MCMCKernelImpl::DataMatrix data;
   MCMCKernelImpl::HostTreeScorerImpl host_scorer(
       alpha, beta, beta_sd,
       data_buffer.get_access<cl::sycl::access::mode::read>(), data);
   double correct_score = host_scorer.logscore_tree(correct_tree);
-  double found_score = host_scorer.logscore_tree(best_trees[0]);
+  double found_score = host_scorer.logscore_tree(found_tree);
 
   REQUIRE(correct_score == found_score);
 }
