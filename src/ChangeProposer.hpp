@@ -38,6 +38,8 @@ public:
    */
   using MutationTreeImpl = MutationTree<max_n_genes>;
 
+  using AncestryVector = typename MutationTreeImpl::AncestryVector;
+
   /**
    * @brief Shorthand for the maximal number of nodes in the mutation tree.
    */
@@ -150,7 +152,7 @@ public:
                                               uint32_t node_i,
                                               bool sample_descendant,
                                               bool include_root) {
-    std::array<bool, max_n_nodes> descendant = tree.get_descendants(node_i);
+    AncestryVector descendant = tree.get_descendants(node_i);
 
     // If we have to sample a nondescendant, we invert the bitvector and
     // continue as if we were to sample a descendant.

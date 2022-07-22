@@ -48,6 +48,8 @@ public:
    */
   using MutationTreeImpl = MutationTree<max_n_genes>;
 
+  using AncestryVector = typename MutationTreeImpl::AncestryVector;
+
   /**
    * @brief Data type of the entries in the mutation data matrix.
    *
@@ -139,8 +141,7 @@ public:
         continue;
       }
 
-      std::array<bool, max_n_genes + 1> true_mutations =
-          tree.get_ancestors(node_i);
+      AncestryVector true_mutations = tree.get_ancestors(node_i);
 
       for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
         if (cell_i >= n_cells) {

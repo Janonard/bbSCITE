@@ -35,8 +35,9 @@ public:
 
   MutationTree(uint32_t n_nodes, double beta)
       : ancestor(), n_nodes(n_nodes), beta(beta) {
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      for (uint32_t j = 0; j < max_n_nodes; j++) {
+    for (uint32_t j = 0; j < max_n_nodes; j++) {
+      ancestor[j] = 0;
+      for (uint32_t i = 0; i < max_n_nodes; i++) {
         ancestor[j][i] = i == j || j == get_root();
       }
     }
@@ -47,13 +48,12 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(n_nodes <= max_n_nodes);
 #endif
+    for (uint32_t j = 0; j < max_n_nodes; j++) {
+      // Zero all vectors. This is equivalent to setting everything to false.
+      ancestor[j] = 0;
+    }
+
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-
-      // First, we assume that node i has no ancestors.
-      for (uint32_t j = 0; j < max_n_nodes; j++) {
-        ancestor[j][i] = false;
-      }
-
       if (i < n_nodes) {
         // Then we start from the node i and walk up to the root, marking all
         // nodes on the way as ancestors.
@@ -251,18 +251,11 @@ public:
    * @param node_i The index of the node who's descendants are queried.
    * @return The descendants bit array.
    */
-  std::array<bool, max_n_nodes> get_descendants(uint32_t node_i) const {
+  AncestryVector get_descendants(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
-    std::array<bool, max_n_nodes> descendants;
-#pragma unroll
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes) {
-        descendants[i] = is_ancestor(node_i, i);
-      }
-    }
-    return descendants;
+    return ancestor[node_i];
   }
 
   /**
@@ -296,11 +289,11 @@ public:
    * @param node_i The index of the node who's ancestors are queried.
    * @return The ancestors bit array.
    */
-  std::array<bool, max_n_nodes> get_ancestors(uint32_t node_i) const {
+  AncestryVector get_ancestors(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < n_nodes);
 #endif
-    std::array<bool, max_n_nodes> ancestors;
+    AncestryVector ancestors = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < n_nodes) {
@@ -417,11 +410,11 @@ public:
     for (uint32_t x = 0; x < max_n_nodes; x++) {
       // Compute the new ancestry vector.
       AncestryVector old_vector = ancestor[x];
-      AncestryVector new_vector;
+      AncestryVector new_vector = 0;
 
       // Declaring the swap variable for the "Swap Nodes" move here since you
       // can't declare it inside the switch statement.
-      bool swap;
+      bool swap = true;
 
       switch (move_type) {
       case MoveType::ChangeBeta:
@@ -480,7 +473,8 @@ public:
               class_y = 0;
             }
 
-            if ((class_x == class_y) || (class_x == 0 && (class_y == 1 || class_y == 2))) {
+            if ((class_x == class_y) ||
+                (class_x == 0 && (class_y == 1 || class_y == 2))) {
               new_vector[y] = old_vector[y];
             } else if (class_x == 2 && class_y == 1) {
               new_vector[y] = old_vector[w_target];
