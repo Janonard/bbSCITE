@@ -613,7 +613,7 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
     // Treeswap
     // ========
     {
-      double neighborhood_correction;
+      float neighborhood_correction;
       std::array<uint32_t, 4> params =
           change_proposer.sample_treeswap_parameters(tree,
                                                      neighborhood_correction);

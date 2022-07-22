@@ -23,7 +23,7 @@ using namespace ffSCITE;
 constexpr uint32_t n_cells = 15;
 constexpr uint32_t n_genes = 4;
 
-constexpr double alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
+constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 
@@ -149,7 +149,7 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   auto result =
       MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
   std::vector<AncestorMatrix> best_am = std::get<0>(result);
-  std::vector<double> best_beta = std::get<1>(result);
+  std::vector<float> best_beta = std::get<1>(result);
   MutationTreeImpl found_tree(best_am[0], n_genes, best_beta[0]);
 
   REQUIRE(best_am.size() >= 1);
@@ -159,8 +159,8 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   MCMCKernelImpl::HostTreeScorerImpl host_scorer(
       alpha, beta, beta_sd,
       data_buffer.get_access<cl::sycl::access::mode::read>(), data);
-  double correct_score = host_scorer.logscore_tree(correct_tree);
-  double found_score = host_scorer.logscore_tree(found_tree);
+  float correct_score = host_scorer.logscore_tree(correct_tree);
+  float found_score = host_scorer.logscore_tree(found_tree);
 
-  REQUIRE(correct_score == found_score);
+  REQUIRE(found_score == Catch::Approx(correct_score));
 }
