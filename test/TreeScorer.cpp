@@ -17,6 +17,8 @@
 #include "TreeScorer.hpp"
 #include <catch2/catch_all.hpp>
 
+using namespace Catch;
+
 constexpr uint32_t n_cells = 6;
 constexpr uint32_t n_genes = 4;
 using ScorerImpl = ffSCITE::TreeScorer<n_cells, n_genes,
@@ -27,7 +29,7 @@ using DataEntry = ScorerImpl::DataEntry;
 using DataMatrix = ScorerImpl::DataMatrix;
 using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 
-constexpr double alpha = 0.01, beta = 0.5, prior_sd = 0.1;
+constexpr float alpha = 0.01, beta = 0.5, prior_sd = 0.1;
 
 void run_with_scorer(
     std::function<void(MutationTreeImpl, ScorerImpl, OccurrenceMatrix)>
@@ -123,12 +125,12 @@ TEST_CASE("TreeScorer::get_logscore_of_occurrences", "[TreeScorer]") {
 
     occurrences[{0, 0}] = 2;
     REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(1.0 - alpha));
+            Approx(2 * std::log(1.0 - alpha)));
 
     occurrences[{0, 0}] = 0;
     occurrences[{1, 0}] = 2;
     REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(alpha));
+            Approx(2 * std::log(alpha)));
 
     occurrences[{1, 0}] = 0;
     occurrences[{2, 0}] = 2;
@@ -137,12 +139,12 @@ TEST_CASE("TreeScorer::get_logscore_of_occurrences", "[TreeScorer]") {
     occurrences[{2, 0}] = 0;
     occurrences[{0, 1}] = 2;
     REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(beta));
+            Approx(2 * std::log(beta)));
 
     occurrences[{0, 1}] = 0;
     occurrences[{1, 1}] = 2;
     REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            2 * std::log(1 - beta));
+            Approx(2 * std::log(1 - beta)));
 
     occurrences[{1, 1}] = 0;
     occurrences[{2, 1}] = 2;
@@ -153,11 +155,11 @@ TEST_CASE("TreeScorer::get_logscore_of_occurrences", "[TreeScorer]") {
 TEST_CASE("TreeScorer::logscore_tree", "[TreeScorer]") {
   run_with_scorer([](MutationTreeImpl tree, ScorerImpl scorer,
                      OccurrenceMatrix true_occurrences) {
-    double score = scorer.logscore_tree(tree);
-    double beta_score = scorer.logscore_beta(tree.get_beta());
+    float score = scorer.logscore_tree(tree);
+    float beta_score = scorer.logscore_beta(tree.get_beta());
 
-    double true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
-                        std::log(beta) + std::log(alpha);
-    REQUIRE(score - beta_score == true_score);
+    float true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
+                       std::log(beta) + std::log(alpha);
+    REQUIRE(score - beta_score == Approx(true_score));
   });
 }

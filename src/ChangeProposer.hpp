@@ -65,8 +65,8 @@ public:
    * @param beta_jump_sd The standard derivation of
    * the beta error changes.
    */
-  ChangeProposer(RNG rng, double prob_beta_change, double prob_prune_n_reattach,
-                 double prob_swap_nodes, double beta_jump_sd)
+  ChangeProposer(RNG rng, float prob_beta_change, float prob_prune_n_reattach,
+                 float prob_swap_nodes, float beta_jump_sd)
       : rng(rng), prob_beta_change(prob_beta_change),
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd) {
@@ -92,7 +92,7 @@ public:
    * @return A random move.
    */
   MoveType sample_move() {
-    double change_type_draw =
+    float change_type_draw =
         oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
       return MoveType::ChangeBeta;
@@ -202,11 +202,11 @@ public:
    * @param old_beta The old beta error rate.
    * @return The newly proposed beta error rate.
    */
-  double change_beta(double old_beta) {
-    // Not using double as the normal distribution's output here since it
+  float change_beta(float old_beta) {
+    // Not using float as the normal distribution's output here since it
     // introduced a compiler error as of this writing.
-    double new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
-                                     0, beta_jump_sd)(rng);
+    float new_beta = old_beta + oneapi::dpl::normal_distribution<float>(
+                                    0, beta_jump_sd)(rng);
     if (new_beta < 0) {
       new_beta = std::abs(new_beta);
     }
@@ -231,7 +231,7 @@ public:
 
   std::array<uint32_t, 4>
   sample_treeswap_parameters(MutationTreeImpl const &current_tree,
-                             double &out_neighborhood_correction) {
+                             float &out_neighborhood_correction) {
     std::array<uint32_t, 2> nodes_to_swap =
         sample_nonroot_nodepair(current_tree.get_n_nodes());
     uint32_t node_a_i = nodes_to_swap[0];
@@ -276,8 +276,8 @@ public:
       }
 
       out_neighborhood_correction =
-          double(current_tree.get_n_descendants(node_a_i)) /
-          double(current_tree.get_n_descendants(node_b_i));
+          float(current_tree.get_n_descendants(node_a_i)) /
+          float(current_tree.get_n_descendants(node_b_i));
 
       // Move node a next to node b.
       new_parent_of_a_i = parent_of_b;
@@ -299,7 +299,7 @@ public:
    */
   void propose_change(MutationTree<max_n_genes> const &current_tree,
                       MutationTree<max_n_genes> &proposed_tree,
-                      double &out_neighborhood_correction) {
+                      float &out_neighborhood_correction) {
     MoveType move_type = sample_move();
 
     if (move_type == MoveType::ChangeBeta) {
@@ -350,8 +350,8 @@ private:
   RNG rng;
 
   // probabilities for the different move types, prob_swap_subtrees implied.
-  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes;
+  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes;
 
-  double beta_jump_sd;
+  float beta_jump_sd;
 };
 } // namespace ffSCITE

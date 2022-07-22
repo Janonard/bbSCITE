@@ -49,7 +49,7 @@ public:
       cl::sycl::accessor<AncestorMatrix, 1, cl::sycl::access::mode::read_write>;
 
   using DoubleAccessor =
-      cl::sycl::accessor<double, 1, cl::sycl::access::mode::read_write>;
+      cl::sycl::accessor<float, 1, cl::sycl::access::mode::read_write>;
 
   /**
    * @brief Shorthand for the index buffer accessor type.
@@ -80,10 +80,10 @@ public:
     MutationDataAccessor mutation_data;
   };
 
-  MCMCKernel(Accessors accessors, RNG rng, double prob_beta_change,
-             double prob_prune_n_reattach, double prob_swap_nodes,
-             double beta_jump_sd, double alpha_mean, double beta_mean,
-             double beta_sd, double gamma, uint32_t n_steps)
+  MCMCKernel(Accessors accessors, RNG rng, float prob_beta_change,
+             float prob_prune_n_reattach, float prob_swap_nodes,
+             float beta_jump_sd, float alpha_mean, float beta_mean,
+             float beta_sd, float gamma, uint32_t n_steps)
       : acs(accessors), prob_beta_change(prob_beta_change),
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd),
@@ -114,25 +114,25 @@ public:
     uint32_t n_cells = acs.mutation_data.get_range()[0];
     uint32_t n_genes = acs.mutation_data.get_range()[1];
 
-    double best_score = -std::numeric_limits<double>::infinity();
+    float best_score = -std::numeric_limits<float>::infinity();
     uint32_t n_best_trees = 0;
 
     for (uint32_t i = 0; i < n_steps; i++) {
       for (uint32_t chain_i = 0; chain_i < acs.current_am.get_range()[0];
            chain_i++) {
-        double neighborhood_correction = 1.0;
+        float neighborhood_correction = 1.0;
         AncestorMatrix current_am = acs.current_am[chain_i];
-        double current_beta = acs.current_beta[chain_i];
+        float current_beta = acs.current_beta[chain_i];
         MutationTreeImpl current_tree(current_am, n_cells, current_beta);
-        double current_score = acs.current_score[chain_i];
+        float current_score = acs.current_score[chain_i];
 
         AncestorMatrix proposed_am;
         MutationTreeImpl proposed_tree(proposed_am, n_cells, current_beta);
         change_proposer.propose_change(current_tree, proposed_tree,
                                        neighborhood_correction);
-        double proposed_score = tree_scorer.logscore_tree(proposed_tree);
+        float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
-        double acceptance_probability =
+        float acceptance_probability =
             neighborhood_correction *
             std::exp((proposed_score - current_score) * gamma);
         bool accept_move = oneapi::dpl::bernoulli_distribution(
@@ -168,7 +168,7 @@ public:
    * trees.
    * @return cl::sycl::event The SYCL event of the MCMC kernel execution.
    */
-  static std::tuple<std::vector<AncestorMatrix>, std::vector<double>,
+  static std::tuple<std::vector<AncestorMatrix>, std::vector<float>,
                     cl::sycl::event>
   run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
                  cl::sycl::queue working_queue, Parameters const &parameters) {
@@ -185,12 +185,12 @@ public:
     twister.seed(parameters.get_seed());
 
     buffer<AncestorMatrix, 1> current_am_buffer((range<1>(n_chains)));
-    buffer<double, 1> current_beta_buffer((range<1>(n_chains)));
-    buffer<double, 1> current_score_buffer((range<1>(n_chains)));
+    buffer<float, 1> current_beta_buffer((range<1>(n_chains)));
+    buffer<float, 1> current_score_buffer((range<1>(n_chains)));
 
     buffer<AncestorMatrix, 1> best_am_buffer((range<1>(max_n_trees)));
-    buffer<double, 1> best_beta_buffer((range<1>(max_n_trees)));
-    buffer<double, 1> best_score_buffer((range<1>(1)));
+    buffer<float, 1> best_beta_buffer((range<1>(max_n_trees)));
+    buffer<float, 1> best_score_buffer((range<1>(1)));
     buffer<uint32_t, 1> n_best_trees_buffer((range<1>(1)));
 
     {
@@ -219,8 +219,8 @@ public:
 
         current_beta_ac[rep_i] = parameters.get_beta_mean();
 
-        MutationTreeImpl tree(current_am_ac[rep_i], current_beta_ac[rep_i],
-                              n_genes);
+        MutationTreeImpl tree(current_am_ac[rep_i], n_genes,
+                              current_beta_ac[rep_i]);
         current_score_ac[rep_i] = host_scorer.logscore_tree(tree);
       }
     }
@@ -258,7 +258,7 @@ public:
           .mutation_data = data_ac,
       };
 
-      double beta_jump_sd =
+      float beta_jump_sd =
           parameters.get_beta_sd() / parameters.get_beta_jump_scaling_chi();
       MCMCKernel kernel(accessors, twister, parameters.get_prob_beta_change(),
                         parameters.get_prob_prune_n_reattach(),
@@ -276,7 +276,7 @@ public:
         n_best_trees_buffer.template get_access<access::mode::read>();
 
     std::vector<AncestorMatrix> best_am_vec;
-    std::vector<double> best_beta_vec;
+    std::vector<float> best_beta_vec;
     best_am_vec.reserve(n_best_trees_ac[0]);
     best_beta_vec.reserve(n_best_trees_ac[0]);
     for (uint32_t i = 0; i < n_best_trees_ac[0]; i++) {
@@ -291,9 +291,9 @@ private:
   Accessors acs;
 
   RNG rng;
-  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;
-  double alpha_mean, beta_mean, beta_sd;
-  double gamma;
+  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;
+  float alpha_mean, beta_mean, beta_sd;
+  float gamma;
   uint32_t n_steps;
 };
 } // namespace ffSCITE
