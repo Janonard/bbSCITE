@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#include <ChangeProposer.hpp>
 #include <MutationTree.hpp>
 #include <catch2/catch_all.hpp>
 
@@ -25,8 +26,6 @@ void require_tree_equality(Tree const &a, Tree const &b) {
   REQUIRE(a.get_n_nodes() == b.get_n_nodes());
 
   for (uint32_t i = 0; i < a.get_n_nodes(); i++) {
-    REQUIRE(a.get_parent(i) == b.get_parent(i));
-
     for (uint32_t j = 0; j < a.get_n_nodes(); j++) {
       REQUIRE(a.is_ancestor(i, j) == b.is_ancestor(i, j));
     }
@@ -480,12 +479,11 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
   std::mt19937 twister;
   twister.seed(std::random_device()());
 
+  ffSCITE::ChangeProposer<max_n_genes, std::mt19937> change_proposer(twister);
+
   constexpr uint32_t n_operations = 1000;
 
   std::uniform_int_distribution<uint32_t> node_distribution(0, max_n_nodes - 1);
-  std::uniform_int_distribution<uint32_t> non_root_distribution(0, max_n_nodes -
-                                                                       2);
-
   std::vector<uint32_t> pruefer_code;
   pruefer_code.reserve(max_n_nodes - 2);
   for (uint32_t i = 0; i < max_n_nodes - 2; i++) {
@@ -501,11 +499,10 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
     // Node swap
     // =========
     {
-      uint32_t v = non_root_distribution(twister);
-      uint32_t w = non_root_distribution(twister);
-      while (v == w) {
-        w = non_root_distribution(twister);
-      }
+      std::array<uint32_t, 2> nodes_to_swap =
+          change_proposer.sample_nonroot_nodepair(max_n_nodes);
+      uint32_t v = nodes_to_swap[0];
+      uint32_t w = nodes_to_swap[1];
 
       // Execute the move on the tree
       Tree modified_tree;
@@ -542,14 +539,10 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
     // Prune and reattach
     // ==================
     {
-      uint32_t v = non_root_distribution(twister);
-      uint32_t v_target = node_distribution(twister);
-
-      // Check that v_target is not a descendant of v, and resample v_target if
-      // this is the case.
-      while (tree.is_descendant(v_target, v)) {
-        v_target = node_distribution(twister);
-      }
+      std::array<uint32_t, 2> params =
+          change_proposer.sample_prune_and_reattach_parameters(tree);
+      uint32_t v = params[0];
+      uint32_t v_target = params[1];
 
       // Execute the move on the tree
       Tree modified_tree;
@@ -569,16 +562,23 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
     // Treeswap
     // ========
     {
-      uint32_t v = non_root_distribution(twister);
-      uint32_t w = non_root_distribution(twister);
+      double neighborhood_correction;
+      std::array<uint32_t, 4> params =
+          change_proposer.sample_treeswap_parameters(tree,
+                                                     neighborhood_correction);
+      uint32_t v = params[0];
+      uint32_t w = params[1];
+      uint32_t v_target = params[2];
+      uint32_t w_target = params[3];
 
-      while (tree.is_descendant(parent_vector[w], v) ||
-             tree.is_descendant(parent_vector[v], w)) {
-        w = non_root_distribution(twister);
+      if (tree.is_ancestor(w, v)) {
+        REQUIRE(tree.is_ancestor(v, w_target));
+        REQUIRE(tree.is_parent(v_target, w));
+      } else {
+        REQUIRE(!tree.is_ancestor(v, w));
+        REQUIRE(tree.is_parent(v_target, w));
+        REQUIRE(tree.is_parent(w_target, v));
       }
-
-      uint32_t v_target = parent_vector[w];
-      uint32_t w_target = parent_vector[v];
 
       // Execute the move on the tree
       Tree modified_tree;
