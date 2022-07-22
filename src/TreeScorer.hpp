@@ -88,7 +88,7 @@ public:
    * @param data An accessor to the mutation input data. The number of cells and
    * genes is inferred from the accessor range.
    */
-  TreeScorer(double alpha_mean, double beta_mean, double beta_sd,
+  TreeScorer(float alpha_mean, float beta_mean, float beta_sd,
              MutationDataAccessor data_ac, DataMatrix &data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data),
         n_cells(data_ac.get_range()[0]), n_genes(data_ac.get_range()[1]) {
@@ -120,13 +120,13 @@ public:
     }
   }
 
-  double logscore_beta(double beta) const {
+  float logscore_beta(float beta) const {
     return std::log(std::tgamma(bpriora + bpriorb)) +
            (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
   }
 
-  double logscore_tree(MutationTreeImpl const &tree) {
+  float logscore_tree(MutationTreeImpl const &tree) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(tree.get_n_nodes() == n_genes + 1);
 #endif
@@ -134,7 +134,7 @@ public:
     log_error_probabilities[0][1] = std::log(tree.get_beta());
     log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
 
-    double best_scores[max_n_cells];
+    float best_scores[max_n_cells];
 
     for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
       if (node_i >= n_genes + 1) {
@@ -156,7 +156,7 @@ public:
           occurrences[{observed_mutations[gene_i], true_mutations[gene_i]}]++;
         }
 
-        double score = get_logscore_of_occurrences(occurrences);
+        float score = get_logscore_of_occurrences(occurrences);
 
         if (node_i == 0 || score > best_scores[cell_i]) {
           best_scores[cell_i] = score;
@@ -164,7 +164,7 @@ public:
       }
     }
 
-    double tree_score = 0.0;
+    float tree_score = 0.0;
 
 #pragma unroll
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
@@ -173,7 +173,7 @@ public:
       }
     }
 
-    double beta_score = logscore_beta(tree.get_beta());
+    float beta_score = logscore_beta(tree.get_beta());
 
     return tree_score + beta_score;
   }
@@ -185,8 +185,8 @@ public:
    * @param occurrences The occurrences to compute the likelihood of.
    * @return The log-likelihood for the given occurrences.
    */
-  double get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
-    double logscore = 0.0;
+  float get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
+    float logscore = 0.0;
 #pragma unroll
     for (uint32_t i_posterior = 0; i_posterior < 3; i_posterior++) {
 #pragma unroll
@@ -199,8 +199,8 @@ public:
   }
 
 private:
-  double log_error_probabilities[3][2];
-  double bpriora, bpriorb;
+  float log_error_probabilities[3][2];
+  float bpriora, bpriorb;
   DataMatrix &data;
   uint32_t n_cells, n_genes;
 };

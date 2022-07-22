@@ -399,10 +399,10 @@ public:
   /**
    * @brief Get the mean value of the probability for false positives (alpha).
    *
-   * @return double The mean value of the probability for false positives
+   * @return float The mean value of the probability for false positives
    * (alpha).
    */
-  double get_alpha_mean() const { return alpha_mean; }
+  float get_alpha_mean() const { return alpha_mean; }
 
   /**
    * @brief Set the mean value of the probability for false positives (alpha).
@@ -410,15 +410,15 @@ public:
    * @param alpha_mean The new mean value of the probability for false positives
    * (alpha).
    */
-  void set_alpha_mean(double alpha_mean) { this->alpha_mean = alpha_mean; }
+  void set_alpha_mean(float alpha_mean) { this->alpha_mean = alpha_mean; }
 
   /**
    * @brief Get the mean value for the probability for false negatives (beta).
    *
-   * @return double The mean value for the probability for false negatives
+   * @return float The mean value for the probability for false negatives
    * (beta).
    */
-  double get_beta_mean() const { return beta_mean; }
+  float get_beta_mean() const { return beta_mean; }
 
   /**
    * @brief Set the mean value for the probability for false negatives (beta).
@@ -426,16 +426,16 @@ public:
    * @param beta_mean The new mean value for the probability for false negatives
    * (beta).
    */
-  void set_beta_mean(double beta_mean) { this->beta_mean = beta_mean; }
+  void set_beta_mean(float beta_mean) { this->beta_mean = beta_mean; }
 
   /**
    * @brief Get the standard derivation for the probability for false negatives
    * (beta).
    *
-   * @return double The standard derivation for the probability for false
+   * @return float The standard derivation for the probability for false
    * negatives (beta).
    */
-  double get_beta_sd() const { return beta_sd; }
+  float get_beta_sd() const { return beta_sd; }
 
   /**
    * @brief Set the standard derivation for the probability for false negatives
@@ -444,17 +444,17 @@ public:
    * @param beta_sd The new standard derivation for the probability for false
    * negatives (beta).
    */
-  void set_beta_sd(double beta_sd) { this->beta_sd = beta_sd; }
+  void set_beta_sd(float beta_sd) { this->beta_sd = beta_sd; }
 
   /**
    * @brief Get the probability that the beta value is modified in a chain step.
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that the beta value is modified in a chain
+   * @return float The probability that the beta value is modified in a chain
    * step.
    */
-  double get_prob_beta_change() const {
+  float get_prob_beta_change() const {
     return prob_beta_change / get_sum_of_move_probs();
   }
 
@@ -467,7 +467,7 @@ public:
    * @param prob_beta_change The new probability that the beta value is modified
    * in a chain step.
    */
-  void set_prob_beta_change(double prob_beta_change) {
+  void set_prob_beta_change(float prob_beta_change) {
     if (prob_beta_change < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -480,10 +480,10 @@ public:
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that a node and its subtree is moved to
+   * @return float The probability that a node and its subtree is moved to
    * another node in a chain step.
    */
-  double get_prob_prune_n_reattach() const {
+  float get_prob_prune_n_reattach() const {
     return prob_prune_n_reattach / get_sum_of_move_probs();
   }
 
@@ -497,7 +497,7 @@ public:
    * @param prob_prune_n_reattach The new probability that a node and its
    * subtree is moved to another node in a chain step.
    */
-  void set_prob_prune_n_reattach(double prob_prune_n_reattach) {
+  void set_prob_prune_n_reattach(float prob_prune_n_reattach) {
     if (prob_prune_n_reattach < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -510,10 +510,10 @@ public:
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that two node labels are swapped in a chain
+   * @return float The probability that two node labels are swapped in a chain
    * step.
    */
-  double get_prob_swap_nodes() const {
+  float get_prob_swap_nodes() const {
     return prob_swap_nodes / get_sum_of_move_probs();
   }
 
@@ -527,7 +527,7 @@ public:
    * @param prob_swap_nodes The new probability that two node labels are swapped
    * in a chain step.
    */
-  void set_prob_swap_nodes(double prob_swap_nodes) {
+  void set_prob_swap_nodes(float prob_swap_nodes) {
     if (prob_swap_nodes < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -539,10 +539,10 @@ public:
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that two subtrees are swapped in a chain
+   * @return float The probability that two subtrees are swapped in a chain
    * step.
    */
-  double get_prob_swap_subtrees() const {
+  float get_prob_swap_subtrees() const {
     return prob_swap_subtrees / get_sum_of_move_probs();
   }
 
@@ -555,7 +555,7 @@ public:
    * @param prob_swap_subtrees The new probability that two subtrees are swapped
    * in a chain step.
    */
-  void set_prob_swap_subtrees(double prob_swap_subtrees) {
+  void set_prob_swap_subtrees(float prob_swap_subtrees) {
     if (prob_swap_subtrees < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -565,10 +565,10 @@ public:
   /**
    * @brief Get the scaling factor to the standard derivation for beta changes.
    *
-   * @return double The scaling factor to the standard derivation for beta
+   * @return float The scaling factor to the standard derivation for beta
    * changes.
    */
-  double get_beta_jump_scaling_chi() const { return beta_jump_scaling_chi; }
+  float get_beta_jump_scaling_chi() const { return beta_jump_scaling_chi; }
 
   /**
    * @brief Set the scaling factor to the standard derivation for beta changes.
@@ -576,7 +576,7 @@ public:
    * @param beta_jump_scaling_chi The new scaling factor to the standard
    * derivation for beta changes.
    */
-  void set_beta_jump_scaling_chi(double beta_jump_scaling_chi) {
+  void set_beta_jump_scaling_chi(float beta_jump_scaling_chi) {
     this->beta_jump_scaling_chi = beta_jump_scaling_chi;
   }
 
@@ -587,9 +587,9 @@ public:
    * gamma > 1.0, the chain focuses on local exploration and for gamma < 1.0,
    * the chain focuses on global exploration.
    *
-   * @return double The gamma factor for the exploration behavior.
+   * @return float The gamma factor for the exploration behavior.
    */
-  double get_gamma() const { return gamma; }
+  float get_gamma() const { return gamma; }
 
   /**
    * @brief Set the gamma factor for the exploration behavior.
@@ -600,7 +600,7 @@ public:
    *
    * @param gamma The new gamma factor for the exploration behavior.
    */
-  void set_gamma(double gamma) { this->gamma = gamma; }
+  void set_gamma(float gamma) { this->gamma = gamma; }
 
   /**
    * @brief Get the seed for the URNGs.
@@ -627,7 +627,7 @@ public:
   void set_seed(uint32_t seed) { this->seed = seed; }
 
 private:
-  double get_sum_of_move_probs() const {
+  float get_sum_of_move_probs() const {
     return prob_beta_change + prob_prune_n_reattach + prob_swap_nodes +
            prob_swap_subtrees;
   }
@@ -637,11 +637,11 @@ private:
   std::optional<uint32_t> n_chains, chain_length;
   uint32_t max_n_best_trees;
 
-  double alpha_mean, beta_mean, beta_sd;
-  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
+  float alpha_mean, beta_mean, beta_sd;
+  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
       prob_swap_subtrees;
-  double beta_jump_scaling_chi;
-  double gamma;
+  float beta_jump_scaling_chi;
+  float gamma;
 
   std::optional<uint32_t> seed;
 };

@@ -24,7 +24,7 @@
 using namespace ffSCITE;
 
 constexpr unsigned int n_iterations = 1024;
-constexpr double alpha = 0.05;
+constexpr float alpha = 0.05;
 constexpr uint32_t n_genes = 7;
 constexpr uint32_t n_nodes = 8;
 constexpr unsigned int ulps = 4;
@@ -80,20 +80,20 @@ TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
   // samples from all those subsets. Our null-hypothesis is that this random
   // variable is uniformly distributed and we test this hypothesis with a
   // chi-squared-test.
-  double t = 0;
-  double n_pairs = boost::math::binomial_coefficient<double>(n_nodes - 1, 2);
+  float t = 0;
+  float n_pairs = boost::math::binomial_coefficient<float>(n_nodes - 1, 2);
   for (uint32_t i = 0; i < n_nodes - 1; i++) {
     for (uint32_t j = i + 1; j < n_nodes - 1; j++) {
-      double n_occurrences;
+      float n_occurrences;
       if (sampled_nodes.contains({i, j})) {
         n_occurrences = sampled_nodes[{i, j}];
       } else {
         n_occurrences = 0.0;
       }
 
-      double numerator = n_occurrences - n_iterations / n_pairs;
+      float numerator = n_occurrences - n_iterations / n_pairs;
       numerator *= numerator;
-      double denominator = n_iterations / n_pairs;
+      float denominator = n_iterations / n_pairs;
       t += numerator / denominator;
     }
   }
@@ -153,12 +153,12 @@ TEST_CASE("ChangeProposer::sample_descendant_or_nondescendant",
   // null-hypothesis is that X_v is uniformly distributed, i.e. \forall w \in
   // Desc(v): P(X_v = w) = (|Desc(v)|)^{-1} and we test this hypothesis with a
   // chi-squared-test.
-  double t = 0;
-  const double n_descendants = tree.get_n_descendants(5);
+  float t = 0;
+  const float n_descendants = tree.get_n_descendants(5);
   for (std::pair<unsigned int, unsigned int> pair : sampled_nodes_for_five) {
-    double numerator = (pair.second - n_iterations / n_descendants);
+    float numerator = (pair.second - n_iterations / n_descendants);
     numerator *= numerator;
-    double denominator = n_iterations / n_descendants;
+    float denominator = n_iterations / n_descendants;
     t += numerator / denominator;
   }
 
@@ -170,7 +170,7 @@ TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
   auto proposer = init_proposer();
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    double sampled_beta = proposer.change_beta(0.0);
+    float sampled_beta = proposer.change_beta(0.0);
     REQUIRE(sampled_beta >= 0.0);
     REQUIRE(sampled_beta <= 1.0);
 
@@ -234,7 +234,7 @@ TEST_CASE("ChangeProposer::sample_treeswap_parameters", "[ChangeProposer]") {
   for (uint32_t i = 0; i < n_iterations; i++) {
     AncestorMatrix proposed_am;
     MutationTreeImpl proposed_tree(proposed_am, 8, 0.42);
-    double neighborhood_correction = 1.0;
+    float neighborhood_correction = 1.0;
     std::array<uint32_t, 4> parameters =
         proposer.sample_treeswap_parameters(tree, neighborhood_correction);
 
@@ -257,8 +257,8 @@ TEST_CASE("ChangeProposer::sample_treeswap_parameters", "[ChangeProposer]") {
       REQUIRE(node_a_target_i == tree.get_parent(node_b_i));
       REQUIRE(tree.is_ancestor(node_a_i, node_b_target_i));
       REQUIRE(neighborhood_correction ==
-              double(tree.get_n_descendants(node_a_i)) /
-                  double(tree.get_n_descendants(node_b_i)));
+              float(tree.get_n_descendants(node_a_i)) /
+                  float(tree.get_n_descendants(node_b_i)));
     } else {
       REQUIRE(node_a_target_i == tree.get_parent(node_b_i));
       REQUIRE(node_b_target_i == tree.get_parent(node_a_i));

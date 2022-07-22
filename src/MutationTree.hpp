@@ -32,7 +32,7 @@ public:
   using AncestryVector = ac_int<max_n_nodes, false>;
   using AncestorMatrix = std::array<AncestryVector, max_n_nodes>;
 
-  MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, double beta)
+  MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, float beta)
       : ancestor(ancestor), n_nodes(n_genes + 1), beta(beta) {}
 
   MutationTree(MutationTree const &other) = default;
@@ -490,9 +490,9 @@ public:
     }
   }
 
-  double get_beta() const { return beta; }
+  float get_beta() const { return beta; }
 
-  void set_beta(double new_beta) { beta = new_beta; }
+  void set_beta(float new_beta) { beta = new_beta; }
 
 private:
   void
@@ -513,6 +513,6 @@ private:
 
   std::array<AncestryVector, max_n_nodes> &ancestor;
   uint32_t n_nodes;
-  double beta;
+  float beta;
 };
 } // namespace ffSCITE
