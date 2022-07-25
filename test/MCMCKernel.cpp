@@ -27,7 +27,7 @@ constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 10;
 constexpr unsigned long chain_length = 1000000;
 
-using MCMCKernelImpl = MCMCKernel<n_cells, n_genes, oneapi::dpl::minstd_rand>;
+using MCMCKernelImpl = MCMCKernel<32, 31, oneapi::dpl::minstd_rand>;
 using AncestorMatrix = MCMCKernelImpl::AncestorMatrix;
 using DataEntry = MCMCKernelImpl::DataEntry;
 using MutationTreeImpl = MCMCKernelImpl::MutationTreeImpl;

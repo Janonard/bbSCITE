@@ -123,11 +123,11 @@ public:
         float neighborhood_correction = 1.0;
         AncestorMatrix current_am = acs.current_am[chain_i];
         float current_beta = acs.current_beta[chain_i];
-        MutationTreeImpl current_tree(current_am, n_cells, current_beta);
+        MutationTreeImpl current_tree(current_am, n_genes, current_beta);
         float current_score = acs.current_score[chain_i];
 
         AncestorMatrix proposed_am;
-        MutationTreeImpl proposed_tree(proposed_am, n_cells, current_beta);
+        MutationTreeImpl proposed_tree(proposed_am, n_genes, current_beta);
         change_proposer.propose_change(current_tree, proposed_tree,
                                        neighborhood_correction);
         float proposed_score = tree_scorer.logscore_tree(proposed_tree);

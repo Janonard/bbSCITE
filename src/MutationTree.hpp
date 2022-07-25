@@ -64,7 +64,7 @@ public:
       }
 
       // Lastly, also mark the root as our ancestor.
-      ancestor[root][i] = true;
+      ancestor[i][i] = ancestor[root][i] = true;
     }
 
     return ancestor;
@@ -184,10 +184,11 @@ public:
     assert(node_i < n_nodes);
 #endif
     for (uint32_t parent = 0; parent < max_n_nodes; parent++) {
-      if (is_parent(parent, node_i)) {
+      if (parent < n_nodes && is_parent(parent, node_i)) {
         return parent;
       }
     }
+    assert(false);
     return 0; // Illegal option, will not occur if the tree is correct.
   }
 

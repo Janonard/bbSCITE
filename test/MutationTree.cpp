@@ -18,7 +18,7 @@
 #include <MutationTree.hpp>
 #include <catch2/catch_all.hpp>
 
-constexpr uint32_t max_n_genes = 64;
+constexpr uint32_t max_n_genes = 31;
 constexpr uint32_t max_n_nodes = max_n_genes + 1;
 using Tree = ffSCITE::MutationTree<max_n_genes>;
 using AncestorMatrix = Tree::AncestorMatrix;
@@ -29,8 +29,9 @@ void require_tree_equality(Tree const &a,
   AncestorMatrix b = Tree::parent_vector_to_ancestor_matrix(parent_vector);
 
   for (uint32_t i = 0; i < a.get_n_nodes(); i++) {
+    REQUIRE(a.get_parent(i) == parent_vector[i]);
     for (uint32_t j = 0; j < a.get_n_nodes(); j++) {
-      REQUIRE(a.is_ancestor(i, j) == b[i][j]);
+      REQUIRE(a.is_ancestor(i, j) == bool(b[i][j]));
     }
   }
 }
@@ -534,16 +535,17 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
   twister.seed(std::random_device()());
 
   ffSCITE::ChangeProposer<max_n_genes, std::mt19937> change_proposer(twister);
+  uint32_t n_genes = 16;
 
   constexpr uint32_t n_operations = 1000;
 
   std::vector<uint32_t> pruefer_code =
-      Tree::sample_random_pruefer_code(twister, max_n_genes);
+      Tree::sample_random_pruefer_code(twister, n_genes);
   std::vector<uint32_t> parent_vector =
       Tree::pruefer_code_to_parent_vector(pruefer_code);
   AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix(parent_vector);
 
-  Tree tree(am, max_n_genes, 0.42);
+  Tree tree(am, n_genes, 0.42);
 
   for (uint32_t i_operation = 0; i_operation < n_operations; i_operation++) {
     // =========
@@ -551,18 +553,18 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
     // =========
     {
       std::array<uint32_t, 2> nodes_to_swap =
-          change_proposer.sample_nonroot_nodepair(max_n_nodes);
+          change_proposer.sample_nonroot_nodepair(parent_vector.size());
       uint32_t v = nodes_to_swap[0];
       uint32_t w = nodes_to_swap[1];
 
       // Execute the move on the tree
       AncestorMatrix modified_am;
-      Tree modified_tree(modified_am, max_n_genes, 0.42);
+      Tree modified_tree(modified_am, n_genes, 0.42);
       tree.execute_move(modified_tree, ffSCITE::MoveType::SwapNodes, v, w, 0,
                         0);
 
       // Execute the move on the parent vector
-      for (uint32_t i_node = 0; i_node < max_n_nodes; i_node++) {
+      for (uint32_t i_node = 0; i_node < parent_vector.size(); i_node++) {
         if (i_node != v && i_node != w) {
           if (parent_vector[i_node] == v) {
             parent_vector[i_node] = w;
@@ -597,7 +599,7 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
 
       // Execute the move on the tree
       AncestorMatrix modified_am;
-      Tree modified_tree(modified_am, max_n_genes, 0.42);
+      Tree modified_tree(modified_am, n_genes, 0.42);
       tree.execute_move(modified_tree, ffSCITE::MoveType::PruneReattach, v, 0,
                         v_target, 0);
 
@@ -633,7 +635,7 @@ TEST_CASE("MutationTree::execute_move (fuzzing)", "[MutationTree]") {
 
       // Execute the move on the tree
       AncestorMatrix modified_am;
-      Tree modified_tree(modified_am, max_n_genes, 0.42);
+      Tree modified_tree(modified_am, n_genes, 0.42);
       tree.execute_move(modified_tree, ffSCITE::MoveType::SwapSubtrees, v, w,
                         v_target, w_target);
 

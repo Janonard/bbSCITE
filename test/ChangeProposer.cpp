@@ -29,8 +29,8 @@ constexpr uint32_t n_genes = 7;
 constexpr uint32_t n_nodes = 8;
 constexpr unsigned int ulps = 4;
 
-using ProposerImpl = ChangeProposer<n_genes, oneapi::dpl::minstd_rand>;
-using MutationTreeImpl = MutationTree<n_genes>;
+using ProposerImpl = ChangeProposer<31, oneapi::dpl::minstd_rand>;
+using MutationTreeImpl = MutationTree<31>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 
 ProposerImpl init_proposer() {
