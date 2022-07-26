@@ -146,23 +146,24 @@ public:
     log_error_probabilities[0][1] = std::log(tree.get_beta());
     log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
 
-    float best_scores[max_n_cells];
+    float tree_score = 0.0;
 
-    for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-      if (node_i >= n_genes + 1) {
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+      if (cell_i >= n_cells) {
         continue;
       }
 
-      AncestryVector true_mutations = tree.get_ancestors(node_i);
+      float best_score = 0.0;
+      std::array<DataEntry, max_n_genes> observed_mutations = data[cell_i];
 
-      for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-        if (cell_i >= n_cells) {
+      for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
+        if (node_i >= n_genes + 1) {
           continue;
         }
 
-        std::array<DataEntry, max_n_genes> observed_mutations = data[cell_i];
-        OccurrenceMatrix occurrences(0);
+        AncestryVector true_mutations = tree.get_ancestors(node_i);
 
+        OccurrenceMatrix occurrences(0);
 #pragma unroll
         for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
           if (gene_i < n_genes) {
@@ -172,19 +173,12 @@ public:
 
         float score = get_logscore_of_occurrences(occurrences);
 
-        if (node_i == 0 || score > best_scores[cell_i]) {
-          best_scores[cell_i] = score;
+        if (node_i == 0 || score > best_score) {
+          best_score = score;
         }
       }
-    }
 
-    float tree_score = 0.0;
-
-#pragma unroll
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      if (cell_i < n_cells) {
-        tree_score += best_scores[cell_i];
-      }
+      tree_score += best_score;
     }
 
     float beta_score = logscore_beta(tree.get_beta());
