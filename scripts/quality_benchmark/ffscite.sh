@@ -11,7 +11,7 @@
 set -e 
 
 source scripts/quality_benchmark/variables.sh
-EXEC=$FFSCITE
+EXEC="./build/ffSCITE"
 EXEC_ID="ffSCITE"
 
 for input_i in `seq $N_INPUTS`

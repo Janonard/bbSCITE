@@ -2,14 +2,14 @@
 #SBATCH -A hpc-lco-kenter
 #SBATCH -p normal
 #SBATCH --cpus-per-task=64
-#SBATCH --time=02:00:00
+#SBATCH --time=00:30:00
 #SBATCH --mail-type=All
 #SBATCH --mail-user=joo@mail.upb.de
 
 set -e 
 
 source scripts/quality_benchmark/variables.sh
-EXEC=$SCITE
+EXEC="./build/scite"
 EXEC_ID="SCITE"
 
 for input_i in `seq $N_INPUTS`
