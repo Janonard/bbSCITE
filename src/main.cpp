@@ -23,8 +23,8 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t max_n_cells = 32;
-constexpr uint32_t max_n_genes = 31;
+constexpr uint32_t max_n_cells = 64;
+constexpr uint32_t max_n_genes = 63;
 
 using URNG = oneapi::dpl::minstd_rand;
 

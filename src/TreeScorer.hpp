@@ -96,14 +96,10 @@ public:
     log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
     // mutation observed, not present
     log_error_probabilities[1][0] = std::log(alpha_mean);
-    // missing data, mutation not present
-    log_error_probabilities[2][0] = std::log(1.0);
     // mutation not observed, but present
     log_error_probabilities[0][1] = std::log(beta_mean);
     // mutation observed and present
     log_error_probabilities[1][1] = std::log(1.0 - beta_mean);
-    // missing data, mutation present
-    log_error_probabilities[2][1] = std::log(1.0);
 
     bpriora =
         ((1 - beta_mean) * std::pow(beta_mean, 2) / std::pow(beta_sd, 2)) -
@@ -129,10 +125,11 @@ public:
     log_error_probabilities[0][1] = std::log(tree.get_beta());
     log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
 
-    float tree_score = 0.0;
+    float cell_score[max_n_cells];
 
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
       if (cell_i >= n_cells) {
+        cell_score[cell_i] = 0;
         continue;
       }
 
@@ -165,7 +162,15 @@ public:
         }
       }
 
-      tree_score += best_score;
+      cell_score[cell_i] = best_score;
+    }
+
+    float tree_score = 0.0;
+    #pragma unroll
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+      if (cell_i < n_cells) {
+        tree_score += cell_score[cell_i];
+      }
     }
 
     float beta_score = logscore_beta(tree.get_beta());
@@ -183,7 +188,7 @@ public:
   float get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
     float logscore = 0.0;
 #pragma unroll
-    for (uint32_t i_posterior = 0; i_posterior < 3; i_posterior++) {
+    for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
 #pragma unroll
       for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
         logscore += occurrences[{i_posterior, i_prior}] *
@@ -194,7 +199,7 @@ public:
   }
 
 private:
-  float log_error_probabilities[3][2];
+  float log_error_probabilities[2][2];
   float bpriora, bpriorb;
   MutationDataMatrix &data;
   uint32_t n_cells, n_genes;
