@@ -29,8 +29,8 @@ constexpr unsigned long chain_length = 1000000;
 
 using MCMCKernelImpl = MCMCKernel<32, 31, oneapi::dpl::minstd_rand>;
 using AncestorMatrix = MCMCKernelImpl::AncestorMatrix;
-using DataEntry = MCMCKernelImpl::DataEntry;
 using MutationTreeImpl = MCMCKernelImpl::MutationTreeImpl;
+using MutationDataWord = MCMCKernelImpl::MutationDataWord;
 
 TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   /*
@@ -50,90 +50,35 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
       MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
   MutationTreeImpl correct_tree(am, 4, beta);
 
-  cl::sycl::buffer<DataEntry, 2> data_buffer(
-      cl::sycl::range<2>(n_cells, n_genes));
+  cl::sycl::buffer<MutationDataWord, 1> data_buffer(
+      (cl::sycl::range<1>(n_cells)));
   {
     auto data = data_buffer.get_access<cl::sycl::access::mode::discard_write>();
 
     // node 0
-    data[0][0] = 1;
-    data[0][1] = 0;
-    data[0][2] = 1;
-    data[0][3] = 0;
-
-    data[1][0] = 1;
-    data[1][1] = 0;
-    data[1][2] = 1;
-    data[1][3] = 0;
-
-    data[2][0] = 1;
-    data[2][1] = 0;
-    data[2][2] = 0; // error
-    data[2][3] = 0;
+    data[0] = 0b00010001;
+    data[1] = 0b00010001;
+    data[2] = 0b00000001; // error
 
     // node 1
-    data[3][0] = 0;
-    data[3][1] = 1;
-    data[3][2] = 1;
-    data[3][3] = 0;
-
-    data[4][0] = 0;
-    data[4][1] = 1;
-    data[4][2] = 0; // error
-    data[4][3] = 0;
-
-    data[5][0] = 0;
-    data[5][1] = 1;
-    data[5][2] = 1;
-    data[5][3] = 0;
+    data[3] = 0b00010100;
+    data[4] = 0b00000100; // error
+    data[5] = 0b00010100;
 
     // node 2
-    data[6][0] = 0;
-    data[6][1] = 0;
-    data[6][2] = 1;
-    data[6][3] = 0;
-
-    data[7][0] = 0;
-    data[7][1] = 0;
-    data[7][2] = 1;
-    data[7][3] = 0;
-
-    data[8][0] = 0;
-    data[8][1] = 0;
-    data[8][2] = 1;
-    data[8][3] = 0;
+    data[6] = 0b00010000;
+    data[7] = 0b00010000;
+    data[8] = 0b00010000;
 
     // node 3
-    data[9][0] = 0;
-    data[9][1] = 0;
-    data[9][2] = 0;
-    data[9][3] = 1;
-
-    data[10][0] = 0;
-    data[10][1] = 0;
-    data[10][2] = 0;
-    data[10][3] = 1;
-
-    data[11][0] = 0;
-    data[11][1] = 0;
-    data[11][2] = 0;
-    data[11][3] = 1;
+    data[9] = 0b01000000;
+    data[10] = 0b01000000;
+    data[11] = 0b01000000;
 
     // node 4
-    data[12][0] = 0;
-    data[12][1] = 0;
-    data[12][2] = 0;
-    data[12][3] = 0;
-
-    data[13][0] = 0;
-    data[13][1] = 0;
-    data[13][2] = 0;
-    data[13][3] = 0;
-
-    data[14][0] = 0;
-    data[14][1] = 0;
-    data[14][2] = 0;
-    data[14][3] = 0;
+    data[12] = 0b00000000;
+    data[13] = 0b00000000;
+    data[14] = 0b00000000;
   }
 
   cl::sycl::queue working_queue(
@@ -146,8 +91,8 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   parameters.set_n_chains(n_chains);
   parameters.set_chain_length(chain_length);
 
-  auto result =
-      MCMCKernelImpl::run_simulation(data_buffer, working_queue, parameters);
+  auto result = MCMCKernelImpl::run_simulation(data_buffer, working_queue,
+                                               parameters, n_cells, n_genes);
   std::vector<AncestorMatrix> best_am = std::get<0>(result);
   std::vector<float> best_beta = std::get<1>(result);
   MutationTreeImpl found_tree(best_am[0], n_genes, best_beta[0]);
@@ -155,9 +100,9 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   REQUIRE(best_am.size() >= 1);
   REQUIRE(best_am.size() == best_beta.size());
 
-  MCMCKernelImpl::DataMatrix data;
+  MCMCKernelImpl::MutationDataMatrix data;
   MCMCKernelImpl::HostTreeScorerImpl host_scorer(
-      alpha, beta, beta_sd,
+      alpha, beta, beta_sd, n_cells, n_genes,
       data_buffer.get_access<cl::sycl::access::mode::read>(), data);
   float correct_score = host_scorer.logscore_tree(correct_tree);
   float found_score = host_scorer.logscore_tree(found_tree);

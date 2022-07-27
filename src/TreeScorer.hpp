@@ -56,10 +56,9 @@ public:
    * 0b00 stands for "no mutation found", 0b01 stands for "mutation found", 0b10
    * stands for "no data", and 0b11 is currently unused.
    */
-  using DataEntry = ac_int<2, false>;
+  using MutationDataWord = ac_int<2 * max_n_genes, false>;
 
-  using DataMatrix =
-      std::array<std::array<DataEntry, max_n_genes>, max_n_cells>;
+  using MutationDataMatrix = std::array<MutationDataWord, max_n_cells>;
 
   /**
    * @brief Shorthand for the occurrence matrix type.
@@ -71,7 +70,7 @@ public:
    *
    */
   using MutationDataAccessor =
-      cl::sycl::accessor<DataEntry, 2, cl::sycl::access::mode::read,
+      cl::sycl::accessor<MutationDataWord, 1, cl::sycl::access::mode::read,
                          access_target>;
 
   /**
@@ -88,10 +87,11 @@ public:
    * @param data An accessor to the mutation input data. The number of cells and
    * genes is inferred from the accessor range.
    */
-  TreeScorer(float alpha_mean, float beta_mean, float beta_sd,
-             MutationDataAccessor data_ac, DataMatrix &data)
+  TreeScorer(float alpha_mean, float beta_mean, float beta_sd, uint32_t n_cells,
+             uint32_t n_genes, MutationDataAccessor data_ac,
+             MutationDataMatrix &data)
       : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data),
-        n_cells(data_ac.get_range()[0]), n_genes(data_ac.get_range()[1]) {
+        n_cells(n_cells), n_genes(n_genes) {
     // mutation not observed, not present
     log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
     // mutation observed, not present
@@ -111,24 +111,7 @@ public:
     bpriorb = bpriora * ((1 / beta_mean) - 1);
 
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      std::array<DataEntry, max_n_genes> row;
-
-#pragma unroll
-      // Initialize the row with "missing" entries. Therefore, we can iterate
-      // over them without issues.
-      for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
-        row[gene_i] = 2;
-      }
-
-#pragma unroll
-      // Load entries, if necessary.
-      for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
-        if (cell_i < n_cells && gene_i < n_genes) {
-          row[gene_i] = data_ac[cell_i][gene_i];
-        }
-      }
-
-      data[cell_i] = row;
+      data[cell_i] = data_ac[cell_i];
     }
   }
 
@@ -154,8 +137,9 @@ public:
       }
 
       float best_score = 0.0;
-      std::array<DataEntry, max_n_genes> observed_mutations = data[cell_i];
+      MutationDataWord observed_mutations = data[cell_i];
 
+#pragma unroll
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
         if (node_i >= n_genes + 1) {
           continue;
@@ -167,7 +151,10 @@ public:
 #pragma unroll
         for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
           if (gene_i < n_genes) {
-            occurrences[{observed_mutations[gene_i], true_mutations[gene_i]}]++;
+            ac_int<2, false> posterior =
+                observed_mutations.template slc<2>(gene_i << 1);
+            ac_int<1, false> prior = true_mutations[gene_i];
+            occurrences[{posterior, prior}]++;
           }
         }
 
@@ -209,7 +196,7 @@ public:
 private:
   float log_error_probabilities[3][2];
   float bpriora, bpriorb;
-  DataMatrix &data;
+  MutationDataMatrix &data;
   uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE
