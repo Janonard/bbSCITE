@@ -136,7 +136,7 @@ public:
       float best_score = 0.0;
       MutationDataWord observed_mutations = data[cell_i];
 
-#pragma unroll
+#pragma unroll 32
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
         if (node_i >= n_genes + 1) {
           continue;
