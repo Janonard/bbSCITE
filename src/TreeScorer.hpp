@@ -125,23 +125,14 @@ public:
     log_error_probabilities[0][1] = std::log(tree.get_beta());
     log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
 
-    float cell_score[max_n_cells];
+    float individual_scores[max_n_cells][max_n_genes + 1];
 
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      if (cell_i >= n_cells) {
-        cell_score[cell_i] = 0;
-        continue;
-      }
-
-      float best_score = 0.0;
+    [[intel::loop_coalesce(2)]] for (uint32_t cell_i = 0; cell_i < max_n_cells;
+                                     cell_i++) {
       MutationDataWord observed_mutations = data[cell_i];
 
-#pragma unroll 32
+#pragma unroll 8
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-        if (node_i >= n_genes + 1) {
-          continue;
-        }
-
         AncestryVector true_mutations = tree.get_ancestors(node_i);
 
         OccurrenceMatrix occurrences(0);
@@ -155,21 +146,31 @@ public:
           }
         }
 
-        float score = get_logscore_of_occurrences(occurrences);
+        individual_scores[cell_i][node_i] =
+            get_logscore_of_occurrences(occurrences);
+      }
+    }
 
-        if (node_i == 0 || score > best_score) {
-          best_score = score;
+    float cell_scores[max_n_cells];
+
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+      float best_cell_score = individual_scores[cell_i][0];
+#pragma unroll
+      for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
+        if (node_i < n_genes + 1 &&
+            individual_scores[cell_i][node_i] > best_cell_score) {
+          best_cell_score = individual_scores[cell_i][node_i];
         }
       }
-
-      cell_score[cell_i] = best_score;
+      cell_scores[cell_i] = best_cell_score;
     }
 
     float tree_score = 0.0;
-    #pragma unroll
+
+#pragma unroll
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
       if (cell_i < n_cells) {
-        tree_score += cell_score[cell_i];
+        tree_score += cell_scores[cell_i];
       }
     }
 
