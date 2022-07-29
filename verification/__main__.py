@@ -1,3 +1,4 @@
+import sys
 from verification.lib import *
 from networkx.drawing.nx_pydot import write_dot
 import random
@@ -5,6 +6,7 @@ import argparse
 from pathlib import Path
 from scipy.stats import ttest_1samp
 from statistics import mean
+import re
 
 
 def generate(args: argparse.Namespace):
@@ -128,6 +130,45 @@ def quality_test(args: argparse.Namespace):
         print(f"ffSCITE may not be non-inferior to SCITE!")
         exit(1)
 
+def performance_analysis(args: argparse.Namespace):
+    makespan_re = re.compile("Time elapsed: ([0-9]+\.[0-9]+)")
+
+    def analyze_makespans(out_dir):
+        all_makespans = dict()
+        for logfile_path in Path(out_dir).glob("*.log"):
+            parts = logfile_path.stem.split("_")
+            n_chains = int(parts[0])
+            n_steps = int(parts[1])
+
+            with open(logfile_path, mode="r") as logfile:
+                lines = (makespan_re.match(line) for line in logfile.readlines())
+                makespans = (float(match[1]) for match in lines if match is not None)
+                mean_makespan = mean(makespans)
+            all_makespans[(n_chains, n_steps)] = mean_makespan
+        return all_makespans
+
+    ffscite_makespans = analyze_makespans(args.basedir / Path("ffSCITE"))
+    scite_makespans = analyze_makespans(args.basedir / Path("SCITE"))
+
+    if args.out_file is None:
+        out_file = sys.stdout
+    else:
+        out_file = open(args.out_file, mode="w")
+
+    print("| no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: mean step makespan | SCITE: mean total makespan | SCITE: mean step makespan | total makespan ratio |", file=out_file)
+    print("|-|-|-|-|-|-|-|", file=out_file)
+
+    keys = list(set(ffscite_makespans.keys()) | set(scite_makespans.keys()))
+    keys.sort()
+
+    for key in keys:
+        ffscite_m = ffscite_makespans.get(key)
+        ffscite_per_step = ffscite_m * 1e3 / (key[0] * key[1]) if ffscite_m is not None else None
+        scite_m = scite_makespans.get(key)
+        scite_per_step = scite_m * 1e3 / (key[0] * key[1]) if scite_m is not None else None
+        ratio = ffscite_m / scite_m if ffscite_m is not None and scite_m is not None else None
+        print(f"| {key[0]} | {key[1]} | {ffscite_m :.2f} ms | {ffscite_per_step:.2f} µs | {scite_m:.2f} ms | {scite_per_step:.2f} µs | {ratio:.2f} |", file=out_file)
+
 
 parser = argparse.ArgumentParser(
     description="Tool for various tasks to test SCITE implementations.")
@@ -184,6 +225,11 @@ test_parser.add_argument("-b", "--beta", default=0.25, type=float,
 test_parser.add_argument("-c", "--confidence-level", default=0.95, type=float,
                          help="The confidence level used for the test.")
 
+performance_parser = subparsers.add_parser("performance", help="Analyze the outputs of the performance benchmark")
+
+performance_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data.")
+performance_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Stdout if not given")
+
 args = parser.parse_args()
 
 if args.subcommand == "generate":
@@ -192,3 +238,5 @@ elif args.subcommand == "score":
     score_tree(args)
 elif args.subcommand == "tost":
     quality_test(args)
+elif args.subcommand == "performance":
+    performance_analysis(args)
