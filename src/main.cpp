@@ -29,6 +29,7 @@ constexpr uint32_t max_n_genes = 63;
 using URNG = oneapi::dpl::minstd_rand;
 
 using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
+using MutationDataWord = MCMCKernelImpl::MutationDataWord;
 using MutationTreeImpl = MutationTree<max_n_genes>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 
@@ -94,11 +95,15 @@ int main(int argc, char **argv) {
   }
 
   // Load the mutation input data.
-  cl::sycl::buffer<ac_int<2, false>, 2> data(
-      cl::sycl::range<2>(n_cells, n_genes));
+  cl::sycl::buffer<MutationDataWord, 1> data((cl::sycl::range<1>(n_cells)));
   {
     auto data_ac = data.get_access<cl::sycl::access::mode::discard_write>();
     std::ifstream input_file(parameters.get_input_path());
+
+    // Zeroing the data.
+    for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+      data_ac[cell_i] = 0;
+    }
 
     for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
       for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
@@ -106,14 +111,14 @@ int main(int argc, char **argv) {
         input_file >> entry;
         switch (entry) {
         case 0:
-          data_ac[cell_i][gene_i] = 0;
+          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(0));
           break;
         case 1:
         case 2:
-          data_ac[cell_i][gene_i] = 1;
+          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(1));
           break;
         case 3:
-          data_ac[cell_i][gene_i] = 2;
+          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(2));
           break;
         default:
           std::cerr << "Error: The input file contains the invalid entry "
@@ -137,7 +142,8 @@ int main(int argc, char **argv) {
   cl::sycl::queue working_queue(device, queue_properties);
 
   // Running the simulation and retrieving the best trees.
-  auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters);
+  auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters,
+                                               n_cells, n_genes);
   std::vector<AncestorMatrix> best_am = std::get<0>(result);
   std::vector<float> best_beta = std::get<1>(result);
   cl::sycl::event runtime_event = std::get<2>(result);

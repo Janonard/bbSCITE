@@ -64,13 +64,14 @@ public:
   using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
                                         cl::sycl::access::target::host_buffer>;
 
-  using DataEntry = typename TreeScorerImpl::DataEntry;
+  using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
 
-  using DataMatrix = typename TreeScorerImpl::DataMatrix;
+  using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
+
+  using MutationDataAccessor =
+      cl::sycl::accessor<MutationDataWord, 1, cl::sycl::access::mode::read>;
 
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
-
-  using MutationDataAccessor = typename TreeScorerImpl::MutationDataAccessor;
 
   struct Accessors {
     AncestorMatrixAccessor current_am, best_am;
@@ -83,12 +84,13 @@ public:
   MCMCKernel(Accessors accessors, RNG rng, float prob_beta_change,
              float prob_prune_n_reattach, float prob_swap_nodes,
              float beta_jump_sd, float alpha_mean, float beta_mean,
-             float beta_sd, float gamma, uint32_t n_steps)
+             float beta_sd, float gamma, uint32_t n_steps, uint32_t n_cells,
+             uint32_t n_genes)
       : acs(accessors), prob_beta_change(prob_beta_change),
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd),
         alpha_mean(alpha_mean), beta_mean(beta_mean), beta_sd(beta_sd),
-        gamma(gamma), n_steps(n_steps) {
+        gamma(gamma), n_steps(n_steps), n_cells(n_cells), n_genes(n_genes) {
     assert(acs.current_am.get_range() == acs.current_beta.get_range());
     assert(acs.current_am.get_range() == acs.current_score.get_range());
     assert(acs.best_am.get_range() == acs.best_beta.get_range());
@@ -106,13 +108,11 @@ public:
         rng, prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
         beta_jump_sd);
 
-    DataMatrix data;
-    TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd,
+    [[intel::fpga_memory]] MutationDataMatrix data;
+    TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells, n_genes,
                                acs.mutation_data, data);
 
     uint32_t n_chains = acs.current_am.get_range()[0];
-    uint32_t n_cells = acs.mutation_data.get_range()[0];
-    uint32_t n_genes = acs.mutation_data.get_range()[1];
 
     float best_score = -std::numeric_limits<float>::infinity();
     uint32_t n_best_trees = 0;
@@ -121,12 +121,13 @@ public:
       for (uint32_t chain_i = 0; chain_i < acs.current_am.get_range()[0];
            chain_i++) {
         float neighborhood_correction = 1.0;
-        AncestorMatrix current_am = acs.current_am[chain_i];
+        [[intel::fpga_memory]] AncestorMatrix current_am =
+            acs.current_am[chain_i];
         float current_beta = acs.current_beta[chain_i];
         MutationTreeImpl current_tree(current_am, n_genes, current_beta);
         float current_score = acs.current_score[chain_i];
 
-        AncestorMatrix proposed_am;
+        [[intel::fpga_memory]] AncestorMatrix proposed_am;
         MutationTreeImpl proposed_tree(proposed_am, n_genes, current_beta);
         change_proposer.propose_change(current_tree, proposed_tree,
                                        neighborhood_correction);
@@ -170,14 +171,13 @@ public:
    */
   static std::tuple<std::vector<AncestorMatrix>, std::vector<float>,
                     cl::sycl::event>
-  run_simulation(cl::sycl::buffer<ac_int<2, false>, 2> data_buffer,
-                 cl::sycl::queue working_queue, Parameters const &parameters) {
+  run_simulation(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
+                 cl::sycl::queue working_queue, Parameters const &parameters,
+                 uint32_t n_cells, uint32_t n_genes) {
     using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, RNG>;
 
     using namespace cl::sycl;
 
-    uint32_t n_cells = data_buffer.get_range()[0];
-    uint32_t n_genes = data_buffer.get_range()[1];
     uint32_t n_chains = parameters.get_n_chains();
     uint32_t max_n_trees = parameters.get_max_n_best_trees();
 
@@ -203,11 +203,11 @@ public:
           current_score_buffer
               .template get_access<access::mode::discard_write>();
       auto data_ac = data_buffer.template get_access<access::mode::read>();
-      DataMatrix data;
+      MutationDataMatrix data;
 
-      HostTreeScorerImpl host_scorer(parameters.get_alpha_mean(),
-                                     parameters.get_beta_mean(),
-                                     parameters.get_beta_sd(), data_ac, data);
+      HostTreeScorerImpl host_scorer(
+          parameters.get_alpha_mean(), parameters.get_beta_mean(),
+          parameters.get_beta_sd(), n_cells, n_genes, data_ac, data);
 
       for (uint32_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
         std::vector<uint32_t> pruefer_code =
@@ -265,7 +265,7 @@ public:
                         parameters.get_prob_swap_nodes(), beta_jump_sd,
                         parameters.get_alpha_mean(), parameters.get_beta_mean(),
                         parameters.get_beta_sd(), parameters.get_gamma(),
-                        parameters.get_chain_length());
+                        parameters.get_chain_length(), n_cells, n_genes);
       cgh.single_task(kernel);
     });
 
@@ -295,5 +295,6 @@ private:
   float alpha_mean, beta_mean, beta_sd;
   float gamma;
   uint32_t n_steps;
+  uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE

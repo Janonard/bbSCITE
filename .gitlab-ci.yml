@@ -48,7 +48,7 @@ report:
   script:
     - "dpcpp -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv -Xsparallel=16 ../src/main.cpp -o ffSCITE"
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:30:00 --mem 32G --cpus-per-task=16"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=01:00:00 --mem 32G --cpus-per-task=16"
   artifacts:
     paths:
       - "build/ffSCITE.prj/reports"
