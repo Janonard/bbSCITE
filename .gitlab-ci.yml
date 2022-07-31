@@ -27,7 +27,7 @@ build-thesis:
       - "docs/proposal/proposal.pdf"
     expire_in: 1 month
   tags:
-    - sencha
+    - docker
 
 unit-tests:
   stage: precheck
