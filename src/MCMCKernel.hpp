@@ -114,6 +114,8 @@ public:
 
     uint32_t n_chains = acs.current_am.get_range()[0];
 
+    AncestorMatrix best_am;
+    float best_beta;
     float best_score = -std::numeric_limits<float>::infinity();
     uint32_t n_best_trees = 0;
 
@@ -145,14 +147,16 @@ public:
         }
 
         if (proposed_score > best_score || n_best_trees == 0) {
-          acs.best_am[0] = proposed_am;
-          acs.best_beta[0] = proposed_tree.get_beta();
+          best_am = proposed_am;
+          best_beta = proposed_tree.get_beta();
           best_score = proposed_score;
           n_best_trees = 1;
         }
       }
     }
 
+    acs.best_am[0] = best_am;
+    acs.best_beta[0] = best_beta;
     acs.best_score[0] = best_score;
     acs.n_best_trees[0] = n_best_trees;
   }
