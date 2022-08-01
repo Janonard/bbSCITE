@@ -181,7 +181,7 @@ public:
 
   uint32_t get_parent(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_i < n_nodes);
+    assert(node_i < max_n_nodes);
 #endif
     for (uint32_t parent = 0; parent < max_n_nodes; parent++) {
       if (parent < n_nodes && is_parent(parent, node_i)) {
@@ -203,7 +203,7 @@ public:
    */
   bool is_ancestor(uint32_t node_a_i, uint32_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_a_i < n_nodes && node_b_i < n_nodes);
+    assert(node_a_i < max_n_nodes && node_b_i < max_n_nodes);
 #endif
     return ancestor[node_a_i][node_b_i];
   }
@@ -217,7 +217,7 @@ public:
    */
   bool is_descendant(uint32_t node_a_i, uint32_t node_b_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_a_i < n_nodes && node_b_i < n_nodes);
+    assert(node_a_i < max_n_nodes && node_b_i < max_n_nodes);
 #endif
     return ancestor[node_b_i][node_a_i];
   }
@@ -235,7 +235,7 @@ public:
    */
   AncestryVector get_descendants(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_i < n_nodes);
+    assert(node_i < max_n_nodes);
 #endif
     return ancestor[node_i];
   }
@@ -248,7 +248,7 @@ public:
    */
   uint32_t get_n_descendants(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_i < n_nodes);
+    assert(node_i < max_n_nodes);
 #endif
     uint32_t n_descendants = 0;
 #pragma unroll
@@ -273,7 +273,7 @@ public:
    */
   AncestryVector get_ancestors(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_i < n_nodes);
+    assert(node_i < max_n_nodes);
 #endif
     AncestryVector ancestors = 0;
 #pragma unroll
@@ -293,7 +293,7 @@ public:
    */
   uint32_t get_n_ancestors(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(node_i < n_nodes);
+    assert(node_i < max_n_nodes);
 #endif
     uint32_t n_ancestors = 0;
 #pragma unroll
