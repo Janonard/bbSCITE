@@ -73,10 +73,18 @@ public:
 
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
 
+  using AncestorInPipe = cl::sycl::pipe<class AncestorInPipeID, AncestorMatrix>;
+  using AncestorOutPipe =
+      cl::sycl::pipe<class AncestorOutPipeID, AncestorMatrix>;
+  using BetaInPipe = cl::sycl::pipe<class BetaInPipeID, float>;
+  using BetaOutPipe = cl::sycl::pipe<class BetaOutPipeID, float>;
+  using ScoreInPipe = cl::sycl::pipe<class ScoreInPipeID, float>;
+  using ScoreOutPipe = cl::sycl::pipe<class ScoreOutPipeID, float>;
+
   struct Accessors {
-    AncestorMatrixAccessor current_am, best_am;
-    DoubleAccessor current_beta, best_beta;
-    DoubleAccessor current_score, best_score;
+    AncestorMatrixAccessor best_am;
+    DoubleAccessor best_beta;
+    DoubleAccessor best_score;
     IndexAccessor n_best_trees;
     MutationDataAccessor mutation_data;
   };
@@ -84,15 +92,14 @@ public:
   MCMCKernel(Accessors accessors, RNG rng, float prob_beta_change,
              float prob_prune_n_reattach, float prob_swap_nodes,
              float beta_jump_sd, float alpha_mean, float beta_mean,
-             float beta_sd, float gamma, uint32_t n_steps, uint32_t n_cells,
-             uint32_t n_genes)
+             float beta_sd, float gamma, uint32_t n_chains, uint32_t n_steps,
+             uint32_t n_cells, uint32_t n_genes)
       : acs(accessors), prob_beta_change(prob_beta_change),
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd),
         alpha_mean(alpha_mean), beta_mean(beta_mean), beta_sd(beta_sd),
-        gamma(gamma), n_steps(n_steps), n_cells(n_cells), n_genes(n_genes) {
-    assert(acs.current_am.get_range() == acs.current_beta.get_range());
-    assert(acs.current_am.get_range() == acs.current_score.get_range());
+        gamma(gamma), n_chains(n_chains), n_steps(n_steps), n_cells(n_cells),
+        n_genes(n_genes) {
     assert(acs.best_am.get_range() == acs.best_beta.get_range());
     assert(acs.best_score.get_range()[0] == 1);
   }
@@ -112,22 +119,19 @@ public:
     TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells, n_genes,
                                acs.mutation_data, data);
 
-    uint32_t n_chains = acs.current_am.get_range()[0];
-
     AncestorMatrix best_am;
     float best_beta;
     float best_score = -std::numeric_limits<float>::infinity();
     uint32_t n_best_trees = 0;
 
-    for (uint32_t i = 0; i < n_steps; i++) {
-      for (uint32_t chain_i = 0; chain_i < acs.current_am.get_range()[0];
-           chain_i++) {
+    [[intel::loop_coalesce(2)]] for (uint32_t i = 0; i < n_steps; i++) {
+      for (uint32_t chain_i = 0; chain_i < n_chains; chain_i++) {
         float neighborhood_correction = 1.0;
         [[intel::fpga_memory]] AncestorMatrix current_am =
-            acs.current_am[chain_i];
-        float current_beta = acs.current_beta[chain_i];
+            AncestorInPipe::read();
+        float current_beta = BetaInPipe::read();
+        float current_score = ScoreInPipe::read();
         MutationTreeImpl current_tree(current_am, n_genes, current_beta);
-        float current_score = acs.current_score[chain_i];
 
         [[intel::fpga_memory]] AncestorMatrix proposed_am;
         MutationTreeImpl proposed_tree(proposed_am, n_genes, current_beta);
@@ -140,11 +144,11 @@ public:
             std::exp((proposed_score - current_score) * gamma);
         bool accept_move = oneapi::dpl::bernoulli_distribution(
             acceptance_probability)(change_proposer.get_rng());
-        if (accept_move) {
-          acs.current_am[chain_i] = proposed_am;
-          acs.current_beta[chain_i] = proposed_tree.get_beta();
-          acs.current_score[chain_i] = proposed_score;
-        }
+
+        AncestorOutPipe::write(accept_move ? proposed_am : current_am);
+        BetaOutPipe::write(accept_move ? proposed_tree.get_beta()
+                                       : current_beta);
+        ScoreOutPipe::write(accept_move ? proposed_score : current_score);
 
         if (proposed_score > best_score || n_best_trees == 0) {
           best_am = proposed_am;
@@ -183,6 +187,7 @@ public:
     using namespace cl::sycl;
 
     uint32_t n_chains = parameters.get_n_chains();
+    uint32_t n_steps = parameters.get_chain_length();
     uint32_t max_n_trees = parameters.get_max_n_best_trees();
 
     RNG twister;
@@ -230,15 +235,6 @@ public:
     }
 
     event event = working_queue.submit([&](handler &cgh) {
-      auto current_am_ac =
-          current_am_buffer.template get_access<access::mode::read_write>(cgh);
-      auto current_beta_ac =
-          current_beta_buffer.template get_access<access::mode::read_write>(
-              cgh);
-      auto current_score_ac =
-          current_score_buffer.template get_access<access::mode::read_write>(
-              cgh);
-
       auto best_am_ac =
           best_am_buffer.template get_access<access::mode::read_write>(cgh);
       auto best_beta_ac =
@@ -252,11 +248,8 @@ public:
       auto data_ac = data_buffer.template get_access<access::mode::read>(cgh);
 
       Accessors accessors{
-          .current_am = current_am_ac,
           .best_am = best_am_ac,
-          .current_beta = current_beta_ac,
           .best_beta = best_beta_ac,
-          .current_score = current_score_ac,
           .best_score = best_score_ac,
           .n_best_trees = n_best_trees_ac,
           .mutation_data = data_ac,
@@ -269,8 +262,34 @@ public:
                         parameters.get_prob_swap_nodes(), beta_jump_sd,
                         parameters.get_alpha_mean(), parameters.get_beta_mean(),
                         parameters.get_beta_sd(), parameters.get_gamma(),
-                        parameters.get_chain_length(), n_cells, n_genes);
+                        n_chains, n_steps, n_cells, n_genes);
       cgh.single_task(kernel);
+    });
+
+    working_queue.submit([&](handler &cgh) {
+      auto current_am_ac =
+          current_am_buffer.template get_access<access::mode::read_write>(cgh);
+      auto current_beta_ac =
+          current_beta_buffer.template get_access<access::mode::read_write>(
+              cgh);
+      auto current_score_ac =
+          current_score_buffer.template get_access<access::mode::read_write>(
+              cgh);
+
+      cgh.single_task<class IOKernel>([=]() {
+        [[intel::loop_coalesce(2)]] for (uint32_t step_i = 0; step_i < n_steps;
+                                         step_i++) {
+          for (uint32_t chain_i = 0; chain_i < n_chains; chain_i++) {
+            AncestorInPipe::write(current_am_ac[chain_i]);
+            BetaInPipe::write(current_beta_ac[chain_i]);
+            ScoreInPipe::write(current_score_ac[chain_i]);
+
+            current_am_ac[chain_i] = AncestorOutPipe::read();
+            current_beta_ac[chain_i] = BetaOutPipe::read();
+            current_score_ac[chain_i] = ScoreOutPipe::read();
+          }
+        }
+      });
     });
 
     auto best_am_ac = best_am_buffer.template get_access<access::mode::read>();
@@ -298,7 +317,7 @@ private:
   float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes, beta_jump_sd;
   float alpha_mean, beta_mean, beta_sd;
   float gamma;
-  uint32_t n_steps;
+  uint32_t n_chains, n_steps;
   uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE
