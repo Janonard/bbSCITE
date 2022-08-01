@@ -133,17 +133,19 @@ public:
         float current_score = ScoreInPipe::read();
         MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
+        ChainStepParameters step_parameters =
+            change_proposer.sample_step_parameters(current_tree);
+
         [[intel::fpga_memory]] AncestorMatrix proposed_am;
-        MutationTreeImpl proposed_tree(proposed_am, n_genes, current_beta);
-        change_proposer.propose_change(current_tree, proposed_tree,
-                                       neighborhood_correction);
+        MutationTreeImpl proposed_tree(proposed_am, current_tree,
+                                       step_parameters);
         float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
         float acceptance_probability =
-            neighborhood_correction *
+            step_parameters.tree_swap_neighborhood_correction *
             std::exp((proposed_score - current_score) * gamma);
-        bool accept_move = oneapi::dpl::bernoulli_distribution(
-            acceptance_probability)(change_proposer.get_rng());
+        bool accept_move =
+            acceptance_probability > step_parameters.acceptance_level;
 
         AncestorOutPipe::write(accept_move ? proposed_am : current_am);
         BetaOutPipe::write(accept_move ? proposed_tree.get_beta()

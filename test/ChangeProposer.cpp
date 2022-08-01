@@ -33,16 +33,20 @@ using ProposerImpl = ChangeProposer<31, oneapi::dpl::minstd_rand>;
 using MutationTreeImpl = MutationTree<31>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 
-ProposerImpl init_proposer() {
+ProposerImpl init_proposer(float prob_beta_change, float prob_prune_n_reattach,
+                           float prob_swap_nodes) {
   std::random_device seeder;
 
   oneapi::dpl::minstd_rand twister;
   twister.seed(seeder());
 
-  ProposerImpl proposer(twister);
+  ProposerImpl proposer(twister, prob_beta_change, prob_prune_n_reattach,
+                        prob_swap_nodes, 0.1);
 
   return proposer;
 }
+
+ProposerImpl init_proposer() { return init_proposer(0.0, 0.5, 0.45); }
 
 /*
  * These unit tests do not prove that the tested methods are correct. Instead,
@@ -55,10 +59,22 @@ ProposerImpl init_proposer() {
 TEST_CASE("ChangeProposer::sample_nonroot_nodepair", "[ChangeProposer]") {
   auto proposer = init_proposer();
 
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  AncestorMatrix am = MutationTreeImpl::parent_vector_to_ancestor_matrix(
+      {2, 2, 5, 5, 6, 7, 7, 7});
+  MutationTreeImpl tree(am, 7, 0.42);
+
   std::map<std::array<uint32_t, 2>, unsigned int> sampled_nodes;
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    auto pair = proposer.sample_nonroot_nodepair(n_nodes);
+    auto pair = proposer.sample_nonroot_nodepair(tree);
     REQUIRE(pair[0] < n_nodes - 1);
     REQUIRE(pair[1] < n_nodes - 1);
     REQUIRE(pair[0] != pair[1]);
@@ -184,9 +200,9 @@ TEST_CASE("ChangeProposer::change_beta", "[ChangeProposer]") {
   }
 }
 
-TEST_CASE("ChangeProposer::sample_prune_and_reattach_parameters",
+TEST_CASE("ChangeProposer::sample_step_parameters (Prune and Reattach)",
           "[ChangeProposer]") {
-  auto proposer = init_proposer();
+  auto proposer = init_proposer(0.0, 1.0, 0.0);
 
   /*
    * Original tree:
@@ -201,10 +217,12 @@ TEST_CASE("ChangeProposer::sample_prune_and_reattach_parameters",
   MutationTreeImpl tree(am, 7, 0.42);
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    std::array<uint32_t, 2> parameters =
-        proposer.sample_prune_and_reattach_parameters(tree);
-    uint32_t node_a_i = parameters[0];
-    uint32_t target_i = parameters[1];
+    ffSCITE::ChainStepParameters parameters =
+        proposer.sample_step_parameters(tree);
+    REQUIRE(parameters.move_type == ffSCITE::MoveType::PruneReattach);
+
+    uint32_t node_a_i = parameters.v;
+    uint32_t target_i = parameters.nondescendant_of_v;
 
     // Simple sanity checks for the move.
     REQUIRE(node_a_i < n_nodes);
@@ -216,8 +234,9 @@ TEST_CASE("ChangeProposer::sample_prune_and_reattach_parameters",
   }
 }
 
-TEST_CASE("ChangeProposer::sample_treeswap_parameters", "[ChangeProposer]") {
-  auto proposer = init_proposer();
+TEST_CASE("ChangeProposer::sample_step_parameters (Swap Subtrees)",
+          "[ChangeProposer]") {
+  auto proposer = init_proposer(0.0, 0.0, 0.0);
 
   /*
    * Original tree:
@@ -232,19 +251,22 @@ TEST_CASE("ChangeProposer::sample_treeswap_parameters", "[ChangeProposer]") {
   MutationTreeImpl tree(am, 7, 0.42);
 
   for (uint32_t i = 0; i < n_iterations; i++) {
-    AncestorMatrix proposed_am;
-    MutationTreeImpl proposed_tree(proposed_am, 8, 0.42);
-    float neighborhood_correction = 1.0;
-    std::array<uint32_t, 4> parameters =
-        proposer.sample_treeswap_parameters(tree, neighborhood_correction);
+    ffSCITE::ChainStepParameters parameters =
+        proposer.sample_step_parameters(tree);
+    REQUIRE(parameters.move_type == ffSCITE::MoveType::SwapSubtrees);
 
-    uint32_t node_a_i = parameters[0];
-    uint32_t node_b_i = parameters[1];
-    uint32_t node_a_target_i = parameters[2];
-    uint32_t node_b_target_i = parameters[3];
+    uint32_t node_a_i = parameters.v;
+    uint32_t node_b_i = parameters.w;
 
-    bool common_lineage = tree.is_ancestor(node_a_i, node_b_i) ||
-                          tree.is_ancestor(node_b_i, node_a_i);
+    bool common_lineage = tree.is_ancestor(node_b_i, node_a_i);
+    REQUIRE(!tree.is_ancestor(node_a_i, node_b_i));
+
+    uint32_t node_a_target_i = parameters.parent_of_w;
+    uint32_t node_b_target_i =
+        common_lineage ? parameters.descendant_of_v : parameters.parent_of_v;
+
+    float neighborhood_correction =
+        parameters.tree_swap_neighborhood_correction;
 
     // Check soundness of the change.
     if (common_lineage) {

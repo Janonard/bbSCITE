@@ -15,7 +15,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "MoveType.hpp"
+#include "ChainStepParameters.hpp"
 #include "MutationTree.hpp"
 #include <oneapi/dpl/random>
 
@@ -71,7 +71,7 @@ public:
         prob_prune_n_reattach(prob_prune_n_reattach),
         prob_swap_nodes(prob_swap_nodes), beta_jump_sd(beta_jump_sd) {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(prob_beta_change + prob_prune_n_reattach + prob_swap_nodes < 1.0);
+    assert(prob_beta_change + prob_prune_n_reattach + prob_swap_nodes <= 1.0);
 #endif
   }
 
@@ -81,8 +81,8 @@ public:
    * @param rng The URNG instance that is used to sample changes.
    */
   ChangeProposer(RNG rng)
-      : rng(rng), prob_beta_change(0.55), prob_prune_n_reattach(0.5),
-        prob_swap_nodes(0.5), beta_jump_sd(0.1) {}
+      : rng(rng), prob_beta_change(0.0), prob_prune_n_reattach(0.5),
+        prob_swap_nodes(0.45), beta_jump_sd(0.1) {}
 
   RNG &get_rng() { return rng; }
 
@@ -117,16 +117,20 @@ public:
    *
    * @return Two random nodes
    */
-  std::array<uint32_t, 2> sample_nonroot_nodepair(uint32_t n_nodes) {
+  std::array<uint32_t, 2>
+  sample_nonroot_nodepair(MutationTreeImpl const &tree) {
     std::array<uint32_t, 2> sampled_nodes;
 
     // excluding n_nodes - 1, the root.
-    sampled_nodes[0] =
-        oneapi::dpl::uniform_int_distribution<uint32_t>(0, n_nodes - 2)(rng);
-    sampled_nodes[1] =
-        oneapi::dpl::uniform_int_distribution<uint32_t>(0, n_nodes - 3)(rng);
+    sampled_nodes[0] = oneapi::dpl::uniform_int_distribution<uint32_t>(
+        0, tree.get_n_nodes() - 2)(rng);
+    sampled_nodes[1] = oneapi::dpl::uniform_int_distribution<uint32_t>(
+        0, tree.get_n_nodes() - 3)(rng);
     if (sampled_nodes[1] >= sampled_nodes[0]) {
       sampled_nodes[1]++;
+    }
+    if (tree.is_ancestor(sampled_nodes[0], sampled_nodes[1])) {
+      std::swap(sampled_nodes[0], sampled_nodes[1]);
     }
     return sampled_nodes;
   }
@@ -216,134 +220,53 @@ public:
     return new_beta;
   }
 
-  std::array<uint32_t, 2>
-  sample_prune_and_reattach_parameters(MutationTreeImpl const &current_tree) {
-    // Pick a node to move.
-    uint32_t node_to_move_i = oneapi::dpl::uniform_int_distribution<uint32_t>(
-        0, current_tree.get_n_nodes() - 2)(rng);
+  ChainStepParameters
+  sample_step_parameters(MutationTree<max_n_genes> const &current_tree) {
+    std::array<uint32_t, 2> v_and_w = sample_nonroot_nodepair(current_tree);
+    uint32_t v = v_and_w[0];
+    uint32_t w = v_and_w[1];
 
-    // Sample one of the node's nondescendants, including the root.
-    uint32_t new_parent_i = sample_descendant_or_nondescendant(
-        current_tree, node_to_move_i, false, true);
+    float neighborhood_correction;
+    if (current_tree.is_ancestor(w, v)) {
+      neighborhood_correction = float(current_tree.get_n_descendants(v)) /
+                                float(current_tree.get_n_descendants(w));
+    } else {
+      neighborhood_correction = 1.0;
+    }
 
-    return {node_to_move_i, new_parent_i};
-  }
-
-  std::array<uint32_t, 4>
-  sample_treeswap_parameters(MutationTreeImpl const &current_tree,
-                             float &out_neighborhood_correction) {
-    std::array<uint32_t, 2> nodes_to_swap =
-        sample_nonroot_nodepair(current_tree.get_n_nodes());
-    uint32_t node_a_i = nodes_to_swap[0];
-    uint32_t node_b_i = nodes_to_swap[1];
-
-    uint32_t parent_of_a;
-    uint32_t parent_of_b;
-
+    uint32_t parent_of_v, parent_of_w;
     for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
       if (node_i >= current_tree.get_n_nodes()) {
         continue;
       }
-      if (current_tree.is_parent(node_i, node_a_i)) {
-        parent_of_a = node_i;
+      if (current_tree.is_parent(node_i, v)) {
+        parent_of_v = node_i;
       }
-      if (current_tree.is_parent(node_i, node_b_i)) {
-        parent_of_b = node_i;
+      if (current_tree.is_parent(node_i, w)) {
+        parent_of_w = node_i;
       }
     }
 
-    uint32_t new_parent_of_a_i, new_parent_of_b_i;
-
-    bool distinct_lineages = !(current_tree.is_ancestor(node_a_i, node_b_i) ||
-                               current_tree.is_ancestor(node_b_i, node_a_i));
-    if (distinct_lineages) {
-      // No correction necessary.
-      out_neighborhood_correction = 1.0;
-
-      // The nodes are from distinct lineages, we can simply swap the subtrees.
-      new_parent_of_a_i = parent_of_b;
-      new_parent_of_b_i = parent_of_a;
-    } else {
-      // The nodes are from a common lineage. We can attach the lower node to
-      // the parent of the upper node, but we have to choose something else for
-      // the upper node. We therefore sample a descendant of the lower node and
-      // attach the upper node to it.
-
-      // Ensure that node a is lower in the tree than node b.
-      if (current_tree.is_ancestor(node_a_i, node_b_i)) {
-        std::swap(node_a_i, node_b_i);
-        std::swap(parent_of_a, parent_of_b);
-      }
-
-      out_neighborhood_correction =
-          float(current_tree.get_n_descendants(node_a_i)) /
-          float(current_tree.get_n_descendants(node_b_i));
-
-      // Move node a next to node b.
-      new_parent_of_a_i = parent_of_b;
-
-      // Sample one of node a's descendants.
-      new_parent_of_b_i = sample_descendant_or_nondescendant(
-          current_tree, node_a_i, true, false);
-    }
-
-    return {node_a_i, node_b_i, new_parent_of_a_i, new_parent_of_b_i};
-  }
-
-  /**
-   * @brief Propose a random change to the markov chain state.
-   *
-   * @param state The current state of the chain, which will be modified.
-   * @param out_neighborhood_correction Output: The neighborhood correction
-   * factor.
-   */
-  void propose_change(MutationTree<max_n_genes> const &current_tree,
-                      MutationTree<max_n_genes> &proposed_tree,
-                      float &out_neighborhood_correction) {
+    uint32_t descendant_of_v =
+        sample_descendant_or_nondescendant(current_tree, v, true, false);
+    uint32_t nondescendant_of_v =
+        sample_descendant_or_nondescendant(current_tree, v, false, true);
     MoveType move_type = sample_move();
+    float new_beta = change_beta(current_tree.get_beta());
+    float acceptance_level =
+        oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
 
-    if (move_type == MoveType::ChangeBeta) {
-      proposed_tree.set_beta(change_beta(current_tree.get_beta()));
-    } else {
-      proposed_tree.set_beta(current_tree.get_beta());
-    }
-
-    // Computing the parameters for every possible move to avoid divergent
-    // loops.
-    std::array<uint32_t, 2> prune_and_reattach_parameters =
-        sample_prune_and_reattach_parameters(current_tree);
-    std::array<uint32_t, 2> swap_nodes_parameters =
-        sample_nonroot_nodepair(current_tree.get_n_nodes());
-    std::array<uint32_t, 4> treeswap_parameters =
-        sample_treeswap_parameters(current_tree, out_neighborhood_correction);
-
-    uint32_t node_a_i, node_b_i, node_a_target_i, node_b_target_i;
-
-    if (move_type == MoveType::ChangeBeta) {
-      node_a_i = node_b_i = node_a_target_i = node_b_target_i = 0;
-
-      out_neighborhood_correction = 1.0;
-    } else if (move_type == MoveType::PruneReattach) {
-      node_a_i = prune_and_reattach_parameters[0];
-      node_a_target_i = prune_and_reattach_parameters[1];
-      node_b_i = node_b_target_i = 0;
-
-      out_neighborhood_correction = 1.0;
-    } else if (move_type == MoveType::SwapNodes) {
-      node_a_i = swap_nodes_parameters[0];
-      node_b_i = swap_nodes_parameters[1];
-      node_a_target_i = node_b_target_i = 0;
-
-      out_neighborhood_correction = 1.0;
-    } else {
-      node_a_i = treeswap_parameters[0];
-      node_b_i = treeswap_parameters[1];
-      node_a_target_i = treeswap_parameters[2];
-      node_b_target_i = treeswap_parameters[3];
-    }
-
-    current_tree.execute_move(proposed_tree, move_type, node_a_i, node_b_i,
-                              node_a_target_i, node_b_target_i);
+    return ChainStepParameters{.v = v,
+                               .w = w,
+                               .parent_of_v = parent_of_v,
+                               .parent_of_w = parent_of_w,
+                               .descendant_of_v = descendant_of_v,
+                               .nondescendant_of_v = nondescendant_of_v,
+                               .move_type = move_type,
+                               .new_beta = new_beta,
+                               .tree_swap_neighborhood_correction =
+                                   neighborhood_correction,
+                               .acceptance_level = acceptance_level};
   }
 
 private:

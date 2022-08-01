@@ -15,7 +15,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "MoveType.hpp"
+#include "ChainStepParameters.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -378,27 +378,46 @@ public:
     return stream.str();
   }
 
-  void execute_move(MutationTree<max_n_genes> &out_tree, MoveType move_type,
-                    uint32_t v, uint32_t w, uint32_t v_target,
-                    uint32_t w_target) const {
-#if __SYCL_DEVICE_ONLY__ == 0
-    assert(v != get_root() && w != get_root());
-#endif
-    out_tree.n_nodes = n_nodes;
+  MutationTree(AncestorMatrix &am, MutationTree<max_n_genes> const &old_tree,
+               ChainStepParameters parameters)
+      : ancestor(am), n_nodes(old_tree.n_nodes), beta(old_tree.beta) {
+    if (parameters.move_type == MoveType::ChangeBeta) {
+      beta = parameters.new_beta;
+    }
 
-    AncestryVector v_descendant = ancestor[v];
-    AncestryVector w_descendant = ancestor[w];
+    uint32_t v = parameters.v;
+    uint32_t w = parameters.w;
+
+    AncestryVector v_descendant = old_tree.ancestor[v];
+    AncestryVector w_descendant = old_tree.ancestor[w];
+
+    uint32_t v_target, w_target;
+    switch (parameters.move_type) {
+    case MoveType::SwapSubtrees:
+      v_target = parameters.parent_of_w;
+      w_target =
+          w_descendant[v] ? parameters.descendant_of_v : parameters.parent_of_v;
+      break;
+    case MoveType::PruneReattach:
+      v_target = parameters.nondescendant_of_v;
+      w_target = 0; // No target necessary.
+      break;
+    case MoveType::ChangeBeta:
+    case MoveType::SwapNodes:
+    default:
+      v_target = w_target = 0; // No targets necessary.
+    }
 
     for (uint32_t x = 0; x < max_n_nodes; x++) {
       // Compute the new ancestry vector.
-      AncestryVector old_vector = ancestor[x];
+      AncestryVector old_vector = old_tree.ancestor[x];
       AncestryVector new_vector = 0;
 
       // Declaring the swap variable for the "Swap Nodes" move here since you
       // can't declare it inside the switch statement.
       bool swap = true;
 
-      switch (move_type) {
+      switch (parameters.move_type) {
       case MoveType::ChangeBeta:
         new_vector = old_vector;
         break;
@@ -487,7 +506,7 @@ public:
         break;
       }
 
-      out_tree.ancestor[x] = new_vector;
+      ancestor[x] = new_vector;
     }
   }
 
