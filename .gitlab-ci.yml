@@ -12,6 +12,23 @@ default:
     - "mkdir -p build"
     - "cd build"
 
+build-thesis:
+  stage: precheck
+  image: "texlive/texlive"
+  before_script: []
+  script:
+    - "cd docs/thesis"
+    - "latexmk --pdf thesis.tex"
+    - "cd ../proposal"
+    - "latexmk --pdf proposal.tex"
+  artifacts:
+    paths:
+      - "docs/thesis/thesis.pdf"
+      - "docs/proposal/proposal.pdf"
+    expire_in: 1 month
+  tags:
+    - docker
+
 unit-tests:
   stage: precheck
   script:
