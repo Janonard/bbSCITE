@@ -8,4 +8,4 @@ cd build
 
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j8 scite
-dpcpp -fintelfpga -qactypes -Xshardware -Xsv -Xsparallel=8 ../src/main.cpp -o ffSCITE
+dpcpp -fintelfpga -qactypes -Xshardware -Xsv -Xsparallel=8 -reuse-exe=./ffSCITE ../src/main.cpp -o ffSCITE
