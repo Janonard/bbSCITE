@@ -4,7 +4,6 @@ variables:
 stages:
   - precheck
   - synthesis
-  - benchmark
 
 default:
   before_script:
@@ -14,6 +13,9 @@ default:
 
 build-thesis:
   stage: precheck
+  only:
+    - main
+    - thesis
   image: "texlive/texlive"
   before_script: []
   script:
@@ -31,6 +33,9 @@ build-thesis:
 
 unit-tests:
   stage: precheck
+  only:
+    - main
+    - staging
   script:
     - "cmake -DCMAKE_BUILD_TYPE=Release .."
     - "make -j16 unit_test"
@@ -40,28 +45,11 @@ unit-tests:
   tags:
     - noctua2
 
-synthesis:
+report:
   stage: synthesis
   only:
     - main
-  script:
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "make -j64 scite"
-    - "dpcpp -fintelfpga -qactypes -Xshardware -Xsv -Xsparallel=64 ../src/main.cpp -o ffSCITE"
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis --time=2-00:00:00 --cpus-per-task=64 --mail-type=All --mail-user=joo@mail.upb.de"
-  artifacts:
-    paths:
-      - "build/ffSCITE.prj/reports"
-      - "build/ffSCITE"
-      - "build/scite"
-    expire_in: 1 month
-  tags:
-    - noctua2
-
-report:
-  stage: synthesis
-  when: manual
+    - staging
   script:
     - "dpcpp -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv -Xsparallel=16 ../src/main.cpp -o ffSCITE"
   variables:
@@ -70,22 +58,5 @@ report:
     paths:
       - "build/ffSCITE.prj/reports"
     expire_in: 1 month
-  tags:
-    - noctua2
-
-quality benchmark:
-  stage: benchmark
-  only:
-    - main
-  dependencies:
-    - synthesis
-  script:
-    - "../experiments/quality_benchmark.sh ./scite ./ffSCITE"
-    - "./tool.py test"
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=12:00:00 --cpus-per-task=128"
-  artifacts:
-    paths:
-      - "build/quality_benchmark.out"
   tags:
     - noctua2
