@@ -30,7 +30,7 @@ constexpr uint32_t max_n_genes = 63;
 // Assert that this design does indeed have the correct ranges set.
 // I often lower the max number of cells and genes for experiments and then forgot to reset them.
 // This should fix it.
-assert(max_n_cells == 64 && max_n_genes == 63);
+static_assert(max_n_cells == 64 && max_n_genes == 63);
 #endif
 
 using URNG = oneapi::dpl::minstd_rand;
