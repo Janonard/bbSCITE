@@ -21,6 +21,13 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
+template <typename PipeID, typename OriginalRNG>
+class PipeRNG {
+  uint64_t operator()() {
+    return cl::sycl::pipe<PipeID, uint64_t>();
+  }
+};
+
 /**
  * @brief SYCL kernel that simulates a SCITE markov chain.
  *
@@ -45,18 +52,6 @@ public:
 
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
 
-  using AncestorMatrixAccessor =
-      cl::sycl::accessor<AncestorMatrix, 1, cl::sycl::access::mode::read_write>;
-
-  using DoubleAccessor =
-      cl::sycl::accessor<float, 1, cl::sycl::access::mode::read_write>;
-
-  /**
-   * @brief Shorthand for the index buffer accessor type.
-   */
-  using IndexAccessor =
-      cl::sycl::accessor<uint32_t, 1, cl::sycl::access::mode::read_write>;
-
   using ChangeProposerImpl = ChangeProposer<max_n_genes, RNG>;
 
   using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
@@ -67,9 +62,6 @@ public:
   using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
 
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
-
-  using MutationDataAccessor =
-      cl::sycl::accessor<MutationDataWord, 1, cl::sycl::access::mode::read>;
 
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
 
@@ -82,11 +74,11 @@ public:
   using ScoreOutPipe = cl::sycl::pipe<class ScoreOutPipeID, float>;
 
   struct Accessors {
-    AncestorMatrixAccessor best_am;
-    DoubleAccessor best_beta;
-    DoubleAccessor best_score;
-    IndexAccessor n_best_trees;
-    MutationDataAccessor mutation_data;
+    cl::sycl::accessor<AncestorMatrix, 1, cl::sycl::access::mode::discard_write> best_am;
+    cl::sycl::accessor<float, 1, cl::sycl::access::mode::discard_write> best_beta;
+    cl::sycl::accessor<float, 1, cl::sycl::access::mode::discard_write> best_score;
+    cl::sycl::accessor<uint32_t, 1, cl::sycl::access::mode::discard_write> n_best_trees;
+    cl::sycl::accessor<MutationDataWord, 1, cl::sycl::access::mode::read> mutation_data;
   };
 
   MCMCKernel(Accessors accessors, RNG rng, float prob_beta_change,
@@ -238,13 +230,13 @@ public:
 
     event event = working_queue.submit([&](handler &cgh) {
       auto best_am_ac =
-          best_am_buffer.template get_access<access::mode::read_write>(cgh);
+          best_am_buffer.template get_access<access::mode::discard_write>(cgh);
       auto best_beta_ac =
-          best_beta_buffer.template get_access<access::mode::read_write>(cgh);
+          best_beta_buffer.template get_access<access::mode::discard_write>(cgh);
       auto best_score_ac =
-          best_score_buffer.template get_access<access::mode::read_write>(cgh);
+          best_score_buffer.template get_access<access::mode::discard_write>(cgh);
       auto n_best_trees_ac =
-          n_best_trees_buffer.template get_access<access::mode::read_write>(
+          n_best_trees_buffer.template get_access<access::mode::discard_write>(
               cgh);
 
       auto data_ac = data_buffer.template get_access<access::mode::read>(cgh);
