@@ -23,8 +23,15 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t max_n_cells = 32;
-constexpr uint32_t max_n_genes = 31;
+constexpr uint32_t max_n_cells = 64;
+constexpr uint32_t max_n_genes = 63;
+
+#ifdef HARDWARE
+// Assert that this design does indeed have the correct ranges set.
+// I often lower the max number of cells and genes for experiments and then forgot to reset them.
+// This should fix it.
+assert(max_n_cells == 64 && max_n_genes == 63);
+#endif
 
 using URNG = oneapi::dpl::minstd_rand;
 
