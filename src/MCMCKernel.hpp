@@ -21,13 +21,6 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <typename PipeID, typename OriginalRNG>
-class PipeRNG {
-  uint64_t operator()() {
-    return cl::sycl::pipe<PipeID, uint64_t>();
-  }
-};
-
 /**
  * @brief SYCL kernel that simulates a SCITE markov chain.
  *
