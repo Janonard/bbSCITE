@@ -21,12 +21,36 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
+template <typename RNG, typename NumberPipe, typename FeedbackPipe>
+class PipeRNG {
+public:
+  using result_type = typename RNG::result_type;
+
+  static result_type min() { return RNG::min(); }
+
+  static result_type max() { return RNG::max(); }
+
+  result_type operator()() { return NumberPipe::read(); }
+
+  void close() {
+    // signal the kernel to halt.
+    FeedbackPipe::write(true);
+    // Read a number to unlock the kernel.
+    NumberPipe::read();
+  }
+};
+
 template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
 public:
+  using RNG = oneapi::dpl::minstd_rand;
+  using NumberPipe =
+      cl::sycl::pipe<class NumberPipeID, typename RNG::result_type>;
+  using FeedbackPipe = cl::sycl::pipe<class FeedbackPipeID, bool>;
+  using PipeRNGImpl = PipeRNG<RNG, NumberPipe, FeedbackPipe>;
+
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
-  using ChangeProposerImpl =
-      ChangeProposer<max_n_genes, oneapi::dpl::minstd_rand>;
+  using ChangeProposerImpl = ChangeProposer<max_n_genes, PipeRNGImpl>;
   using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
   using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
                                         cl::sycl::access::target::host_buffer>;
@@ -117,33 +141,27 @@ public:
   float run_simulation() {
     using namespace cl::sycl;
 
-    auto io_event = enqueue_io();
-    auto change_proposer_event = enqueue_change_proposer();
-    auto tree_scorer_event = enqueue_tree_scorer();
+    std::vector<event> events;
+    events.push_back(enqueue_io());
+    events.push_back(enqueue_rng_kernel());
+    events.push_back(enqueue_change_proposer());
+    events.push_back(enqueue_tree_scorer());
 
-    uint64_t io_start = io_event.template get_profiling_info<
-        cl::sycl::info::event_profiling::command_start>();
-    uint64_t io_end = io_event.template get_profiling_info<
-        cl::sycl::info::event_profiling::command_end>();
+    std::vector<uint64_t> starts, ends;
 
-    uint64_t change_proposer_start =
-        change_proposer_event.template get_profiling_info<
-            cl::sycl::info::event_profiling::command_start>();
-    uint64_t change_proposer_end =
-        change_proposer_event.template get_profiling_info<
-            cl::sycl::info::event_profiling::command_end>();
+    for (event kernel_event : events) {
+      uint64_t start = kernel_event.template get_profiling_info<
+          cl::sycl::info::event_profiling::command_start>();
+      uint64_t end = kernel_event.template get_profiling_info<
+          cl::sycl::info::event_profiling::command_end>();
+      starts.push_back(start);
+      ends.push_back(end);
+    }
 
-    uint64_t tree_scorer_start = tree_scorer_event.template get_profiling_info<
-        cl::sycl::info::event_profiling::command_start>();
-    uint64_t tree_scorer_end = tree_scorer_event.template get_profiling_info<
-        cl::sycl::info::event_profiling::command_end>();
+    uint64_t execution_start = *std::min_element(starts.begin(), starts.end());
+    uint64_t execution_end = *std::max_element(ends.begin(), ends.end());
 
-    uint64_t exec_start =
-        std::min({io_start, change_proposer_start, tree_scorer_start});
-    uint64_t exec_end =
-        std::max({io_end, change_proposer_end, tree_scorer_end});
-
-    return (exec_end - exec_start) / 1000000.0;
+    return (execution_end - execution_start) / 1000000.0;
   }
 
   AncestorMatrix get_best_am() {
@@ -202,11 +220,31 @@ private:
     });
   }
 
+  cl::sycl::event enqueue_rng_kernel() {
+    using namespace cl::sycl;
+
+    return working_queue.submit([&](handler &cgh) {
+      uint64_t seed = parameters.get_seed();
+
+      cgh.single_task<class RNGKernel>([=]() {
+        RNG rng;
+        rng.seed(seed);
+
+        bool halt = false;
+        while (!halt) {
+          NumberPipe::write(rng());
+          bool read_successful;
+          bool halt_execution = FeedbackPipe::read(read_successful);
+          halt = read_successful && halt_execution;
+        }
+      });
+    });
+  }
+
   cl::sycl::event enqueue_change_proposer() {
     using namespace cl::sycl;
 
     return working_queue.submit([&](handler &cgh) {
-      uint32_t seed = parameters.get_seed();
       float prob_beta_change = parameters.get_prob_beta_change();
       float prob_prune_n_reattach = parameters.get_prob_prune_n_reattach();
       float prob_swap_nodes = parameters.get_prob_swap_nodes();
@@ -217,9 +255,7 @@ private:
       uint32_t n_genes = this->n_genes;
 
       cgh.single_task<class ChangeProposerKernel>([=]() {
-        oneapi::dpl::minstd_rand rng;
-        rng.seed(seed);
-
+        PipeRNGImpl rng;
         [[intel::fpga_register]] ChangeProposerImpl change_proposer(
             rng, prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
             beta_jump_sd);
@@ -244,6 +280,8 @@ private:
 
           ProposedChangePipe::write(proposed_change_state);
         }
+
+        rng.close();
       });
     });
   }
