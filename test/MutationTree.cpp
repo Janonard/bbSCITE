@@ -21,6 +21,8 @@
 constexpr uint32_t max_n_genes = 31;
 constexpr uint32_t max_n_nodes = max_n_genes + 1;
 using Tree = ffSCITE::MutationTree<max_n_genes>;
+using ChangeProposerImpl = ffSCITE::ChangeProposer<max_n_genes, std::mt19937>;
+using ModificationParameters = Tree::ModificationParameters;
 using AncestorMatrix = Tree::AncestorMatrix;
 
 void require_tree_equality(Tree const &a,
@@ -381,17 +383,16 @@ TEST_CASE("MutationTree update constructor, swap nodes", "[MutationTree]") {
   Tree tree(am, 4, 0.42);
 
   // Identity operation
-  ffSCITE::ChainStepParameters parameters{
+  Tree::ModificationParameters parameters{
+      .move_type = ffSCITE::MoveType::SwapNodes,
       .v = 2,
       .w = 2,
       .parent_of_v = 4,
       .parent_of_w = 4,
       .descendant_of_v = 0,
       .nondescendant_of_v = 3,
-      .move_type = ffSCITE::MoveType::SwapNodes,
       .new_beta = 0.42,
-      .tree_swap_neighborhood_correction = 1.0,
-      .acceptance_level = 1.0};
+  };
   AncestorMatrix identity_am;
   Tree identity_tree(identity_am, tree, parameters);
 
@@ -405,16 +406,16 @@ TEST_CASE("MutationTree update constructor, swap nodes", "[MutationTree]") {
   require_tree_equality(identity_tree, {2, 2, 4, 4, 4});
 
   // Swap of unrelated nodes
-  parameters = {.v = 2,
-                .w = 3,
-                .parent_of_v = 4,
-                .parent_of_w = 4,
-                .descendant_of_v = 0,
-                .nondescendant_of_v = 3,
-                .move_type = ffSCITE::MoveType::SwapNodes,
-                .new_beta = 0.42,
-                .tree_swap_neighborhood_correction = 1.0,
-                .acceptance_level = 1.0};
+  parameters = {
+      .move_type = ffSCITE::MoveType::SwapNodes,
+      .v = 2,
+      .w = 3,
+      .parent_of_v = 4,
+      .parent_of_w = 4,
+      .descendant_of_v = 0,
+      .nondescendant_of_v = 3,
+      .new_beta = 0.42,
+  };
   AncestorMatrix unrelated_swap_am;
   Tree unrelated_swap_tree(unrelated_swap_am, identity_tree, parameters);
 
@@ -428,16 +429,16 @@ TEST_CASE("MutationTree update constructor, swap nodes", "[MutationTree]") {
   require_tree_equality(unrelated_swap_tree, {3, 3, 4, 4, 4});
 
   // Swap of parent and child
-  parameters = {.v = 0,
-                .w = 3,
-                .parent_of_v = 3,
-                .parent_of_w = 4,
-                .descendant_of_v = 0,
-                .nondescendant_of_v = 3,
-                .move_type = ffSCITE::MoveType::SwapNodes,
-                .new_beta = 0.42,
-                .tree_swap_neighborhood_correction = 1.0,
-                .acceptance_level = 1.0};
+  parameters = {
+      .move_type = ffSCITE::MoveType::SwapNodes,
+      .v = 0,
+      .w = 3,
+      .parent_of_v = 3,
+      .parent_of_w = 4,
+      .descendant_of_v = 0,
+      .nondescendant_of_v = 3,
+      .new_beta = 0.42,
+  };
   AncestorMatrix child_swap_am;
   Tree child_swap_tree(child_swap_am, unrelated_swap_tree, parameters);
 
@@ -465,17 +466,16 @@ TEST_CASE("MutationTree update constructor (prune and reattach)",
       Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
   Tree tree(am, 7, 0.42);
 
-  ffSCITE::ChainStepParameters parameters{
+  Tree::ModificationParameters parameters{
+      .move_type = ffSCITE::MoveType::PruneReattach,
       .v = 2,
       .w = 0,
       .parent_of_v = 5,
       .parent_of_w = 2,
       .descendant_of_v = 0,
       .nondescendant_of_v = 6,
-      .move_type = ffSCITE::MoveType::PruneReattach,
       .new_beta = 0.42,
-      .tree_swap_neighborhood_correction = 1.0,
-      .acceptance_level = 1.0};
+  };
   AncestorMatrix modified_am;
   Tree modified_tree(modified_am, tree, parameters);
 
@@ -504,17 +504,16 @@ TEST_CASE("MutationTree update constructor (swap unrelated subtrees)",
       Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
   Tree tree(am, 7, 0.42);
 
-  ffSCITE::ChainStepParameters parameters{
+  Tree::ModificationParameters parameters{
+      .move_type = ffSCITE::MoveType::SwapSubtrees,
       .v = 2,
       .w = 6,
       .parent_of_v = 5,
       .parent_of_w = 7,
       .descendant_of_v = 0,
       .nondescendant_of_v = 3,
-      .move_type = ffSCITE::MoveType::SwapSubtrees,
       .new_beta = 0.42,
-      .tree_swap_neighborhood_correction = 1.0,
-      .acceptance_level = 1.0};
+  };
   AncestorMatrix swapped_am;
   Tree swapped_tree(swapped_am, tree, parameters);
 
@@ -543,17 +542,16 @@ TEST_CASE("MutationTree update constructor (swap related subtrees)",
       Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
   Tree tree(am, 7, 0.42);
 
-  ffSCITE::ChainStepParameters parameters{
+  Tree::ModificationParameters parameters{
+      .move_type = ffSCITE::MoveType::SwapSubtrees,
       .v = 2,
       .w = 5,
       .parent_of_v = 5,
       .parent_of_w = 7,
       .descendant_of_v = 0,
       .nondescendant_of_v = 3,
-      .move_type = ffSCITE::MoveType::SwapSubtrees,
       .new_beta = 0.42,
-      .tree_swap_neighborhood_correction = 1.0,
-      .acceptance_level = 1.0};
+  };
   AncestorMatrix swapped_am;
   Tree swapped_tree(swapped_am, tree, parameters);
 
@@ -621,7 +619,7 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
   std::mt19937 twister;
   twister.seed(std::random_device()());
 
-  ffSCITE::ChangeProposer<max_n_genes, std::mt19937> change_proposer(twister);
+  ChangeProposerImpl change_proposer(twister);
   uint32_t n_genes = 16;
 
   constexpr uint32_t n_operations = 1000;
@@ -635,8 +633,19 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
   Tree tree(am, n_genes, 0.42);
 
   for (uint32_t i_operation = 0; i_operation < n_operations; i_operation++) {
-    ffSCITE::ChainStepParameters parameters =
+    ChangeProposerImpl::ChainStepSample change_sample =
         change_proposer.sample_step_parameters(tree);
+
+    Tree::ModificationParameters parameters{
+        .move_type = change_sample.move_type,
+        .v = change_sample.v,
+        .w = change_sample.w,
+        .parent_of_v = tree.get_parent(change_sample.v),
+        .parent_of_w = tree.get_parent(change_sample.w),
+        .descendant_of_v = change_sample.descendant_of_v,
+        .nondescendant_of_v = change_sample.nondescendant_of_v,
+        .new_beta = change_sample.new_beta,
+    };
 
     // Execute the move manually
     std::vector<uint32_t> modified_vector = parent_vector;

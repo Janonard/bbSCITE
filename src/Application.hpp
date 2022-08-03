@@ -100,7 +100,7 @@ public:
     float current_beta;
     float current_score;
 
-    ChainStepParameters change_parameters;
+    typename ChangeProposerImpl::ChainStepSample change_sample;
   };
 
   using ProposedChangePipe =
@@ -233,15 +233,14 @@ private:
 
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
-          ChainStepParameters change_parameters =
+          auto change_sample =
               change_proposer.sample_step_parameters(current_tree);
 
           ProposedChangeState proposed_change_state{
               .current_am = current_am,
               .current_beta = current_beta,
               .current_score = current_score,
-              .change_parameters = change_parameters,
-          };
+              .change_sample = change_sample};
 
           ProposedChangePipe::write(proposed_change_state);
         }
@@ -289,22 +288,56 @@ private:
           AncestorMatrix current_am = proposed_change_state.current_am;
           float current_beta = proposed_change_state.current_beta;
           float current_score = proposed_change_state.current_score;
-          ChainStepParameters change_parameters =
-              proposed_change_state.change_parameters;
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
+          auto change_sample = proposed_change_state.change_sample;
+
+          uint32_t v = change_sample.v;
+          uint32_t w = change_sample.w;
+
+          uint32_t parent_of_v, parent_of_w;
+          for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
+            if (node_i >= current_tree.get_n_nodes()) {
+              continue;
+            }
+            if (current_tree.is_parent(node_i, v)) {
+              parent_of_v = node_i;
+            }
+            if (current_tree.is_parent(node_i, w)) {
+              parent_of_w = node_i;
+            }
+          }
+
+          typename MutationTreeImpl::ModificationParameters mod_params{
+              .move_type = change_sample.move_type,
+              .v = change_sample.v,
+              .w = change_sample.w,
+              .parent_of_v = parent_of_v,
+              .parent_of_w = parent_of_w,
+              .descendant_of_v = change_sample.descendant_of_v,
+              .nondescendant_of_v = change_sample.nondescendant_of_v,
+              .new_beta = change_sample.new_beta,
+          };
+
           AncestorMatrix proposed_am;
-          MutationTreeImpl proposed_tree(
-              proposed_am, current_tree,
-              proposed_change_state.change_parameters);
+          MutationTreeImpl proposed_tree(proposed_am, current_tree, mod_params);
           float proposed_beta = proposed_tree.get_beta();
           float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
+          float neighborhood_correction;
+          if (change_sample.move_type == MoveType::SwapSubtrees &&
+              current_tree.is_ancestor(w, v)) {
+            neighborhood_correction = float(current_tree.get_n_descendants(v)) /
+                                      float(current_tree.get_n_descendants(w));
+          } else {
+            neighborhood_correction = 1.0;
+          }
+
           float acceptance_probability =
-              change_parameters.tree_swap_neighborhood_correction *
+              neighborhood_correction *
               std::exp((proposed_score - current_score) * gamma);
           bool accept_move =
-              acceptance_probability > change_parameters.acceptance_level;
+              acceptance_probability > change_sample.acceptance_level;
 
           OutputState output_state{
               .new_am = accept_move ? proposed_am : current_am,

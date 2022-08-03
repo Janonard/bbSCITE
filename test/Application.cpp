@@ -25,7 +25,7 @@ constexpr uint32_t n_genes = 4;
 
 constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 1;
-constexpr unsigned long chain_length = 100000;
+constexpr unsigned long chain_length = 50000;
 
 using ApplicationImpl = Application<32, 31>;
 using AncestorMatrix = ApplicationImpl::AncestorMatrix;

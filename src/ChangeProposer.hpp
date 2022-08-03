@@ -15,7 +15,6 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "ChainStepParameters.hpp"
 #include "MutationTree.hpp"
 #include <oneapi/dpl/random>
 
@@ -220,32 +219,18 @@ public:
     return new_beta;
   }
 
-  ChainStepParameters
+  struct ChainStepSample {
+    MoveType move_type;
+    uint32_t v, w, descendant_of_v, nondescendant_of_v;
+    float new_beta;
+    float acceptance_level;
+  };
+
+  ChainStepSample
   sample_step_parameters(MutationTree<max_n_genes> const &current_tree) {
     std::array<uint32_t, 2> v_and_w = sample_nonroot_nodepair(current_tree);
     uint32_t v = v_and_w[0];
     uint32_t w = v_and_w[1];
-
-    float neighborhood_correction;
-    if (current_tree.is_ancestor(w, v)) {
-      neighborhood_correction = float(current_tree.get_n_descendants(v)) /
-                                float(current_tree.get_n_descendants(w));
-    } else {
-      neighborhood_correction = 1.0;
-    }
-
-    uint32_t parent_of_v, parent_of_w;
-    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
-      if (node_i >= current_tree.get_n_nodes()) {
-        continue;
-      }
-      if (current_tree.is_parent(node_i, v)) {
-        parent_of_v = node_i;
-      }
-      if (current_tree.is_parent(node_i, w)) {
-        parent_of_w = node_i;
-      }
-    }
 
     uint32_t descendant_of_v =
         sample_descendant_or_nondescendant(current_tree, v, true, false);
@@ -256,17 +241,13 @@ public:
     float acceptance_level =
         oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
 
-    return ChainStepParameters{.v = v,
-                               .w = w,
-                               .parent_of_v = parent_of_v,
-                               .parent_of_w = parent_of_w,
-                               .descendant_of_v = descendant_of_v,
-                               .nondescendant_of_v = nondescendant_of_v,
-                               .move_type = move_type,
-                               .new_beta = new_beta,
-                               .tree_swap_neighborhood_correction =
-                                   neighborhood_correction,
-                               .acceptance_level = acceptance_level};
+    return ChainStepSample{.move_type = move_type,
+                           .v = v,
+                           .w = w,
+                           .descendant_of_v = descendant_of_v,
+                           .nondescendant_of_v = nondescendant_of_v,
+                           .new_beta = new_beta,
+                           .acceptance_level = acceptance_level};
   }
 
 private:

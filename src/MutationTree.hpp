@@ -15,7 +15,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "ChainStepParameters.hpp"
+#include "MoveType.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -378,8 +378,15 @@ public:
     return stream.str();
   }
 
+  struct ModificationParameters {
+    MoveType move_type;
+    uint32_t v, w, parent_of_v, parent_of_w, descendant_of_v,
+        nondescendant_of_v;
+    float new_beta;
+  };
+
   MutationTree(AncestorMatrix &am, MutationTree<max_n_genes> const &old_tree,
-               ChainStepParameters parameters)
+               ModificationParameters parameters)
       : ancestor(am), n_nodes(old_tree.n_nodes), beta(old_tree.beta) {
     if (parameters.move_type == MoveType::ChangeBeta) {
       beta = parameters.new_beta;
