@@ -9,3 +9,4 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j8 scite
 dpcpp -fintelfpga -qactypes -DHARDWARE -Xshardware -Xsv -Xsparallel=8 -reuse-exe=./ffSCITE ../src/main.cpp -o ffSCITE
+tar -caf build.tar.gz scite ffSCITE ffSCITE.prj/reports
