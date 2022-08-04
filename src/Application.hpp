@@ -21,36 +21,12 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <typename RNG, typename NumberPipe, typename FeedbackPipe>
-class PipeRNG {
-public:
-  using result_type = typename RNG::result_type;
-
-  static result_type min() { return RNG::min(); }
-
-  static result_type max() { return RNG::max(); }
-
-  result_type operator()() { return NumberPipe::read(); }
-
-  void close() {
-    // signal the kernel to halt.
-    FeedbackPipe::write(true);
-    // Read a number to unlock the kernel.
-    NumberPipe::read();
-  }
-};
-
 template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
 public:
-  using RNG = oneapi::dpl::minstd_rand;
-  using NumberPipe =
-      cl::sycl::pipe<class NumberPipeID, typename RNG::result_type>;
-  using FeedbackPipe = cl::sycl::pipe<class FeedbackPipeID, bool>;
-  using PipeRNGImpl = PipeRNG<RNG, NumberPipe, FeedbackPipe>;
-
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
-  using ChangeProposerImpl = ChangeProposer<max_n_genes, PipeRNGImpl>;
+  using ChangeProposerImpl =
+      ChangeProposer<max_n_genes, oneapi::dpl::minstd_rand>;
   using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
   using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
                                         cl::sycl::access::target::host_buffer>;
@@ -143,7 +119,6 @@ public:
 
     std::vector<event> events;
     events.push_back(enqueue_io());
-    events.push_back(enqueue_rng_kernel());
     events.push_back(enqueue_change_proposer());
     events.push_back(enqueue_tree_scorer());
 
@@ -220,31 +195,11 @@ private:
     });
   }
 
-  cl::sycl::event enqueue_rng_kernel() {
-    using namespace cl::sycl;
-
-    return working_queue.submit([&](handler &cgh) {
-      uint64_t seed = parameters.get_seed();
-
-      cgh.single_task<class RNGKernel>([=]() {
-        RNG rng;
-        rng.seed(seed);
-
-        bool halt = false;
-        while (!halt) {
-          NumberPipe::write(rng());
-          bool read_successful;
-          bool halt_execution = FeedbackPipe::read(read_successful);
-          halt = read_successful && halt_execution;
-        }
-      });
-    });
-  }
-
   cl::sycl::event enqueue_change_proposer() {
     using namespace cl::sycl;
 
     return working_queue.submit([&](handler &cgh) {
+      uint32_t seed = parameters.get_seed();
       float prob_beta_change = parameters.get_prob_beta_change();
       float prob_prune_n_reattach = parameters.get_prob_prune_n_reattach();
       float prob_swap_nodes = parameters.get_prob_swap_nodes();
@@ -255,7 +210,9 @@ private:
       uint32_t n_genes = this->n_genes;
 
       cgh.single_task<class ChangeProposerKernel>([=]() {
-        PipeRNGImpl rng;
+        oneapi::dpl::minstd_rand rng;
+        rng.seed(seed);
+
         [[intel::fpga_register]] ChangeProposerImpl change_proposer(
             rng, prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
             beta_jump_sd);
@@ -280,8 +237,6 @@ private:
 
           ProposedChangePipe::write(proposed_change_state);
         }
-
-        rng.close();
       });
     });
   }
