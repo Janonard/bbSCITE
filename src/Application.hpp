@@ -21,7 +21,9 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
+template <uint32_t max_n_cells, uint32_t max_n_genes,
+          uint32_t n_parallel_chains = 1>
+class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
@@ -87,32 +89,24 @@ public:
     }
   }
 
-  struct InputState {
-    AncestorMatrix current_am;
-    float current_beta;
-    float current_score;
+  struct ChainState {
+    AncestorMatrix ancestor_matrix;
+    float beta;
+    float score;
   };
 
-  using InputPipe = cl::sycl::pipe<class InputPipeID, InputState>;
+  using InputPipe = cl::sycl::pipe<class InputPipeID, ChainState>;
+  using OutputPipe =
+      cl::sycl::pipe<class OutputPipeID, ChainState, n_parallel_chains>;
 
   struct ProposedChangeState {
-    AncestorMatrix current_am;
-    float current_beta;
-    float current_score;
+    ChainState current_state;
 
     typename ChangeProposerImpl::ChainStepSample change_sample;
   };
 
   using ProposedChangePipe =
       cl::sycl::pipe<class ChangedStatePipeID, ProposedChangeState>;
-
-  struct OutputState {
-    AncestorMatrix new_am;
-    float new_beta;
-    float new_score;
-  };
-
-  using OutputPipe = cl::sycl::pipe<class OutputPipeID, OutputState>;
 
   float run_simulation() {
     using namespace cl::sycl;
@@ -175,20 +169,35 @@ private:
       uint32_t n_chains = parameters.get_n_chains();
 
       cgh.single_task<class IOKernel>([=]() {
-        [[intel::loop_coalesce(2)]] for (uint32_t step_i = 0; step_i < n_steps;
-                                         step_i++) {
-          for (uint32_t chain_i = 0; chain_i < n_chains; chain_i++) {
-            InputState input_state{
-                .current_am = current_am_ac[chain_i],
-                .current_beta = current_beta_ac[chain_i],
-                .current_score = current_score_ac[chain_i],
-            };
-            InputPipe::write(input_state);
+        for (uint32_t i_chain_group = 0; i_chain_group < n_chains;
+             i_chain_group += n_parallel_chains) {
 
-            OutputState output_state = OutputPipe::read();
-            current_am_ac[chain_i] = output_state.new_am;
-            current_beta_ac[chain_i] = output_state.new_beta;
-            current_score_ac[chain_i] = output_state.new_score;
+          for (uint32_t i_chain = i_chain_group;
+               i_chain < i_chain_group + n_parallel_chains; i_chain++) {
+            if (i_chain < n_chains) {
+              InputPipe::write(ChainState{
+                  .ancestor_matrix = current_am_ac[i_chain],
+                  .beta = current_beta_ac[i_chain],
+                  .score = current_score_ac[i_chain],
+              });
+            }
+          }
+
+          uint32_t n_iterations =
+              (n_steps - 1) *
+              std::min(n_parallel_chains, n_chains - i_chain_group);
+          for (uint32_t i = 0; i < n_iterations; i++) {
+            InputPipe::write(OutputPipe::read());
+          }
+
+          for (uint32_t i_chain = i_chain_group;
+               i_chain < i_chain_group + n_parallel_chains; i_chain++) {
+            if (i_chain < n_chains) {
+              ChainState output_state = OutputPipe::read();
+              current_am_ac[i_chain] = output_state.ancestor_matrix;
+              current_beta_ac[i_chain] = output_state.beta;
+              current_score_ac[i_chain] = output_state.score;
+            }
           }
         }
       });
@@ -218,11 +227,10 @@ private:
             beta_jump_sd);
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
-          InputState input_state = InputPipe::read();
+          ChainState input_state = InputPipe::read();
 
-          AncestorMatrix current_am = input_state.current_am;
-          float current_beta = input_state.current_beta;
-          float current_score = input_state.current_score;
+          AncestorMatrix current_am = input_state.ancestor_matrix;
+          float current_beta = input_state.beta;
 
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
@@ -230,10 +238,7 @@ private:
               change_proposer.sample_step_parameters(current_tree);
 
           ProposedChangeState proposed_change_state{
-              .current_am = current_am,
-              .current_beta = current_beta,
-              .current_score = current_score,
-              .change_sample = change_sample};
+              .current_state = input_state, .change_sample = change_sample};
 
           ProposedChangePipe::write(proposed_change_state);
         }
@@ -278,9 +283,10 @@ private:
           ProposedChangeState proposed_change_state =
               ProposedChangePipe::read();
 
-          AncestorMatrix current_am = proposed_change_state.current_am;
-          float current_beta = proposed_change_state.current_beta;
-          float current_score = proposed_change_state.current_score;
+          AncestorMatrix current_am =
+              proposed_change_state.current_state.ancestor_matrix;
+          float current_beta = proposed_change_state.current_state.beta;
+          float current_score = proposed_change_state.current_state.score;
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
           auto change_sample = proposed_change_state.change_sample;
@@ -332,10 +338,10 @@ private:
           bool accept_move =
               acceptance_probability > change_sample.acceptance_level;
 
-          OutputState output_state{
-              .new_am = accept_move ? proposed_am : current_am,
-              .new_beta = accept_move ? proposed_beta : current_beta,
-              .new_score = accept_move ? proposed_score : current_score,
+          ChainState output_state{
+              .ancestor_matrix = accept_move ? proposed_am : current_am,
+              .beta = accept_move ? proposed_beta : current_beta,
+              .score = accept_move ? proposed_score : current_score,
           };
 
           OutputPipe::write(output_state);
