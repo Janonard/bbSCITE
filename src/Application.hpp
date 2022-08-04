@@ -15,7 +15,6 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "ChangeProposer.hpp"
 #include "Parameters.hpp"
 #include "TreeScorer.hpp"
 #include <CL/sycl.hpp>
@@ -27,8 +26,6 @@ class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
-  using ChangeProposerImpl =
-      ChangeProposer<max_n_genes, oneapi::dpl::minstd_rand>;
   using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
   using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
                                         cl::sycl::access::target::host_buffer>;
@@ -54,7 +51,7 @@ public:
     using namespace cl::sycl;
 
     oneapi::dpl::minstd_rand rng;
-    rng.seed(parameters.get_seed());
+    rng.seed(std::random_device()());
 
     current_am_buffer = range<1>(parameters.get_n_chains());
     current_beta_buffer = range<1>(parameters.get_n_chains());
@@ -102,7 +99,10 @@ public:
   struct ProposedChangeState {
     ChainState current_state;
 
-    typename ChangeProposerImpl::ChainStepSample change_sample;
+    MoveType move_type;
+    uint32_t v, w, descendant_of_v, nondescendant_of_v;
+    float new_beta;
+    float acceptance_level;
   };
 
   using ProposedChangePipe =
@@ -207,8 +207,16 @@ private:
   cl::sycl::event enqueue_change_proposer() {
     using namespace cl::sycl;
 
+    std::random_device seeder;
+    std::array<uint64_t, 6> seed;
+    seed[0] = seeder();
+    seed[1] = seeder();
+    seed[2] = seeder();
+    seed[3] = seeder();
+    seed[4] = seeder();
+    seed[5] = seeder();
+
     return working_queue.submit([&](handler &cgh) {
-      uint32_t seed = parameters.get_seed();
       float prob_beta_change = parameters.get_prob_beta_change();
       float prob_prune_n_reattach = parameters.get_prob_prune_n_reattach();
       float prob_swap_nodes = parameters.get_prob_swap_nodes();
@@ -219,12 +227,14 @@ private:
       uint32_t n_genes = this->n_genes;
 
       cgh.single_task<class ChangeProposerKernel>([=]() {
-        oneapi::dpl::minstd_rand rng;
-        rng.seed(seed);
-
-        [[intel::fpga_register]] ChangeProposerImpl change_proposer(
-            rng, prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
-            beta_jump_sd);
+        oneapi::dpl::minstd_rand nodepair_rng, descendant_rng,
+            nondescendant_rng, move_rng, beta_rng, acceptance_rng;
+        nodepair_rng.seed(seed[0]);
+        descendant_rng.seed(seed[1]);
+        nondescendant_rng.seed(seed[2]);
+        move_rng.seed(seed[3]);
+        beta_rng.seed(seed[4]);
+        acceptance_rng.seed(seed[5]);
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
           ChainState input_state = InputPipe::read();
@@ -234,11 +244,34 @@ private:
 
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
-          auto change_sample =
-              change_proposer.sample_step_parameters(current_tree);
+          std::array<uint32_t, 2> v_and_w =
+              current_tree.sample_nonroot_nodepair(nodepair_rng);
+          uint32_t v = v_and_w[0];
+          uint32_t w = v_and_w[1];
+
+          uint32_t descendant_of_v =
+              current_tree.sample_descendant(descendant_rng, v);
+          uint32_t nondescendant_of_v =
+              current_tree.sample_nondescendant(nondescendant_rng, v);
+
+          MoveType move_type =
+              current_tree.sample_move(move_rng, prob_beta_change,
+                                       prob_prune_n_reattach, prob_swap_nodes);
+
+          float new_beta = current_tree.sample_new_beta(beta_rng, beta_jump_sd);
+
+          float acceptance_level =
+              oneapi::dpl::uniform_real_distribution(0.0, 1.0)(acceptance_rng);
 
           ProposedChangeState proposed_change_state{
-              .current_state = input_state, .change_sample = change_sample};
+              .current_state = input_state,
+              .move_type = move_type,
+              .v = v,
+              .w = w,
+              .descendant_of_v = descendant_of_v,
+              .nondescendant_of_v = nondescendant_of_v,
+              .new_beta = new_beta,
+              .acceptance_level = acceptance_level};
 
           ProposedChangePipe::write(proposed_change_state);
         }
@@ -289,10 +322,8 @@ private:
           float current_score = proposed_change_state.current_state.score;
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
-          auto change_sample = proposed_change_state.change_sample;
-
-          uint32_t v = change_sample.v;
-          uint32_t w = change_sample.w;
+          uint32_t v = proposed_change_state.v;
+          uint32_t w = proposed_change_state.w;
 
           uint32_t parent_of_v, parent_of_w;
           for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
@@ -308,14 +339,14 @@ private:
           }
 
           typename MutationTreeImpl::ModificationParameters mod_params{
-              .move_type = change_sample.move_type,
-              .v = change_sample.v,
-              .w = change_sample.w,
+              .move_type = proposed_change_state.move_type,
+              .v = proposed_change_state.v,
+              .w = proposed_change_state.w,
               .parent_of_v = parent_of_v,
               .parent_of_w = parent_of_w,
-              .descendant_of_v = change_sample.descendant_of_v,
-              .nondescendant_of_v = change_sample.nondescendant_of_v,
-              .new_beta = change_sample.new_beta,
+              .descendant_of_v = proposed_change_state.descendant_of_v,
+              .nondescendant_of_v = proposed_change_state.nondescendant_of_v,
+              .new_beta = proposed_change_state.new_beta,
           };
 
           AncestorMatrix proposed_am;
@@ -324,7 +355,7 @@ private:
           float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
           float neighborhood_correction;
-          if (change_sample.move_type == MoveType::SwapSubtrees &&
+          if (proposed_change_state.move_type == MoveType::SwapSubtrees &&
               current_tree.is_ancestor(w, v)) {
             neighborhood_correction = float(current_tree.get_n_descendants(v)) /
                                       float(current_tree.get_n_descendants(w));
@@ -336,7 +367,7 @@ private:
               neighborhood_correction *
               std::exp((proposed_score - current_score) * gamma);
           bool accept_move =
-              acceptance_probability > change_sample.acceptance_level;
+              acceptance_probability > proposed_change_state.acceptance_level;
 
           ChainState output_state{
               .ancestor_matrix = accept_move ? proposed_am : current_am,

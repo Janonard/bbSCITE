@@ -44,7 +44,7 @@ public:
         max_n_best_trees(128), alpha_mean(6.04e-5), beta_mean(0.4309),
         beta_sd(0.1), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
         prob_swap_nodes(0.4), prob_swap_subtrees(0.05),
-        beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {}
+        beta_jump_scaling_chi(10.0), gamma(1.0) {}
 
   /**
    * @brief Verify the CLI arguments and store them in the object's fields.
@@ -219,13 +219,9 @@ public:
           error = true;
         }
       } else if (strcmp(argv[i], "-seed") == 0) {
-        if (i + 1 < argc) {
-          seed = atoi(argv[++i]);
-        } else {
-          std::cerr << "Error: Missing argument to parameter -seed."
-                    << std::endl;
-          error = true;
-        }
+        std::cerr << "Warning: The -seed parameter is not supported by "
+                     "ffSCITE (yet). Ignoring the -seed."
+                  << std::endl;
       } else if (strcmp(argv[i], "-max_treelist_size") == 0) {
         if (i + 1 < argc) {
           max_n_best_trees = atoi(argv[++i]);
@@ -602,30 +598,6 @@ public:
    */
   void set_gamma(float gamma) { this->gamma = gamma; }
 
-  /**
-   * @brief Get the seed for the URNGs.
-   *
-   * If the seed has not been explicitly set before, it is sampled from the
-   * random device.
-   *
-   * @return uint32_t The seed for the URNGs.
-   */
-  uint32_t get_seed() const {
-    if (seed.has_value()) {
-      return seed.value();
-    } else {
-      std::random_device seeder;
-      return seeder();
-    }
-  }
-
-  /**
-   * @brief Set the seed for the URNGs.
-   *
-   * @param seed The new seed for the URNGs.
-   */
-  void set_seed(uint32_t seed) { this->seed = seed; }
-
 private:
   float get_sum_of_move_probs() const {
     return prob_beta_change + prob_prune_n_reattach + prob_swap_nodes +
@@ -642,7 +614,5 @@ private:
       prob_swap_subtrees;
   float beta_jump_scaling_chi;
   float gamma;
-
-  std::optional<uint32_t> seed;
 };
 } // namespace ffSCITE

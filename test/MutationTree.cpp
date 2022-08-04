@@ -14,14 +14,18 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#include <ChangeProposer.hpp>
 #include <MutationTree.hpp>
+#include <boost/math/distributions/chi_squared.hpp>
+#include <boost/math/special_functions/binomial.hpp>
 #include <catch2/catch_all.hpp>
+#include <map>
+#include <set>
 
 constexpr uint32_t max_n_genes = 31;
 constexpr uint32_t max_n_nodes = max_n_genes + 1;
+constexpr uint32_t n_fuzzing_iterations = 10000;
+constexpr float hypothesis_test_alpha = 0.05;
 using Tree = ffSCITE::MutationTree<max_n_genes>;
-using ChangeProposerImpl = ffSCITE::ChangeProposer<max_n_genes, std::mt19937>;
 using ModificationParameters = Tree::ModificationParameters;
 using AncestorMatrix = Tree::AncestorMatrix;
 
@@ -567,6 +571,171 @@ TEST_CASE("MutationTree update constructor (swap related subtrees)",
   require_tree_equality(swapped_tree, {2, 2, 7, 5, 6, 0, 7, 7});
 }
 
+/*
+ * These unit tests do not prove that the tested methods are correct. Instead,
+ * they only check whether their behavior is plausible. We chose to not correct
+ * this since we needed to prioritize the optimization of the application. For
+ * more information, check out Issue 15
+ * (https://git.uni-paderborn.de/joo/ffscite/-/issues/15).
+ */
+TEST_CASE("MutationTree::sample_nonroot_nodepair", "[MutationTree]") {
+  std::mt19937 rng;
+  rng.seed(std::random_device()());
+
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
+
+  std::map<std::array<uint32_t, 2>, unsigned int> sampled_nodes;
+
+  for (uint32_t i = 0; i < n_fuzzing_iterations; i++) {
+    auto pair = tree.sample_nonroot_nodepair(rng);
+    REQUIRE(pair[0] < tree.get_n_nodes() - 1);
+    REQUIRE(pair[1] < tree.get_n_nodes() - 1);
+    REQUIRE(pair[0] != pair[1]);
+
+    if (pair[0] > pair[1]) {
+      std::swap(pair[0], pair[1]);
+    }
+
+    if (sampled_nodes.contains(pair)) {
+      sampled_nodes[pair] += 1;
+    } else {
+      sampled_nodes[pair] = 1;
+    }
+  }
+
+  // We want to test that the samples are uniformly distributed among all
+  // possible node pairs, i.e. subsets of the nodesets with a cardinality of
+  // two. We therefore view `sample_nonroot_nodepair` as a random variable that
+  // samples from all those subsets. Our null-hypothesis is that this random
+  // variable is uniformly distributed and we test this hypothesis with a
+  // chi-squared-test.
+  float t = 0;
+  float n_pairs =
+      boost::math::binomial_coefficient<float>(tree.get_n_nodes() - 1, 2);
+  for (uint32_t i = 0; i < tree.get_n_nodes() - 1; i++) {
+    for (uint32_t j = i + 1; j < tree.get_n_nodes() - 1; j++) {
+      float n_occurrences;
+      if (sampled_nodes.contains({i, j})) {
+        n_occurrences = sampled_nodes[{i, j}];
+      } else {
+        n_occurrences = 0.0;
+      }
+
+      float numerator = n_occurrences - n_fuzzing_iterations / n_pairs;
+      numerator *= numerator;
+      float denominator = n_fuzzing_iterations / n_pairs;
+      t += numerator / denominator;
+    }
+  }
+
+  boost::math::chi_squared chi_squared_dist(n_pairs - 1);
+  REQUIRE(t < quantile(chi_squared_dist, 1 - hypothesis_test_alpha));
+}
+
+TEST_CASE("MutationTree::sample_descendant_or_nondescendant",
+          "[MutationTree]") {
+  std::mt19937 rng;
+  rng.seed(std::random_device()());
+
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
+
+  // We count how often each descendant of five is picked to run a hypothesis
+  // test.
+  std::map<unsigned int, unsigned int> sampled_nodes_for_five;
+  sampled_nodes_for_five[0] = 0;
+  sampled_nodes_for_five[1] = 0;
+  sampled_nodes_for_five[2] = 0;
+  sampled_nodes_for_five[3] = 0;
+  sampled_nodes_for_five[5] = 0;
+
+  for (uint32_t i = 0; i < n_fuzzing_iterations; i++) {
+    auto sampled_node = tree.sample_descendant(rng, 5);
+    REQUIRE(tree.is_ancestor(5, sampled_node));
+    sampled_nodes_for_five[sampled_node]++;
+
+    sampled_node = tree.sample_nondescendant(rng, 5);
+    REQUIRE(!tree.is_ancestor(5, sampled_node));
+
+    sampled_node = tree.sample_descendant(rng, 6);
+    REQUIRE(tree.is_ancestor(6, sampled_node));
+
+    sampled_node = tree.sample_nondescendant(rng, 6);
+    REQUIRE(!tree.is_ancestor(6, sampled_node));
+  }
+
+  // We want to test that the samples are uniformly distributed among all
+  // descendants of five. We therefore view `sample_descendant_or_nondescendant`
+  // as a random variable that samples from the descendants of a node. Our
+  // null-hypothesis is that X_v is uniformly distributed, i.e. \forall w \in
+  // Desc(v): P(X_v = w) = (|Desc(v)|)^{-1} and we test this hypothesis with a
+  // chi-squared-test.
+  float t = 0;
+  const float n_descendants = tree.get_n_descendants(5);
+  for (std::pair<unsigned int, unsigned int> pair : sampled_nodes_for_five) {
+    float numerator = (pair.second - n_fuzzing_iterations / n_descendants);
+    numerator *= numerator;
+    float denominator = n_fuzzing_iterations / n_descendants;
+    t += numerator / denominator;
+  }
+
+  boost::math::chi_squared chi_squared_dist(5 - 1);
+  REQUIRE(t < quantile(chi_squared_dist, 1 - hypothesis_test_alpha));
+}
+
+TEST_CASE("MutationTree::sample_new_beta", "[MutationTree]") {
+  std::mt19937 rng;
+  rng.seed(std::random_device()());
+
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.0);
+
+  for (uint32_t i = 0; i < n_fuzzing_iterations; i++) {
+    tree.set_beta(0.0);
+    float sampled_beta = tree.sample_new_beta(rng, 0.25);
+    REQUIRE(sampled_beta >= 0.0);
+    REQUIRE(sampled_beta <= 1.0);
+
+    tree.set_beta(0.5);
+    sampled_beta = tree.sample_new_beta(rng, 0.25);
+    REQUIRE(sampled_beta >= 0.0);
+    REQUIRE(sampled_beta <= 1.0);
+
+    tree.set_beta(1.0);
+    sampled_beta = tree.sample_new_beta(rng, 0.25);
+    REQUIRE(sampled_beta >= 0.0);
+    REQUIRE(sampled_beta <= 1.0);
+  }
+}
+
 const std::string required_graphviz_tree =
     "digraph G {\n"
     "node [color=deeppink4, style=filled, fontcolor=white];\n"
@@ -616,43 +785,38 @@ TEST_CASE("MutationTree::to_newick", "[MutationTree]") {
 }
 
 TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
-  std::mt19937 twister;
-  twister.seed(std::random_device()());
+  std::mt19937 rng;
+  rng.seed(std::random_device()());
 
-  ChangeProposerImpl change_proposer(twister);
   uint32_t n_genes = 16;
 
-  constexpr uint32_t n_operations = 1000;
-
   std::vector<uint32_t> pruefer_code =
-      Tree::sample_random_pruefer_code(twister, n_genes);
+      Tree::sample_random_pruefer_code(rng, n_genes);
   std::vector<uint32_t> parent_vector =
       Tree::pruefer_code_to_parent_vector(pruefer_code);
   AncestorMatrix am = Tree::parent_vector_to_ancestor_matrix(parent_vector);
 
   Tree tree(am, n_genes, 0.42);
 
-  for (uint32_t i_operation = 0; i_operation < n_operations; i_operation++) {
-    ChangeProposerImpl::ChainStepSample change_sample =
-        change_proposer.sample_step_parameters(tree);
+  for (uint32_t i_operation = 0; i_operation < n_fuzzing_iterations;
+       i_operation++) {
+    std::array<uint32_t, 2> v_and_w = tree.sample_nonroot_nodepair(rng);
+    uint32_t v = v_and_w[0];
+    uint32_t w = v_and_w[1];
+    uint32_t parent_of_v = tree.get_parent(v);
+    uint32_t parent_of_w = tree.get_parent(w);
 
-    Tree::ModificationParameters parameters{
-        .move_type = change_sample.move_type,
-        .v = change_sample.v,
-        .w = change_sample.w,
-        .parent_of_v = tree.get_parent(change_sample.v),
-        .parent_of_w = tree.get_parent(change_sample.w),
-        .descendant_of_v = change_sample.descendant_of_v,
-        .nondescendant_of_v = change_sample.nondescendant_of_v,
-        .new_beta = change_sample.new_beta,
-    };
+    uint32_t descendant_of_v = tree.sample_descendant(rng, v);
+    uint32_t nondescendant_of_v = tree.sample_nondescendant(rng, v);
+    ffSCITE::MoveType move_type = tree.sample_move(rng, 0.0, 0.33, 0.33);
+    if (move_type == ffSCITE::MoveType::ChangeBeta) {
+      continue;
+    }
 
     // Execute the move manually
     std::vector<uint32_t> modified_vector = parent_vector;
-    uint32_t v = parameters.v;
-    uint32_t w = parameters.w;
 
-    switch (parameters.move_type) {
+    switch (move_type) {
     case ffSCITE::MoveType::SwapNodes:
       for (uint32_t i_node = 0; i_node < modified_vector.size(); i_node++) {
         if (i_node != v && i_node != w) {
@@ -674,14 +838,14 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
       }
       break;
     case ffSCITE::MoveType::PruneReattach:
-      modified_vector[v] = parameters.nondescendant_of_v;
+      modified_vector[v] = nondescendant_of_v;
       break;
     case ffSCITE::MoveType::SwapSubtrees:
-      modified_vector[v] = parameters.parent_of_w;
+      modified_vector[v] = parent_of_w;
       if (tree.is_ancestor(w, v)) {
-        modified_vector[w] = parameters.descendant_of_v;
+        modified_vector[w] = descendant_of_v;
       } else {
-        modified_vector[w] = parameters.parent_of_v;
+        modified_vector[w] = parent_of_v;
       }
       break;
     case ffSCITE::MoveType::ChangeBeta:
@@ -690,6 +854,16 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
     }
 
     // Construct the updated tree
+    Tree::ModificationParameters parameters{
+        .move_type = move_type,
+        .v = v,
+        .w = w,
+        .parent_of_v = parent_of_v,
+        .parent_of_w = parent_of_w,
+        .descendant_of_v = descendant_of_v,
+        .nondescendant_of_v = nondescendant_of_v,
+        .new_beta = 0.42,
+    };
     AncestorMatrix modified_am;
     Tree modified_tree(modified_am, tree, parameters);
 
