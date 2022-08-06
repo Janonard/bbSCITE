@@ -20,9 +20,7 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <uint32_t max_n_cells, uint32_t max_n_genes,
-          uint32_t n_parallel_chains = 1>
-class Application {
+template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
@@ -93,8 +91,7 @@ public:
   };
 
   using InputPipe = cl::sycl::pipe<class InputPipeID, ChainState>;
-  using OutputPipe =
-      cl::sycl::pipe<class OutputPipeID, ChainState, n_parallel_chains>;
+  using OutputPipe = cl::sycl::pipe<class OutputPipeID, ChainState>;
 
   struct ProposedChangeState {
     ChainState current_state;
@@ -169,35 +166,19 @@ private:
       uint32_t n_chains = parameters.get_n_chains();
 
       cgh.single_task<class IOKernel>([=]() {
-        for (uint32_t i_chain_group = 0; i_chain_group < n_chains;
-             i_chain_group += n_parallel_chains) {
+        [[intel::loop_coalesce(2)]] for (uint32_t step_i = 0; step_i < n_steps;
+                                         step_i++) {
+          for (uint32_t chain_i = 0; chain_i < n_chains; chain_i++) {
+            InputPipe::write(ChainState{
+                .ancestor_matrix = current_am_ac[chain_i],
+                .beta = current_beta_ac[chain_i],
+                .score = current_score_ac[chain_i],
+            });
 
-          for (uint32_t i_chain = i_chain_group;
-               i_chain < i_chain_group + n_parallel_chains; i_chain++) {
-            if (i_chain < n_chains) {
-              InputPipe::write(ChainState{
-                  .ancestor_matrix = current_am_ac[i_chain],
-                  .beta = current_beta_ac[i_chain],
-                  .score = current_score_ac[i_chain],
-              });
-            }
-          }
-
-          uint32_t n_iterations =
-              (n_steps - 1) *
-              std::min(n_parallel_chains, n_chains - i_chain_group);
-          for (uint32_t i = 0; i < n_iterations; i++) {
-            InputPipe::write(OutputPipe::read());
-          }
-
-          for (uint32_t i_chain = i_chain_group;
-               i_chain < i_chain_group + n_parallel_chains; i_chain++) {
-            if (i_chain < n_chains) {
-              ChainState output_state = OutputPipe::read();
-              current_am_ac[i_chain] = output_state.ancestor_matrix;
-              current_beta_ac[i_chain] = output_state.beta;
-              current_score_ac[i_chain] = output_state.score;
-            }
+            ChainState output_state = OutputPipe::read();
+            current_am_ac[chain_i] = output_state.ancestor_matrix;
+            current_beta_ac[chain_i] = output_state.beta;
+            current_score_ac[chain_i] = output_state.score;
           }
         }
       });
