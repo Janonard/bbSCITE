@@ -206,13 +206,11 @@ private:
     using namespace cl::sycl;
 
     std::random_device seeder;
-    std::array<uint64_t, 6> seed;
+    std::array<uint64_t, 4> seed;
     seed[0] = seeder();
     seed[1] = seeder();
     seed[2] = seeder();
     seed[3] = seeder();
-    seed[4] = seeder();
-    seed[5] = seeder();
 
     return working_queue.submit([&](handler &cgh) {
       float prob_beta_change = parameters.get_prob_beta_change();
@@ -225,14 +223,12 @@ private:
       uint32_t n_genes = this->n_genes;
 
       cgh.single_task<class ChangeProposerKernel>([=]() {
-        oneapi::dpl::minstd_rand nodepair_rng, descendant_rng,
-            nondescendant_rng, move_rng, beta_rng, acceptance_rng;
+        oneapi::dpl::minstd_rand nodepair_rng, descendant_rng, move_rng,
+            beta_rng;
         nodepair_rng.seed(seed[0]);
         descendant_rng.seed(seed[1]);
-        nondescendant_rng.seed(seed[2]);
-        move_rng.seed(seed[3]);
-        beta_rng.seed(seed[4]);
-        acceptance_rng.seed(seed[5]);
+        move_rng.seed(seed[2]);
+        beta_rng.seed(seed[3]);
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
           ChainState input_state = InputPipe::read();
@@ -250,7 +246,7 @@ private:
           uint32_t descendant_of_v =
               current_tree.sample_descendant(descendant_rng, v);
           uint32_t nondescendant_of_v =
-              current_tree.sample_nondescendant(nondescendant_rng, v);
+              current_tree.sample_nondescendant(descendant_rng, v);
 
           MoveType move_type =
               current_tree.sample_move(move_rng, prob_beta_change,
@@ -259,7 +255,7 @@ private:
           float new_beta = current_tree.sample_new_beta(beta_rng, beta_jump_sd);
 
           float acceptance_level =
-              oneapi::dpl::uniform_real_distribution(0.0, 1.0)(acceptance_rng);
+              oneapi::dpl::uniform_real_distribution(0.0, 1.0)(move_rng);
 
           ProposedChangeState proposed_change_state{
               .current_state = input_state,
