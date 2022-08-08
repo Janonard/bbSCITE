@@ -20,7 +20,9 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
+template <uint32_t max_n_cells, uint32_t max_n_genes,
+          uint32_t pipeline_capacity>
+class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
@@ -154,31 +156,46 @@ private:
 
     return working_queue.submit([&](handler &cgh) {
       auto current_am_ac =
-          current_am_buffer.template get_access<access::mode::read_write>(cgh);
+          current_am_buffer.template get_access<access::mode::read>(cgh);
       auto current_beta_ac =
-          current_beta_buffer.template get_access<access::mode::read_write>(
-              cgh);
+          current_beta_buffer.template get_access<access::mode::read>(cgh);
       auto current_score_ac =
-          current_score_buffer.template get_access<access::mode::read_write>(
-              cgh);
+          current_score_buffer.template get_access<access::mode::read>(cgh);
 
       uint32_t n_steps = parameters.get_chain_length();
       uint32_t n_chains = parameters.get_n_chains();
 
       cgh.single_task<class IOKernel>([=]() {
-        [[intel::loop_coalesce(2)]] for (uint32_t step_i = 0; step_i < n_steps;
-                                         step_i++) {
-          for (uint32_t chain_i = 0; chain_i < n_chains; chain_i++) {
-            InputPipe::write(ChainState{
-                .ancestor_matrix = current_am_ac[chain_i],
-                .beta = current_beta_ac[chain_i],
-                .score = current_score_ac[chain_i],
-            });
+        uint32_t i_initial_state = 0;
 
-            ChainState output_state = OutputPipe::read();
-            current_am_ac[chain_i] = output_state.ancestor_matrix;
-            current_beta_ac[chain_i] = output_state.beta;
-            current_score_ac[chain_i] = output_state.score;
+        for (uint32_t i = 0; i < n_steps * n_chains + pipeline_capacity; i++) {
+          // Always read the result from the output pipe if we can expect an
+          // output, even if the result is not written back.
+          ChainState feedback_state;
+          if (i > pipeline_capacity) {
+            feedback_state = OutputPipe::read();
+          }
+
+          // We only provide inputs for the first `n_steps * n_chains`
+          // iterations. The rest is just the tail to empty the pipes.
+          if (i < n_steps * n_chains) {
+
+            ChainState input_state;
+            if (i % n_steps < pipeline_capacity) {
+              // For the first couple of iterations, we read the inputs from our
+              // initial state buffer.
+              input_state = ChainState{
+                  .ancestor_matrix = current_am_ac[i_initial_state],
+                  .beta = current_beta_ac[i_initial_state],
+                  .score = current_score_ac[i_initial_state],
+              };
+              i_initial_state++;
+            } else {
+              // After that, we simply use the previous output.
+              input_state = feedback_state;
+            }
+
+            InputPipe::write(input_state);
           }
         }
       });

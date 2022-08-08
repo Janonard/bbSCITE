@@ -25,6 +25,7 @@ using namespace ffSCITE;
 
 constexpr uint32_t max_n_cells = 64;
 constexpr uint32_t max_n_genes = 63;
+constexpr uint32_t pipeline_capacity = 8;
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
@@ -35,7 +36,8 @@ static_assert(max_n_cells == 64 && max_n_genes == 63);
 
 using URNG = oneapi::dpl::minstd_rand;
 
-using ApplicationImpl = Application<max_n_cells, max_n_genes>;
+using ApplicationImpl =
+    Application<max_n_cells, max_n_genes, pipeline_capacity>;
 using MutationDataWord = ApplicationImpl::MutationDataWord;
 using MutationTreeImpl = MutationTree<max_n_genes>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
@@ -149,8 +151,7 @@ int main(int argc, char **argv) {
   cl::sycl::queue working_queue(device, queue_properties);
 
   // Running the simulation and retrieving the best trees.
-  Application<max_n_cells, max_n_genes> app(data, working_queue, parameters,
-                                            n_cells, n_genes);
+  ApplicationImpl app(data, working_queue, parameters, n_cells, n_genes);
   float runtime = app.run_simulation();
 
   std::cout << "Time elapsed: " << runtime << " ms" << std::endl;

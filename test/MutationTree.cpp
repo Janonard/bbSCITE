@@ -719,7 +719,7 @@ TEST_CASE("MutationTree::sample_new_beta", "[MutationTree]") {
   Tree tree(am, 7, 0.0);
 
   for (uint32_t i = 0; i < n_fuzzing_iterations; i++) {
-    tree.set_beta(0.0);
+    tree.set_beta(0.0001);
     float sampled_beta = tree.sample_new_beta(rng, 0.25);
     REQUIRE(sampled_beta >= 0.0);
     REQUIRE(sampled_beta <= 1.0);
@@ -729,7 +729,7 @@ TEST_CASE("MutationTree::sample_new_beta", "[MutationTree]") {
     REQUIRE(sampled_beta >= 0.0);
     REQUIRE(sampled_beta <= 1.0);
 
-    tree.set_beta(1.0);
+    tree.set_beta(0.9999);
     sampled_beta = tree.sample_new_beta(rng, 0.25);
     REQUIRE(sampled_beta >= 0.0);
     REQUIRE(sampled_beta <= 1.0);
