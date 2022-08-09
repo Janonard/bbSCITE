@@ -20,9 +20,7 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <uint32_t max_n_cells, uint32_t max_n_genes,
-          uint32_t pipeline_capacity>
-class Application {
+template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
@@ -32,6 +30,12 @@ public:
   using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
+
+#ifdef EMULATOR
+  static constexpr uint32_t pipeline_capacity = 2;
+#else
+  static constexpr uint32_t pipeline_capacity = 5;
+#endif
 
   Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
@@ -52,6 +56,19 @@ public:
 
     oneapi::dpl::minstd_rand rng;
     rng.seed(std::random_device()());
+
+    if (parameters.get_n_chains() % pipeline_capacity != 0) {
+      uint32_t old_n_chains = parameters.get_n_chains();
+      uint32_t new_n_chains =
+          old_n_chains +
+          (pipeline_capacity - (old_n_chains % pipeline_capacity));
+      std::cerr << "Warning: Increasing the number of chains to "
+                << new_n_chains << "." << std::endl;
+      std::cerr << "This is the next multiple of the pipeline capacity and "
+                   "doing so improves the performance."
+                << std::endl;
+      parameters.set_n_chains(new_n_chains);
+    }
 
     current_am_buffer = range<1>(parameters.get_n_chains());
     current_beta_buffer = range<1>(parameters.get_n_chains());
@@ -154,6 +171,8 @@ private:
   cl::sycl::event enqueue_io() {
     using namespace cl::sycl;
 
+    assert(parameters.get_n_chains() % pipeline_capacity == 0);
+
     return working_queue.submit([&](handler &cgh) {
       auto current_am_ac =
           current_am_buffer.template get_access<access::mode::read>(cgh);
@@ -181,9 +200,9 @@ private:
           if (i < n_steps * n_chains) {
 
             ChainState input_state;
-            if (i % n_steps < pipeline_capacity) {
-              // For the first couple of iterations, we read the inputs from our
-              // initial state buffer.
+            if (i % (n_steps * pipeline_capacity) < pipeline_capacity) {
+              // For the first couple of iterations of a group, we read the
+              // inputs from our initial state buffer.
               input_state = ChainState{
                   .ancestor_matrix = current_am_ac[i_initial_state],
                   .beta = current_beta_ac[i_initial_state],
@@ -395,7 +414,7 @@ private:
 
   cl::sycl::buffer<MutationDataWord, 1> data_buffer;
   cl::sycl::queue working_queue;
-  Parameters const &parameters;
+  Parameters parameters;
   uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE

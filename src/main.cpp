@@ -25,7 +25,6 @@ using namespace ffSCITE;
 
 constexpr uint32_t max_n_cells = 64;
 constexpr uint32_t max_n_genes = 63;
-constexpr uint32_t pipeline_capacity = 8;
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
@@ -37,7 +36,7 @@ static_assert(max_n_cells == 64 && max_n_genes == 63);
 using URNG = oneapi::dpl::minstd_rand;
 
 using ApplicationImpl =
-    Application<max_n_cells, max_n_genes, pipeline_capacity>;
+    Application<max_n_cells, max_n_genes>;
 using MutationDataWord = ApplicationImpl::MutationDataWord;
 using MutationTreeImpl = MutationTree<max_n_genes>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;

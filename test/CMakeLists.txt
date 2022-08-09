@@ -12,6 +12,7 @@ set(UNIT_TEST_SOURCES Application.cpp MutationTree.cpp TreeScorer.cpp StaticMatr
 
 add_executable(unit_test ${UNIT_TEST_SOURCES})
 
+target_compile_definitions(unit_test PUBLIC EMULATOR)
 target_link_libraries(unit_test PRIVATE Catch2::Catch2WithMain)
 target_include_directories(unit_test PUBLIC ../src)
 

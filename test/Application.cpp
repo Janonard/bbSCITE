@@ -20,19 +20,19 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t n_cells = 15;
-constexpr uint32_t n_genes = 4;
-
-constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
-constexpr unsigned long n_chains = 1;
-constexpr unsigned long chain_length = 50000;
-
-using ApplicationImpl = Application<32, 31, 2>;
+using ApplicationImpl = Application<32, 31>;
 using AncestorMatrix = ApplicationImpl::AncestorMatrix;
 using MutationTreeImpl = ApplicationImpl::MutationTreeImpl;
 using MutationDataWord = ApplicationImpl::MutationDataWord;
 using MutationDataMatrix = ApplicationImpl::MutationDataMatrix;
 using HostTreeScorerImpl = ApplicationImpl::HostTreeScorerImpl;
+
+constexpr uint32_t n_cells = 15;
+constexpr uint32_t n_genes = 4;
+
+constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
+constexpr unsigned long n_chains = ApplicationImpl::pipeline_capacity;
+constexpr unsigned long chain_length = 50000;
 
 TEST_CASE("Application::run_simulation()", "[Application]") {
   /*
