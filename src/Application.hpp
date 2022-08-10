@@ -20,7 +20,7 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <uint32_t max_n_cells, uint32_t max_n_genes> class Application {
+template <uint32_t max_n_cells, uint32_t max_n_genes, uint32_t pipeline_capacity> class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
@@ -30,12 +30,6 @@ public:
   using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
-
-#ifdef EMULATOR
-  static constexpr uint32_t pipeline_capacity = 2;
-#else
-  static constexpr uint32_t pipeline_capacity = 5;
-#endif
 
   Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
