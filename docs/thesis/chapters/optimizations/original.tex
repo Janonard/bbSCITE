@@ -1,0 +1,10 @@
+\section{Formal specification of SCITE}
+
+First, we will formalize the observed phenomenon of mutations. Let $n, m \in \mathbb{N}$ be the number of cells and genes that we consider, respectively. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{n \times m}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{n \times m}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also be $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $i \leq n, j \leq m$:
+
+\begin{align*}
+    \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 0) &:= \alpha & \mathbb{P}(D_{i,j} = 0\mid E_{i,j} = 1) &:= \beta \\
+    \mathbb{P}(D_{i,j} = 0 \mid E_{i,j} = 0) &:= (1-\alpha) & \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 1) &:= (1-\beta)
+\end{align*}
+
+\todo[inline]{Handle the case for missing data, either by ruling it out in the prior or saying that we assume this before missing data is applied.}
