@@ -1,10 +1,70 @@
 \section{Formal specification of SCITE}
 
-First, we will formalize the observed phenomenon of mutations. Let $n, m \in \mathbb{N}$ be the number of cells and genes that we consider, respectively. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{n \times m}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{n \times m}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also be $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $i \leq n, j \leq m$:
+First, we will formalize the observed phenomenon of mutations. This formalization is based on the original framework by Jahn et al. \cite{tree2016}, but with improved soundness and more details that we require both to formally describe \ac{SCITE} and to prove the correctness of our implementation. 
 
-\begin{align*}
-    \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 0) &:= \alpha & \mathbb{P}(D_{i,j} = 0\mid E_{i,j} = 1) &:= \beta \\
-    \mathbb{P}(D_{i,j} = 0 \mid E_{i,j} = 0) &:= (1-\alpha) & \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 1) &:= (1-\beta)
-\end{align*}
+\begin{definition}
+    \label{def:mutmatrix}
+    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{n \times m}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{n \times m}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $i \leq n, j \leq m$:
+    \begin{align*}
+        \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 0 \wedge D_{i,j} \neq 2) &:= \alpha & \mathbb{P}(D_{i,j} = 0\mid E_{i,j} = 1 \wedge D_{i,j} \neq 2) &:= \beta \\
+        \mathbb{P}(D_{i,j} = 0 \mid E_{i,j} = 0 \wedge D_{i,j} \neq 2) &:= (1-\alpha) & \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 1 \wedge D_{i,j} \neq 2) &:= (1-\beta)
+    \end{align*}
+    The additional prior $D_{i,j} \neq 2$ is not present in the original formalization, but technically necessary since we would otherwise have $\mathbb{P}(D_{i,j} = 2 \mid E_{i,j} = e) = 0$ for all $e \in \{0,1\}$, which is not useful.
+\end{definition}
 
-\todo[inline]{Handle the case for missing data, either by ruling it out in the prior or saying that we assume this before missing data is applied.}
+
+\begin{definition}
+    \label{def:likelihood}
+    First, we define the local likelihood function $\lambda$ as follows:
+    \begin{align*}
+        \lambda: \{0, 1, 2\} \times \{0, 1\} \rightarrow (0, 1), (d, e) &\mapsto \begin{cases}
+            \mathbb{P}(D_{i,j} = d \mid E_{i,j} = e \wedge D_{i,j} \neq 2) & d \neq 2 \\
+            1 & d = 2 \\
+        \end{cases} \\
+        &= \begin{cases}
+            1-\alpha & d = 0 \wedge e = 0 \\
+            \alpha & d = 1 \wedge e = 0 \\
+            \beta & d = 0 \wedge e = 1 \\
+            1-\beta & d = 1 \wedge e = 1 \\
+            1 & d = 2
+        \end{cases}
+    \end{align*}
+    We make the distinction between $d = 2$ and $d \neq 2$ since we are not interested in lost data, with the underlying assumption that data loss is independent of the true mutation status of a cell. This distinction is not present in the original formalization, but it is present in the original implementation. 
+
+    Given an observed mutation data matrix $d \in \{0,1,2\}^{n \times m}$, we then define the global likelihood function as follows:
+    \begin{align*}
+        \Lambda_d : \{0,1\}^{n \times m} \rightarrow (0,1), e \mapsto \prod_{i = 0}^n \prod_{j = 0}^m \lambda(d_{i,j}, e_{i,j})
+    \end{align*}
+\end{definition}
+
+
+\begin{definition}
+    \label{def:mutation_tree}
+    Let $m \in \mathbb{N}$ be the number of considered genes. A mutation tree is a rooted, directed tree $T = (V, E, r)$ with $V = \{1, 2, 3, \dots, m, r\}$, $|V| = m+1$.
+\end{definition}
+
+\begin{definition}
+    \label{def:reachability}
+    Let $T = (V, E)$ be a tree and $v, w \in V$. $w$ is reachable from $v$, formally $v \leadsto_T w$, iff there is a path $p = (v, \dots, w)$ in $T$.
+\end{definition}
+
+\begin{definition}
+    \label{def:attachment}
+    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, and $T = (V, E, r)$ a mutation tree. An attachment function is a function $\sigma: \{1, \dots, n\} \rightarrow V$.
+\end{definition}
+
+\begin{definition}
+    \label{def:induced_mutmatrix}
+    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, $T$ a mutation tree and $\sigma$ an attachment function. We define the mutation matrix $e_{T, \sigma} \in \{0,1\}^{n \times m}$ induced by the mutation matrix and attachment function as follows:
+    \begin{align*}
+        \forall i \leq n, j \leq m: (e_{T, \sigma})_{i,j} := \begin{cases}
+            1 & j \leadsto_T \sigma(i) \\
+            0 & \mathrm{else}
+        \end{cases}
+    \end{align*}
+\end{definition}
+
+\begin{definition}[The SCITE problem]
+    \label{def:scite_problem}
+    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, and $d \in \{0,1\}^{n \times m}$ an observed mutation matrix. The SCITE problem is: Find a mutation tree $T$ and an attachment function $\sigma$ so that $\Lambda_d(e_{T, \sigma})$ is maximal.
+\end{definition}
