@@ -12,7 +12,6 @@ First, we will formalize the observed phenomenon of mutations. This formalizatio
     The additional prior $D_{i,j} \neq 2$ is not present in the original formalization, but technically necessary since we would otherwise have $\mathbb{P}(D_{i,j} = 2 \mid E_{i,j} = e) = 0$ for all $e \in \{0,1\}$, which is not useful.
 \end{definition}
 
-
 \begin{definition}
     \label{def:likelihood}
     First, we define the local likelihood function $\lambda$ as follows:
@@ -36,7 +35,6 @@ First, we will formalize the observed phenomenon of mutations. This formalizatio
         \Lambda_d : \{0,1\}^{n \times m} \rightarrow (0,1), e \mapsto \prod_{i = 0}^n \prod_{j = 0}^m \lambda(d_{i,j}, e_{i,j})
     \end{align*}
 \end{definition}
-
 
 \begin{definition}
     \label{def:mutation_tree}
@@ -66,5 +64,51 @@ First, we will formalize the observed phenomenon of mutations. This formalizatio
 
 \begin{definition}[The SCITE problem]
     \label{def:scite_problem}
-    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, and $d \in \{0,1\}^{n \times m}$ an observed mutation matrix. The SCITE problem is: Find a mutation tree $T$ and an attachment function $\sigma$ so that $\Lambda_d(e_{T, \sigma})$ is maximal.
+    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, and $d \in \{0,1\}^{n \times m}$ an observed mutation matrix. The \ac{SCITE} problem is: Find a mutation tree $T$ and an attachment function $\sigma$ so that $\Lambda_d(e_{T, \sigma})$ is maximal.
 \end{definition}
+
+\begin{example}
+    \label{exmpl:scite_problem}
+    Let's have a constructed example: We consider $n = 4$ cells and $m = 4$ genes. We assume that the true, underlying mutation tree $T$ and attachments $\sigma$ look like this:
+    \todo[inline]{Draw example tree}
+    Therefore, this gives us the following true mutation matrix:
+    \begin{align*}
+        e_{T, \sigma} &= \begin{pmatrix}
+            1 & 0 & 0 & 0 \\
+            0 & 1 & 0 & 0 \\
+            1 & 1 & 0 & 0 \\
+            0 & 0 & 1 & 1 \\
+        \end{pmatrix}
+    \end{align*}
+    In this example, we assume that $(\alpha, \beta) = (0.01, 0.4)$ and that matrix entries are set as missing with a probability of 0.25, after the false-positive and -negative errors are decided. This is not necessarily the case for all inputs and the algorithms do not work with this assumption, but we can use this model to generate an observed mutation matrix $d$, like this one:
+    \begin{align*}
+        d &= \begin{pmatrix}
+            1 & 0 & 0 & 0 \\
+            0 & 2 & 0 & 2 \\
+            1 & 1 & 2 & 0 \\
+            0 & 0 & 0 & 1 \\
+        \end{pmatrix}
+    \end{align*}
+    Now, we can compute the likelihood of the underlying mutation tree and attachment:
+    \begin{align*}
+        \Lambda_d(e_{T, \sigma}) = (1-\alpha)^{8} \cdot \alpha^{0} \cdot (1-\beta)^{4} \cdot \beta^{1} &\approx 0.05 \\
+        &\approx \exp(-3.04)
+    \end{align*}
+    However, if you attach cell number two to gene two instead, you get the following tree:
+    \todo[inline]{Modified example graph}
+    with the following true mutation matrix:
+    \begin{align*}
+        e_{T, \sigma'} = \begin{pmatrix}
+            1 & 0 & 0 & 0 \\
+            0 & 1 & 0 & 0 \\
+            1 & 1 & 1 & 0 \\
+            0 & 0 & 0 & 1 \\
+        \end{pmatrix}
+    \end{align*}
+    and the following likelihood:
+    \begin{align*}
+        \Lambda_d(e_{T, \sigma'}) = (1-\alpha)^{9} \cdot \alpha^{0} \cdot (1-\beta)^{4} \cdot \beta^{0} &\approx 0.12 \\
+        &\approx \exp(-2.13) 
+    \end{align*}
+    This is one of the solutions found by \ac{SCITE} and it shows that the true, underlying mutation tree and attachment function is not necessarily the most likely one.
+\end{example}
