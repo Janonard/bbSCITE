@@ -130,7 +130,55 @@ Next, we have a lemma that shows that it is not necessary to search for the maxi
     $\sigma_{\max, T}$ maximizes $\Lambda_d (e_{T, \sigma})$ among all $\sigma: \{1, \dots, n\} \rightarrow V$.
 \end{lemma}
 
-Informally, $\sigma_{\max, T}$ picks the attachment node for every cell that maximizes its local likelihood. This lemma is already assumed to be true in the original SCITE paper \cite{tree2016}. Therefore, we see no need to prove it. However, it means that an algorithm that tries to solve the \ac{SCITE} problem (Definition \ref{def:scite_problem}) only needs to try different trees, not every tree-attachment combination. We will also continue to write $\Lambda_d(T)$ instead of $\Lambda_d(e_{T, \sigma_{\max, T}})$. With everything in place, we can now formally describe the \ac{SCITE} algorithm:
+Informally, $\sigma_{\max, T}$ picks the attachment node for every cell that maximizes its local likelihood. This lemma is already assumed to be true in the original SCITE paper \cite{tree2016}. Therefore, we see no need to prove it. However, it means that SCITE only needs to try different trees, not every tree-attachment combination, and we can simply write $\Lambda_d(T)$ instead of $\Lambda_d(e_{T, \sigma_{\max, T}})$ to express the likelihood of a mutation tree. 
+
+\todo[inline]{Define the SCITE chain as a Markov chain}
+
+\begin{definition}[Proposal of new trees, \cite{tree2016}] We define the algorithm to propose a new tree as follows:
+    \begin{algorithmic}
+        \Function{ProposeChange}{$T$}
+            \State $(V, E, r) \leftarrow T$
+            \State $\mathrm{move} \leftarrow \text{sample uniformly from } \{\text{``swap nodes''}, \text{``prune and reattach''}, \text{``swap subtrees''}\}$
+            \If{$\mathrm{move} = \text{``swap nodes''}$}
+                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
+                \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
+                \State $E' \leftarrow \{(w, x) : (v, x) \in E \wedge x \neq w\} \cup \{(v, x) : (w, x) \in E \wedge x \neq v\}$
+                \State $E' \leftarrow E' \cup \{(x, y) \in E: \{x, y\} \cap \{v, w\} \neq \emptyset\}\}$
+                \If{$(v, w) \in E$}
+                    \State $E' \leftarrow E' \cup \{(w, v), (p(v), w)\}$
+                \ElsIf{$(w, v) \in E$}
+                    \State $E' \leftarrow E' \cup \{(v, w), (p(w), v)\}$
+                \Else
+                    \State $E' \leftarrow E' \cup \{(p(w), v), (p(v), w)\}$
+                \EndIf
+                \State $f_\mathrm{correction} \leftarrow 1$
+            \ElsIf{$\mathrm{move} = \text{``prune and reattach''}$}
+                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
+                \State $w \leftarrow \text{sample uniformly from } \{w \in V : v \not\leadsto_T w\}$
+                \State $E' \leftarrow \left(E \setminus \{(p(v), v)\}\right)  \cup \{(w, v)\}$
+                \State $f_\mathrm{correction} \leftarrow 1$
+            \ElsIf{$\mathrm{move} = \text{``swap subtrees''}$}
+                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
+                \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
+                \If{$v \leadsto_T w$}
+                    \State $v, w \leftarrow w, v$
+                \EndIf
+                \If{$w \leadsto_T v$}
+                    \State $t \leftarrow \text{sample uniformly from } \{x \in V: v \leadsto_T x\}$
+                    \State $f_\mathrm{correction} \leftarrow \frac{|\{x \in V : v \leadsto_T x\}|}{|\{x \in V : w \leadsto_T x\}|}$
+                \Else
+                    \State $t \leftarrow p(v)$
+                    \State $f_\mathrm{correction} \leftarrow 1$
+                \EndIf
+                \State $E' \leftarrow (E \setminus \{(p(v), v)\}) \cup \{(p(w), v)\}$ 
+                \State $E' \leftarrow (E' \setminus \{(p(w), w)\}) \cup \{(t, w)\}$
+            \EndIf
+            \State \Return $(V, E', r), f_\mathrm{correction}$
+        \EndFunction
+    \end{algorithmic}
+\end{definition}
+
+We will also continue to write $\Lambda_d(T)$ instead of $\Lambda_d(e_{T, \sigma_{\max, T}})$. With everything in place, we can now formally describe the \ac{SCITE} algorithm:
 
 \begin{definition}[The general SCITE algorithm, \cite{tree2016}] We define the \ac{SCITE} algorithm as follows:
     \begin{algorithmic}
@@ -152,39 +200,6 @@ Informally, $\sigma_{\max, T}$ picks the attachment node for every cell that max
                     \EndIf
                 \EndFor
             \EndFor
-        \EndFunction
-    \end{algorithmic}
-    The helper function \textsc{ProposeChange} is defined as follows:
-    \begin{algorithmic}
-        \Function{ProposeChange}{$T = (V, E, r)$}
-            \State $\mathrm{move} \leftarrow \text{sample uniformly from } \{\text{``swap nodes''}, \text{``prune and reattach''}, \text{``swap subtrees''}\}$
-            \If{$\mathrm{move} = \text{``swap nodes''}$}
-                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
-                \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
-                \State $E \leftarrow \{\}$
-                \State $f_\mathrm{correction} \leftarrow 1$
-            \ElsIf{$\mathrm{move} = \text{``prune and reattach''}$}
-                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
-                \State $w \leftarrow \text{sample uniformly from } \{w \in V : v \not\leadsto_T w\}$
-                \State $E \leftarrow \left(E \setminus \{(p(v), v)\}\right)  \cup \{(w, v)\}$
-                \State $f_\mathrm{correction} \leftarrow 1$
-            \ElsIf{$\mathrm{move} = \text{``swap subtrees''}$}
-                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
-                \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
-                \If{$v \leadsto_T w$}
-                    \State $v, w \leftarrow w, v$
-                \EndIf
-                \If{$w \leadsto_T v$}
-                    \State $t \leftarrow \text{sample uniformly from } \{x \in V: v \leadsto_T x\}$
-                    \State $f_\mathrm{correction} \leftarrow 1$
-                \Else
-                    \State $t \leftarrow p(v)$
-                    \State $f_\mathrm{correction} \leftarrow \frac{|\{x \in V : v \leadsto_T x\}|}{|\{x \in V : w \leadsto_T x\}|}$
-                \EndIf
-                \State $E \leftarrow (E \setminus \{(p(v), v)\}) \cup \{(p(w), v)\}$ 
-                \State $E \leftarrow (E \setminus \{(p(w), w)\}) \cup \{(t, w)\}$
-            \EndIf
-            \State \Return $(V, E, r), f_\mathrm{correction}$
         \EndFunction
     \end{algorithmic}
 \end{definition}
