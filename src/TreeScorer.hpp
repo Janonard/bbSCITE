@@ -131,7 +131,7 @@ public:
                                      cell_i++) {
       MutationDataWord observed_mutations = data[cell_i];
 
-#pragma unroll 16
+#pragma unroll 8
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
         AncestryVector true_mutations = tree.get_ancestors(node_i);
 
