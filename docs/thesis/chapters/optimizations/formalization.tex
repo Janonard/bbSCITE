@@ -16,7 +16,7 @@ First, we will formalize the observed phenomenon of mutations. This formalizatio
     \label{def:likelihood}
     First, we define the local likelihood function $\lambda$ as follows:
     \begin{align*}
-        \lambda: \{0, 1, 2\} \times \{0, 1\} \rightarrow (0, 1), (d, e) &\mapsto \begin{cases}
+        \lambda_d: \{0, 1, 2\} \times \{0, 1\} \rightarrow (0, 1), (d, e) &\mapsto \begin{cases}
             \mathbb{P}(D_{i,j} = d \mid E_{i,j} = e \wedge D_{i,j} \neq 2) & d \neq 2 \\
             1 & d = 2 \\
         \end{cases} \\
@@ -60,7 +60,10 @@ First, we will formalize the observed phenomenon of mutations. This formalizatio
             0 & \mathrm{else}
         \end{cases}
     \end{align*}
+    This means that a cell $i$ has a mutation $j$ iff $j$ is an ancestor of its attachment node $\sigma(i)$.
 \end{definition}
+
+\todo[inline]{Insert an example here.}
 
 \begin{definition}[The SCITE problem]
     \label{def:scite_problem}
@@ -112,3 +115,76 @@ First, we will formalize the observed phenomenon of mutations. This formalizatio
     \end{align*}
     This is one of the solutions found by \ac{SCITE} and it shows that the true, underlying mutation tree and attachment function is not necessarily the most likely one.
 \end{example}
+
+Next, we have a lemma that shows that it is not necessary to search for the maximal attachment function given a mutation tree:
+
+\begin{lemma}[\cite{tree2016}]
+    \label{lem:max_attachment}
+    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, $d \in \{0,1\}^{n \times m}$ an observed mutation matrix, and $T$ a mutation tree. We define:
+    \begin{align*}
+        \sigma_{\max, T}: \{1, \dots, n\} \rightarrow V, i \mapsto \argmax_{v \in V} \prod_{j = 1}^m \lambda \left(d_{i,j}, \begin{cases}
+            1 & j \leadsto_T v \\
+            0 & \mathrm{else} \\
+        \end{cases}\right)
+    \end{align*}
+    $\sigma_{\max, T}$ maximizes $\Lambda_d (e_{T, \sigma})$ among all $\sigma: \{1, \dots, n\} \rightarrow V$.
+\end{lemma}
+
+Informally, $\sigma_{\max, T}$ picks the attachment node for every cell that maximizes its local likelihood. This lemma is already assumed to be true in the original SCITE paper \cite{tree2016}. Therefore, we see no need to prove it. However, it means that an algorithm that tries to solve the \ac{SCITE} problem (Definition \ref{def:scite_problem}) only needs to try different trees, not every tree-attachment combination. We will also continue to write $\Lambda_d(T)$ instead of $\Lambda_d(e_{T, \sigma_{\max, T}})$. With everything in place, we can now formally describe the \ac{SCITE} algorithm:
+
+\begin{definition}[The general SCITE algorithm, \cite{tree2016}] We define the \ac{SCITE} algorithm as follows:
+    \begin{algorithmic}
+        \Function{SCITE}{$n_\mathrm{chains} \in \mathbb{N}, n_\mathrm{steps} \in \mathbb{N}, d \in \{0,1,2\}^{n \times m}$}
+            \State $T_\mathrm{best} \leftarrow \text{sample random mutation tree}$
+            \State $s_\mathrm{best} \leftarrow \Lambda_d(T_\mathrm{best})$
+            \ForAll{$i_\mathrm{chain} \leq n_\mathrm{chains}$}
+                \State $T_\mathrm{current} \leftarrow \text{sample random mutation tree}$
+                \State $s_\mathrm{current} \leftarrow \Lambda_d(T_\mathrm{current})$
+                \ForAll{$i_\mathrm{step} \leq n_\mathrm{steps}$}
+                    \State $T_\mathrm{proposed}, f_\mathrm{correction} \leftarrow \textsc{ProposeChange}(T_\mathrm{current})$
+                    \State $s_\mathrm{proposed} \leftarrow \Lambda_d(T_\mathrm{proposed})$
+                    \State $p_\mathrm{acceptance} \leftarrow f_\mathrm{correction} \cdot \frac{s_\mathrm{proposed}}{s_\mathrm{current}}$
+                    \If{accept with probability $p_\mathrm{acceptance}$}
+                        \State $T_\mathrm{current}, s_\mathrm{current} \leftarrow T_\mathrm{proposed}, s_\mathrm{proposed}$
+                    \EndIf
+                    \If{$s_\mathrm{proposed} > s_\mathrm{best}$}
+                        \State $T_\mathrm{best}, s_\mathrm{best} \leftarrow T_\mathrm{proposed}, s_\mathrm{proposed}$
+                    \EndIf
+                \EndFor
+            \EndFor
+        \EndFunction
+    \end{algorithmic}
+    The helper function \textsc{ProposeChange} is defined as follows:
+    \begin{algorithmic}
+        \Function{ProposeChange}{$T = (V, E, r)$}
+            \State $\mathrm{move} \leftarrow \text{sample uniformly from } \{\text{``swap nodes''}, \text{``prune and reattach''}, \text{``swap subtrees''}\}$
+            \If{$\mathrm{move} = \text{``swap nodes''}$}
+                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
+                \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
+                \State $E \leftarrow \{\}$
+                \State $f_\mathrm{correction} \leftarrow 1$
+            \ElsIf{$\mathrm{move} = \text{``prune and reattach''}$}
+                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
+                \State $w \leftarrow \text{sample uniformly from } \{w \in V : v \not\leadsto_T w\}$
+                \State $E \leftarrow \left(E \setminus \{(p(v), v)\}\right)  \cup \{(w, v)\}$
+                \State $f_\mathrm{correction} \leftarrow 1$
+            \ElsIf{$\mathrm{move} = \text{``swap subtrees''}$}
+                \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
+                \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
+                \If{$v \leadsto_T w$}
+                    \State $v, w \leftarrow w, v$
+                \EndIf
+                \If{$w \leadsto_T v$}
+                    \State $t \leftarrow \text{sample uniformly from } \{x \in V: v \leadsto_T x\}$
+                    \State $f_\mathrm{correction} \leftarrow 1$
+                \Else
+                    \State $t \leftarrow p(v)$
+                    \State $f_\mathrm{correction} \leftarrow \frac{|\{x \in V : v \leadsto_T x\}|}{|\{x \in V : w \leadsto_T x\}|}$
+                \EndIf
+                \State $E \leftarrow (E \setminus \{(p(v), v)\}) \cup \{(p(w), v)\}$ 
+                \State $E \leftarrow (E \setminus \{(p(w), w)\}) \cup \{(t, w)\}$
+            \EndIf
+            \State \Return $(V, E, r), f_\mathrm{correction}$
+        \EndFunction
+    \end{algorithmic}
+\end{definition}
