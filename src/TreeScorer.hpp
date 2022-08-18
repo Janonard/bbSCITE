@@ -151,28 +151,8 @@ public:
       }
     }
 
-    float cell_scores[max_n_cells];
-
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      float best_cell_score = individual_scores[cell_i][0];
-#pragma unroll
-      for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-        if (node_i < n_genes + 1 &&
-            individual_scores[cell_i][node_i] > best_cell_score) {
-          best_cell_score = individual_scores[cell_i][node_i];
-        }
-      }
-      cell_scores[cell_i] = best_cell_score;
-    }
-
-    float tree_score = 0.0;
-
-#pragma unroll
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      if (cell_i < n_cells) {
-        tree_score += cell_scores[cell_i];
-      }
-    }
+    float tree_score = individual_scores[0][0] + individual_scores[1][1] +
+                       individual_scores[2][2];
 
     float beta_score = logscore_beta(tree.get_beta());
 
