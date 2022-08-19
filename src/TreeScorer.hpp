@@ -151,7 +151,7 @@ public:
       }
     }
 
-    float cell_scores[max_n_cells];
+    float tree_score = 0.0;
 
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
       float best_cell_score = individual_scores[cell_i][0];
@@ -162,15 +162,9 @@ public:
           best_cell_score = individual_scores[cell_i][node_i];
         }
       }
-      cell_scores[cell_i] = best_cell_score;
-    }
-
-    float tree_score = 0.0;
-
-#pragma unroll
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+      
       if (cell_i < n_cells) {
-        tree_score += cell_scores[cell_i];
+        tree_score += best_cell_score;
       }
     }
 
