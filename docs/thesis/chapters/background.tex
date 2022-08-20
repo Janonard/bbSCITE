@@ -1,0 +1,8 @@
+\chapter{Background}
+\label{ch:background}
+
+In this chapter, we describe the theoretical framework in which this thesis operates. We will first introduce the observed phenomenon of mutations and the erroneous mutation matrix we receive from single-cell sequencing. Then, we will introduce the likelihood function we wish to maximize, and the mutation trees and attachment functions that we use to model the true mutation status of the cells. Lastly, we introduce the \ac{SCITE} Markov chain which uses all of the previous concepts to find a maximum-likelihood mutation tree. All of this is conceptually equivalent to the framework used by Jahn et al. \cite{tree2016}, but with enhanced precision and details. Equivalent formalizations are found in either the original paper or implementation if not indicated otherwise.
+
+This chapter also includes a description of how the \ac{SCITE} chain is simulated in the original implementation. This is relevant since it forms the baseline of our implementation \ac{ffSCITE}, which will be covered in the following chapters.
+
+\input{chapters/background/formalization}
