@@ -2,8 +2,6 @@
 
 First, we will formalize the observed phenomenon of mutations:
 
-\todo[inline]{Note about limited scope: No MAP scoring, no heterozygous mutations, no beta discovery, single tree output}
-
 \begin{definition}[Mutation matrix]
     \label{def:mutmatrix}
     Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{n \times m}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{n \times m}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $i \leq n, j \leq m$:
@@ -73,8 +71,29 @@ This function $\Lambda_d$ is the likelihood function we wish to maximize. We cou
 \begin{example}
     \label{exmpl:scite_problem}
     We consider $n = 4$ cells and $m = 4$ genes in this example. We assume that the true, underlying mutation tree $T$ and attachments $\sigma$ look like this:
-    \todo[inline]{Draw example tree ((1,2)3,4)r, 1->1, 2->2, 3->4, 4->4}
-    Therefore, this gives us the following true, induced mutation matrix:
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[every node/.style={draw}, level 1/.style={sibling distance=3cm}, level 2/.style={sibling distance=1.5cm}, edge from parent/.append style={-stealth}]
+                node[circle] {r}
+                child {
+                    node[circle] {3} 
+                    child {
+                        node[circle] {1}
+                        child {node {1} edge from parent[stealth-]}
+                    }
+                    child {
+                        node[circle] {2}
+                        child {node {2} edge from parent[stealth-]}
+                    }
+                }
+                child {
+                    node[circle] {4}
+                    child {node {3} edge from parent[stealth-]}
+                    child {node {4} edge from parent[stealth-]}
+                };
+        \end{tikzpicture}
+    \end{center}
+    In this graph, the encircled nodes represent the actual nodes of the mutation tree, while the squared nodes represent cells that are attached to a node. Therefore, this gives us the following true, induced mutation matrix:
     \begin{align*}
         e_{T, \sigma} &= \begin{pmatrix}
             1 & 0 & 0 & 0 \\
@@ -83,7 +102,9 @@ This function $\Lambda_d$ is the likelihood function we wish to maximize. We cou
             0 & 0 & 1 & 1 \\
         \end{pmatrix}
     \end{align*}
-    We also assume that $(\alpha, \beta) = (0.01, 0.4)$ and that matrix entries are reported as missing with a probability of 0.25, after the false-positive and false-negative errors are decided. This is not necessarily the case for all inputs or the real world, but we can use this model to generate an observed mutation matrix $d$, like this one:
+    For example, cell number 1 is attached to node number 1, which means that we have $\sigma(1) = 1$. Since only nodes 1 and 3 are on the path from the root to the attachment point $\sigma(1)$, there are 1-entries exactly at positions $(1,1)$ and $(3,1)$ of $e_{T, \sigma}$, but not at $(2,1)$ and $(4,1)$.
+    
+    We now assume that $(\alpha, \beta) = (0.01, 0.4)$ and that matrix entries are reported as missing with a probability of 0.25, after the false-positive and false-negative errors are decided. This is not necessarily the case for all inputs or the real world, but we can use this model to generate an observed mutation matrix $d$, like this one:
     \begin{align*}
         d &= \begin{pmatrix}
             1 & 0 & 0 & 0 \\
@@ -97,8 +118,29 @@ This function $\Lambda_d$ is the likelihood function we wish to maximize. We cou
         \Lambda_d(e_{T, \sigma}) = (1-\alpha)^{8} \cdot \alpha^{0} \cdot (1-\beta)^{4} \cdot \beta^{1} &\approx 0.05 \\
         &\approx \exp(-3.04)
     \end{align*}
-    However, if you attach cell number two to gene two instead, you get the following tree:
-    \todo[inline]{Modified example graph ((1,2)3,4)r, 1->1, 2->2, 3->3, 4->4}
+    However, if you attach cell 3 to gene 3 instead, you get the following tree:
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[every node/.style={draw}, level 1/.style={sibling distance=3cm}, level 2/.style={sibling distance=1.5cm}, edge from parent/.append style={-stealth}]
+                node[circle] {r}
+                child {
+                    node[circle] {3} 
+                    child {
+                        node[circle] {1}
+                        child {node {1} edge from parent[stealth-]}
+                    }
+                    child {
+                        node[circle] {2}
+                        child {node {2} edge from parent[stealth-]}
+                    }
+                    child {node {3} edge from parent[stealth-]}
+                }
+                child {
+                    node[circle] {4}
+                    child {node {4} edge from parent[stealth-]}
+                };
+        \end{tikzpicture}
+    \end{center}
     with the following true mutation matrix:
     \begin{align*}
         e_{T, \sigma'} = \begin{pmatrix}
