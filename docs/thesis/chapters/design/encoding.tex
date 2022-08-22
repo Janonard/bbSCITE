@@ -1,6 +1,6 @@
 \section{Tree encoding and operations}
 
-Our first and most impactful contribution is an improvement on the used mutation tree encoding and the operations on this code. The original \ac{SCITE} implementation \cite{tree2016} uses a parent vector as the canonical form to encode a mutation tree:
+Our first and most impactful contribution is an improvement to the used mutation tree encoding and the operations on this code. The original \ac{SCITE} implementation \cite{tree2016} uses a parent vector as the canonical data structure of a mutation tree:
 
 \begin{definition}[Parent vector, \cite{tree2016}]
     \label{def:parent_vector}
@@ -27,7 +27,7 @@ Using this encoding has the obvious advantage that most of the tree moves are si
     for all $v, w \in V$.
 \end{definition}
 
-\begin{figure}
+\begin{figure}[p]
     \begin{algorithmic}[1]
         \Function{AncestorMatrix}{$(p_v)_{v \in V} \subseteq V, r \in V$} \Comment $r$ is the root of the tree.
             \State $n \leftarrow |V|$
@@ -43,10 +43,61 @@ Using this encoding has the obvious advantage that most of the tree moves are si
             \State \Return $a$
         \EndFunction
     \end{algorithmic}
-    \caption{An algorithm to construct an ancestor matrix (Definition \ref{def:ancestor_matrix}) from a parent vector (Definition \ref{def:parent_vector}), \cite{tree2016}}
+    \caption{Algorithm to construct an ancestor matrix (Definition \ref{def:ancestor_matrix}) from a parent vector (Definition \ref{def:parent_vector}), \cite{tree2016}}
     \label{alg:ancestor_matrix}
 \end{figure}
 
-It is obvious that connectivity queries can be executed in constant time using an ancestor matrix. Jahn et al. also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it in figure \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. It is however very hard to implement on \acp{FPGA}: It is hard to predict how often the inner while loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which would severely limit the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device.
+It is obvious that connectivity queries can be executed in constant time using an ancestor matrix. Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it in figure \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. It is however very hard to implement in hardware: It is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with theorem \ref{theo:am_reverse} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with theorem \ref{theo:am_update} that every move of the \textsc{ChainStep} algorithm (Figure \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with two linear, perfectly pipelinable loops, a certain improvement on the previous implementation.
 
-\todo[inline]{Narrate the usage of the following lemmata}
+\subsection{Reversing the ancestor matrix construction}
+
+\begin{theorem}
+    \label{theo:am_reverse}
+    Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} in Figure \ref{alg:is_parent} returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$. If we implement \textsc{IsParent} as a hardware design and unroll to for-loop at line 8ff., it has a runtime in $O(1)$ and a space usage in $O(|V|)$. Finding a node's parent by iterating over all nodes has a runtime in $O(|V|)$, a space usage $O(|V|)$, and is perfectly pipelinable.
+\end{theorem}
+
+The algorithm uses Lemma \ref{lem:am_reverse} to check whether the requested edge exists in the tree, with an additional shortcut for the root. Unrolling the for-loop is possible since we assume an upper bound for the number of genes, and apart from that, the runtime and space requirement should be obvious to see.
+
+\begin{lemma}
+    \label{lem:am_reverse}
+    Let $T = (V, E)$ be a tree and $v, w \in V$. We have:
+    \begin{align*}
+        (v, w) \in E \Leftrightarrow (\forall x \in V \setminus \{w\}: x \leadsto v \Leftrightarrow x \leadsto w) \wedge (v \leadsto w)
+    \end{align*}
+\end{lemma}
+
+\begin{proof}
+
+We first show $\Rightarrow$: We obviously have $v \leadsto w$. Let $x \in V \setminus \{v\}$. Then, we have:
+\begin{align*}
+    x \leadsto w    &\Rightarrow \exists p = (x, \dots, w) \subseteq E \\
+                    &\stackrel{(v, w) \in E}{\Rightarrow} p = (x, \dots, v, w) \subseteq E \\
+                    &\Rightarrow p' := (x, \dots, v) \subseteq E \\
+                    &\Rightarrow x \leadsto v \\
+    x \leadsto v    &\Rightarrow \exists p = (x, \dots, v) \subseteq E \\
+                    &\stackrel{(v, w) \in E}{\Rightarrow} p = (x, \dots, v, w) \subseteq E \\
+                    &\Rightarrow x \leadsto w
+\end{align*}
+Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \in V \setminus \{v, w\}$ with $v \leadsto y \leadsto w$. Since we have $y \neq w$, $y \leadsto w \Rightarrow y \leadsto v$ follows. However, this means that we have $v \leadsto y \leadsto v$ and that our tree has a circle, which is a contradiction. Therefore, such a $y$ can not exist and we have in fact $p = (v, \dots, w) = (v, w) \Rightarrow (v, w) \in E$.
+\end{proof}
+
+\begin{figure}[p]
+    \begin{algorithmic}[1]
+        \Function{IsParent}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $(v, w) \in V^2$}
+            \If{$a_{v,w} = 0$}
+                \State \Return False
+            \EndIf
+            \If{$v = w$}
+                \State \Return $v = r$ \Comment Per convention, the root is the only node that is also its parent.
+            \EndIf
+            \ForAll{$x \in V \setminus \{w\}$}
+                \If{$a_{x,w} \neq a_{x,v}$}
+                    \State \Return False
+                \EndIf
+            \EndFor
+            \State \Return True
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to query whether an edge exists in a tree, using an ancestor matrix}
+    \label{alg:is_parent}
+\end{figure}
