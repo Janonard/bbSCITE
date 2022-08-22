@@ -101,3 +101,122 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \caption{Algorithm to query whether an edge exists in a tree, using an ancestor matrix}
     \label{alg:is_parent}
 \end{figure}
+
+\subsection{Ancestor matrix updates}
+
+\begin{figure}[p]
+    \begin{algorithmic}[1]
+        \Function{AM::SwapNodes}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
+            \State $d_v \leftarrow a[v]$
+            \State $d_w \leftarrow a[w]$
+            \ForAll{$x \in V$}
+                \If{$x = v$}
+                    \State $d_\mathrm{new} \leftarrow d[w]$
+                \ElsIf{$x = w$}
+                    \State $d_\mathrm{new} \leftarrow d[v]$
+                \Else
+                    \State $d_\mathrm{new} \leftarrow a[x]$
+                \EndIf
+                \State $d_\mathrm{new}[v], d_\mathrm{new}[w] \leftarrow d_\mathrm{new}[w], d_\mathrm{new}[v]$
+                \State $a[x] \leftarrow d_\mathrm{new}$
+            \EndFor
+            \State \Return $a$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to perform the ``swap nodes'' move on an ancestor matrix. All edges from and to $v$ are $w$ are swapped, assuming that we have $v \neq w$.}
+    \label{alg:am_swap_nodes}
+\end{figure}
+
+\begin{figure}[p]
+    \begin{algorithmic}[1]
+        \Function{AM::PruneReattach}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
+            \State $d_v \leftarrow a[v]$
+            \State $d_w \leftarrow a[w]$
+            \ForAll{$x \in V$}
+                \State $d_\mathrm{old} \leftarrow a[x]$
+                \State $d_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
+                \ForAll{$y \in V$} \Comment Unroll completely
+                    \If{$d_v[y]$}
+                        \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[t] \vee (d_v[x] \wedge d_\mathrm{old}[y])$
+                    \Else
+                        \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[y]$
+                    \EndIf
+                \EndFor
+                \State $a[x] \leftarrow d_\mathrm{new}$
+            \EndFor
+            \State \Return $a$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to perform the ``prune and reattach'' move on an ancestor matrix. The node $v$ is attached to the node $t$, assuming that we have $v \not\leadsto_T t$.}
+    \label{alg:am_prune_reattach}
+\end{figure}
+
+\begin{figure}[p]
+    \begin{algorithmic}[1]
+        \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
+        \State $d_v \leftarrow a[v]$
+        \State $d_w \leftarrow a[w]$
+        \ForAll{$x \in V$}
+            \State $d_\mathrm{old} \leftarrow a[x]$
+            \State $d_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
+            \ForAll{$y \in V$} \Comment Unroll completely
+                \If{$d_v[y] \wedge \neg d_w[y]$}
+                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[p_T(w)] \vee (d_v[x] \wedge d_\mathrm{old}[y])$
+                \ElsIf{$\neg d_v[y] \wedge d_w[y]$}
+                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[p_T(v)] \vee (d_v[x] \wedge d_\mathrm{old}[y])$
+                \Else
+                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[y]$
+                \EndIf
+            \EndFor
+            \State $a[x] \leftarrow d_\mathrm{new}$
+        \EndFor
+        \State \Return $a$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to perform the ``swab subtrees'' move for unrelated subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $p_T(v)$, assuming that we have $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$.}
+    \label{alg:am_swap_unrelated}
+\end{figure}
+
+\begin{figure}[p]
+    \begin{algorithmic}[1]
+        \Function{AM::SwapRelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$, $t$}
+        \State $d_v \leftarrow a[v]$
+        \State $d_w \leftarrow a[w]$
+        \ForAll{$x \in V$}
+            \If{$d_v[x]$}
+                \State $c_x \leftarrow 2$
+            \ElsIf{$d_w[x]$}
+                \State $c_x \leftarrow 1$
+            \Else
+                \State $c_x \leftarrow 0$
+            \EndIf
+
+            \State $d_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
+
+            \ForAll{$y \in V$} \Comment Unroll completely
+                \If{$d_v[y]$}
+                    \State $c_y \leftarrow 2$
+                \ElsIf{$d_w[x]$}
+                    \State $c_y \leftarrow 1$
+                \Else
+                    \State $c_y \leftarrow 0$
+                \EndIf
+
+                \If{$(c_x = x_y) \vee (c_x = 0 \wedge c_y \neq 0)$}
+                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[y]$
+                \ElsIf{$c_x = 2 \wedge c_y = 1$}
+                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[t]$
+                \Else
+                    \State $d_\mathrm{new}[y] \leftarrow 0$
+                \EndIf
+            \EndFor
+
+            \State $a[x] \leftarrow d_\mathrm{new}$
+        \EndFor
+        \State \Return $a$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to perform the ``swab subtrees'' move for related subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $t$, assuming that we have $v \neq w$ and $w \leadsto_T v$.}
+    \label{alg:am_swap_related}
+\end{figure}
+
