@@ -1,3 +1,52 @@
 \section{Tree encoding and operations}
 
-One of the first.
+Our first and most impactful contribution is an improvement on the used mutation tree encoding and the operations on this code. The original \ac{SCITE} implementation \cite{tree2016} uses a parent vector as the canonical form to encode a mutation tree:
+
+\begin{definition}[Parent vector, \cite{tree2016}]
+    \label{def:parent_vector}
+    Let $T = (V, E, r)$ be a mutation tree. The corresponding parent vector is defined as the sequence $(p_v)_{v \in V} \subseteq V$ with
+    \begin{align*}
+        p_v &:= \begin{cases}
+            p_T(v) & v \neq r \\
+            r & v = r 
+        \end{cases}
+    \end{align*}
+\end{definition}
+
+Using this encoding has the obvious advantage that most of the tree moves are simple: The updates in the ``prune and reattach'' and ``swap subtrees'' moves of \textsc{ChainStep} (Figure \ref{alg:scite-step}, lines 21, 36, and 37) are mere constant operations. The update operations in the ``swap nodes'' move are more involved since every edge needs to be visited and checked, but it's still in linear runtime. However, sampling moves and computing the likelihood function requires many connectivity queries: Both the ``prune and reattach'' and the ``swap subtrees'' moves may need to sample a target that is not a descendant of the moved node, and the induced mutation matrix (Definition \ref{def:induced_mutmatrix}) is defined by node connectivity. Therefore, a separate data structure is used to answer these queries quickly:
+
+\begin{definition}[Ancestor matrix, \cite{tree2016}]
+    \label{def:ancestor_matrix}
+    Let $T = (V, E, r)$ be a mutation tree. The corresponding ancestor matrix is defined as the matrix $A \in \{0,1\}^{|V| \times |V|}$ with
+    \begin{align*}
+        A_{v,w} &:= \begin{cases}
+            1 & v \leadsto_T w \\
+            0 & \text{else}
+        \end{cases}
+    \end{align*}
+    for all $v, w \in V$.
+\end{definition}
+
+\begin{figure}
+    \begin{algorithmic}[1]
+        \Function{AncestorMatrix}{$(p_v)_{v \in V} \subseteq V, r \in V$} \Comment $r$ is the root of the tree.
+            \State $n \leftarrow |V|$
+            \State $a \leftarrow 0 \in \{0,1\}^{n \times n}$
+            \ForAll{$w \in V$}
+                \State $v \leftarrow w$
+                \While{$v \neq r$}
+                    \State $a_{v, w} \leftarrow 1$
+                    \State $v \leftarrow p_v$
+                \EndWhile
+                \State $a_{r, w} \leftarrow r$
+            \EndFor
+            \State \Return $a$
+        \EndFunction
+    \end{algorithmic}
+    \caption{An algorithm to construct an ancestor matrix (Definition \ref{def:ancestor_matrix}) from a parent vector (Definition \ref{def:parent_vector}), \cite{tree2016}}
+    \label{alg:ancestor_matrix}
+\end{figure}
+
+It is obvious that connectivity queries can be executed in constant time using an ancestor matrix. Jahn et al. also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it in figure \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. It is however very hard to implement on \acp{FPGA}: It is hard to predict how often the inner while loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which would severely limit the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device.
+
+\todo[inline]{Narrate the usage of the following lemmata}
