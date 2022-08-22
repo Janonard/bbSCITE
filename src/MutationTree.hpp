@@ -32,8 +32,147 @@ public:
   using AncestryVector = ac_int<max_n_nodes, false>;
   using AncestorMatrix = std::array<AncestryVector, max_n_nodes>;
 
+  struct ModificationParameters {
+    MoveType move_type;
+    uint32_t v, w, parent_of_v, parent_of_w, descendant_of_v,
+        nondescendant_of_v;
+    float new_beta;
+  };
+
   MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, float beta)
       : ancestor(ancestor), n_nodes(n_genes + 1), beta(beta) {}
+
+  MutationTree(AncestorMatrix &am, MutationTree<max_n_genes> const &old_tree,
+               ModificationParameters parameters)
+      : ancestor(am), n_nodes(old_tree.n_nodes), beta(old_tree.beta) {
+    if (parameters.move_type == MoveType::ChangeBeta) {
+      beta = parameters.new_beta;
+    }
+
+    uint32_t v = parameters.v;
+    uint32_t w = parameters.w;
+
+    AncestryVector v_descendant = old_tree.ancestor[v];
+    AncestryVector w_descendant = old_tree.ancestor[w];
+
+    uint32_t v_target, w_target;
+    switch (parameters.move_type) {
+    case MoveType::SwapSubtrees:
+      v_target = parameters.parent_of_w;
+      w_target =
+          w_descendant[v] ? parameters.descendant_of_v : parameters.parent_of_v;
+      break;
+    case MoveType::PruneReattach:
+      v_target = parameters.nondescendant_of_v;
+      w_target = 0; // No target necessary.
+      break;
+    case MoveType::ChangeBeta:
+    case MoveType::SwapNodes:
+    default:
+      v_target = w_target = 0; // No targets necessary.
+    }
+
+    for (uint32_t x = 0; x < max_n_nodes; x++) {
+      // Compute the new ancestry vector.
+      AncestryVector old_vector = old_tree.ancestor[x];
+      AncestryVector new_vector = 0;
+
+      // Declaring the swap variable for the "Swap Nodes" move here since you
+      // can't declare it inside the switch statement.
+      bool swap = true;
+
+      switch (parameters.move_type) {
+      case MoveType::ChangeBeta:
+        new_vector = old_vector;
+        break;
+
+      case MoveType::SwapNodes:
+        if (x == v) {
+          new_vector = w_descendant;
+        } else if (x == w) {
+          new_vector = v_descendant;
+        } else {
+          new_vector = old_vector;
+        }
+
+        swap = new_vector[v];
+        new_vector[v] = new_vector[w];
+        new_vector[w] = swap;
+        break;
+
+      case MoveType::PruneReattach:
+#pragma unroll
+        for (uint32_t y = 0; y < max_n_nodes; y++) {
+          if (v_descendant[y]) {
+            // if (v -> y),
+            // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+            new_vector[y] =
+                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
+          } else {
+            // otherwise, we have (v !-> y).
+            // Since this node is unaffected, everything remains the same.
+            new_vector[y] = old_vector[y];
+          }
+        }
+        break;
+
+      case MoveType::SwapSubtrees:
+#pragma unroll
+        for (uint32_t y = 0; y < max_n_nodes; y++) {
+          if (w_descendant[v]) {
+            ac_int<2, false> class_x;
+            if (v_descendant[x]) {
+              class_x = 2;
+            } else if (w_descendant[x]) {
+              class_x = 1;
+            } else {
+              class_x = 0;
+            }
+
+            ac_int<2, false> class_y;
+            if (v_descendant[y]) {
+              class_y = 2;
+            } else if (w_descendant[y]) {
+              class_y = 1;
+            } else {
+              class_y = 0;
+            }
+
+            if ((class_x == class_y) ||
+                (class_x == 0 && (class_y == 1 || class_y == 2))) {
+              new_vector[y] = old_vector[y];
+            } else if (class_x == 2 && class_y == 1) {
+              new_vector[y] = old_vector[w_target];
+            } else {
+              new_vector[y] = false;
+            }
+          } else {
+            if (v_descendant[y] && !w_descendant[y]) {
+              // if (v -> y && w !-> y),
+              // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+              new_vector[y] =
+                  old_vector[v_target] || (v_descendant[x] && old_vector[y]);
+            } else if (!v_descendant[y] && w_descendant[y]) {
+              // if (v !-> y && w -> y),
+              // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
+              new_vector[y] =
+                  old_vector[w_target] || (w_descendant[x] && old_vector[y]);
+            } else {
+              // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
+              // In this case, everything remains the same.
+              new_vector[y] = old_vector[y];
+            }
+          }
+        }
+        break;
+
+      default:
+        break;
+      }
+
+      ancestor[x] = new_vector;
+    }
+  }
 
   MutationTree(MutationTree const &other) = default;
   MutationTree<max_n_genes> &
@@ -152,6 +291,10 @@ public:
 
     return pruefer_code;
   }
+
+  float get_beta() const { return beta; }
+
+  void set_beta(float new_beta) { beta = new_beta; }
 
   uint32_t get_root() const { return n_nodes - 1; }
 
@@ -345,6 +488,113 @@ public:
     return !operator==(other);
   }
 
+  template <typename RNG>
+  MoveType sample_move(RNG &rng, float prob_beta_change,
+                       float prob_prune_n_reattach,
+                       float prob_swap_nodes) const {
+    float change_type_draw =
+        oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
+    if (change_type_draw <= prob_beta_change) {
+      return MoveType::ChangeBeta;
+    } else if (change_type_draw <= prob_beta_change + prob_prune_n_reattach) {
+      return MoveType::PruneReattach;
+    } else if (change_type_draw <=
+               prob_beta_change + prob_prune_n_reattach + prob_swap_nodes) {
+      return MoveType::SwapNodes;
+    } else {
+      return MoveType::SwapSubtrees;
+    }
+  }
+
+  template <typename RNG> MoveType sample_move(RNG &rng) const {
+    return sample_move(rng, 0.0, 0.5, 0.45);
+  }
+
+  template <typename RNG>
+  std::array<uint32_t, 2> sample_nonroot_nodepair(RNG &rng) const {
+    // excluding n_nodes - 1, the root.
+    uint32_t v = oneapi::dpl::uniform_int_distribution<uint32_t>(
+        0, get_n_nodes() - 2)(rng);
+    uint32_t w = oneapi::dpl::uniform_int_distribution<uint32_t>(
+        0, get_n_nodes() - 3)(rng);
+    if (w >= v) {
+      w++;
+    }
+    if (is_ancestor(v, w)) {
+      std::swap(v, w);
+    }
+    return {v, w};
+  }
+
+  template <typename RNG>
+  uint32_t sample_descendant_or_nondescendant(RNG &rng, uint32_t node_i,
+                                              bool sample_descendant) const {
+    AncestryVector descendant = get_descendants(node_i);
+
+    // If we have to sample a nondescendant, we invert the bitvector and
+    // continue as if we were to sample a descendant.
+    if (!sample_descendant) {
+#pragma unroll
+      for (uint32_t i = 0; i < max_n_nodes; i++) {
+        descendant[i] = !descendant[i];
+      }
+    }
+
+    // Count the (non)descendants.
+    uint32_t n_descendants = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      if (i < get_n_nodes() && descendant[i]) {
+        n_descendants++;
+      }
+    }
+
+    // Sample the occurrence of the (non)descendant to pick. The resulting node
+    // will be the `sampled_occurrence_i`th (non)descendant.
+    uint32_t sampled_occurrence_i =
+        oneapi::dpl::uniform_int_distribution<uint32_t>(0,
+                                                        n_descendants - 1)(rng);
+
+    // Walk through the (non)descendant bitvector and pick the correct node
+    // index.
+    uint32_t sampled_node_i = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      if (i < get_n_nodes() && descendant[i]) {
+        if (sampled_occurrence_i == 0) {
+          sampled_node_i = i;
+          break;
+        } else {
+          sampled_occurrence_i--;
+        }
+      }
+    }
+    return sampled_node_i;
+  }
+
+  template <typename RNG>
+  uint32_t sample_descendant(RNG &rng, uint32_t node_i) const {
+    return sample_descendant_or_nondescendant(rng, node_i, true);
+  }
+
+  template <typename RNG>
+  uint32_t sample_nondescendant(RNG &rng, uint32_t node_i) const {
+    return sample_descendant_or_nondescendant(rng, node_i, false);
+  }
+
+  template <typename RNG>
+  float sample_new_beta(RNG &rng, float beta_jump_sd) const {
+    float new_beta =
+        beta + oneapi::dpl::normal_distribution<float>(0, beta_jump_sd)(rng);
+    if (new_beta < 0) {
+      new_beta = std::abs(new_beta);
+    }
+    if (new_beta > 1) {
+      new_beta = new_beta - 2 * (new_beta - 1);
+    }
+    return new_beta;
+  }
+
   std::string to_graphviz() const {
     std::stringstream stream;
     stream << "digraph G {" << std::endl;
@@ -377,123 +627,6 @@ public:
     stream << std::endl;
     return stream.str();
   }
-
-  void execute_move(MutationTree<max_n_genes> &out_tree, MoveType move_type,
-                    uint32_t v, uint32_t w, uint32_t v_target,
-                    uint32_t w_target) const {
-#if __SYCL_DEVICE_ONLY__ == 0
-    assert(v != get_root() && w != get_root());
-#endif
-    out_tree.n_nodes = n_nodes;
-
-    AncestryVector v_descendant = ancestor[v];
-    AncestryVector w_descendant = ancestor[w];
-
-    for (uint32_t x = 0; x < max_n_nodes; x++) {
-      // Compute the new ancestry vector.
-      AncestryVector old_vector = ancestor[x];
-      AncestryVector new_vector = 0;
-
-      // Declaring the swap variable for the "Swap Nodes" move here since you
-      // can't declare it inside the switch statement.
-      bool swap = true;
-
-      switch (move_type) {
-      case MoveType::ChangeBeta:
-        new_vector = old_vector;
-        break;
-
-      case MoveType::SwapNodes:
-        if (x == v) {
-          new_vector = w_descendant;
-        } else if (x == w) {
-          new_vector = v_descendant;
-        } else {
-          new_vector = old_vector;
-        }
-
-        swap = new_vector[v];
-        new_vector[v] = new_vector[w];
-        new_vector[w] = swap;
-        break;
-
-      case MoveType::PruneReattach:
-#pragma unroll
-        for (uint32_t y = 0; y < max_n_nodes; y++) {
-          if (v_descendant[y]) {
-            // if (v -> y),
-            // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-            new_vector[y] =
-                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
-          } else {
-            // otherwise, we have (v !-> y).
-            // Since this node is unaffected, everything remains the same.
-            new_vector[y] = old_vector[y];
-          }
-        }
-        break;
-
-      case MoveType::SwapSubtrees:
-#pragma unroll
-        for (uint32_t y = 0; y < max_n_nodes; y++) {
-          if (w_descendant[v]) {
-            ac_int<2, false> class_x;
-            if (v_descendant[x]) {
-              class_x = 2;
-            } else if (w_descendant[x]) {
-              class_x = 1;
-            } else {
-              class_x = 0;
-            }
-
-            ac_int<2, false> class_y;
-            if (v_descendant[y]) {
-              class_y = 2;
-            } else if (w_descendant[y]) {
-              class_y = 1;
-            } else {
-              class_y = 0;
-            }
-
-            if ((class_x == class_y) ||
-                (class_x == 0 && (class_y == 1 || class_y == 2))) {
-              new_vector[y] = old_vector[y];
-            } else if (class_x == 2 && class_y == 1) {
-              new_vector[y] = old_vector[w_target];
-            } else {
-              new_vector[y] = false;
-            }
-          } else {
-            if (v_descendant[y] && !w_descendant[y]) {
-              // if (v -> y && w !-> y),
-              // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-              new_vector[y] =
-                  old_vector[v_target] || (v_descendant[x] && old_vector[y]);
-            } else if (!v_descendant[y] && w_descendant[y]) {
-              // if (v !-> y && w -> y),
-              // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
-              new_vector[y] =
-                  old_vector[w_target] || (w_descendant[x] && old_vector[y]);
-            } else {
-              // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
-              // In this case, everything remains the same.
-              new_vector[y] = old_vector[y];
-            }
-          }
-        }
-        break;
-
-      default:
-        break;
-      }
-
-      out_tree.ancestor[x] = new_vector;
-    }
-  }
-
-  float get_beta() const { return beta; }
-
-  void set_beta(float new_beta) { beta = new_beta; }
 
 private:
   void

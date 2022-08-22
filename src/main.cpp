@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#include "MCMCKernel.hpp"
+#include "Application.hpp"
 #include "Parameters.hpp"
 #include <CL/sycl.hpp>
 #include <ext/intel/fpga_extensions.hpp>
@@ -25,11 +25,20 @@ using namespace ffSCITE;
 
 constexpr uint32_t max_n_cells = 64;
 constexpr uint32_t max_n_genes = 63;
+constexpr uint32_t pipeline_capacity = 8;
+
+#ifdef HARDWARE
+// Assert that this design does indeed have the correct ranges set.
+// I often lower the max number of cells and genes for experiments and then
+// forgot to reset them. This should fix it.
+static_assert(max_n_cells == 64 && max_n_genes == 63);
+#endif
 
 using URNG = oneapi::dpl::minstd_rand;
 
-using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
-using MutationDataWord = MCMCKernelImpl::MutationDataWord;
+using ApplicationImpl =
+    Application<max_n_cells, max_n_genes, pipeline_capacity>;
+using MutationDataWord = ApplicationImpl::MutationDataWord;
 using MutationTreeImpl = MutationTree<max_n_genes>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 
@@ -142,54 +151,40 @@ int main(int argc, char **argv) {
   cl::sycl::queue working_queue(device, queue_properties);
 
   // Running the simulation and retrieving the best trees.
-  auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters,
-                                               n_cells, n_genes);
-  std::vector<AncestorMatrix> best_am = std::get<0>(result);
-  std::vector<float> best_beta = std::get<1>(result);
-  cl::sycl::event runtime_event = std::get<2>(result);
+  ApplicationImpl app(data, working_queue, parameters, n_cells, n_genes);
+  float runtime = app.run_simulation();
 
-  static constexpr float timesteps_per_millisecond = 1000000.0;
-  float start_of_event = runtime_event.get_profiling_info<
-                             cl::sycl::info::event_profiling::command_start>() /
-                         timesteps_per_millisecond;
-  float end_of_event =
-      runtime_event
-          .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
-      timesteps_per_millisecond;
-  std::cout << "Time elapsed: " << end_of_event - start_of_event << " ms"
-            << std::endl;
+  std::cout << "Time elapsed: " << runtime << " ms" << std::endl;
 
-  for (uint32_t tree_i = 0; tree_i < best_am.size(); tree_i++) {
-    MutationTreeImpl tree(best_am[tree_i], n_genes, best_beta[tree_i]);
+  AncestorMatrix best_am = app.get_best_am();
+  float best_beta = app.get_best_beta();
 
-    // Output the tree as a graphviz file.
-    {
-      std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << tree_i
-                  << ".gv";
+  MutationTreeImpl tree(best_am, n_genes, best_beta);
 
-      std::ofstream output_file(output_path.str());
-      output_file << tree.to_graphviz();
-    }
+  // Output the tree as a graphviz file.
+  {
+    std::stringstream output_path;
+    output_path << parameters.get_output_path_base() << "_ml0.gv";
 
-    // Output the tree in newick format
-    {
-      std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << tree_i
-                  << ".newick";
+    std::ofstream output_file(output_path.str());
+    output_file << tree.to_graphviz();
+  }
 
-      std::ofstream output_file(output_path.str());
-      output_file << tree.to_newick();
-    }
+  // Output the tree in newick format
+  {
+    std::stringstream output_path;
+    output_path << parameters.get_output_path_base() << "_ml0.newick";
 
-    // Output the found beta value for the tree
-    {
-      std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << tree_i
-                  << "_beta.txt";
+    std::ofstream output_file(output_path.str());
+    output_file << tree.to_newick();
+  }
 
-      std::ofstream output_file(output_path.str());
-      output_file << best_beta[tree_i] << std::endl;
-    }
+  // Output the found beta value for the tree
+  {
+    std::stringstream output_path;
+    output_path << parameters.get_output_path_base() << "_ml0_beta.txt";
+
+    std::ofstream output_file(output_path.str());
+    output_file << best_beta << std::endl;
   }
 }

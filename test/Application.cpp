@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#include "MCMCKernel.hpp"
+#include "Application.hpp"
 #include <catch2/catch_all.hpp>
 #include <ext/intel/fpga_extensions.hpp>
 
@@ -22,17 +22,20 @@ using namespace ffSCITE;
 
 constexpr uint32_t n_cells = 15;
 constexpr uint32_t n_genes = 4;
+constexpr uint32_t pipeline_capacity = 2;
 
 constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
-constexpr unsigned long n_chains = 10;
-constexpr unsigned long chain_length = 1000000;
+constexpr unsigned long n_chains = pipeline_capacity;
+constexpr unsigned long chain_length = 50000;
 
-using MCMCKernelImpl = MCMCKernel<32, 31, oneapi::dpl::minstd_rand>;
-using AncestorMatrix = MCMCKernelImpl::AncestorMatrix;
-using MutationTreeImpl = MCMCKernelImpl::MutationTreeImpl;
-using MutationDataWord = MCMCKernelImpl::MutationDataWord;
+using ApplicationImpl = Application<32, 31, pipeline_capacity>;
+using AncestorMatrix = ApplicationImpl::AncestorMatrix;
+using MutationTreeImpl = ApplicationImpl::MutationTreeImpl;
+using MutationDataWord = ApplicationImpl::MutationDataWord;
+using MutationDataMatrix = ApplicationImpl::MutationDataMatrix;
+using HostTreeScorerImpl = ApplicationImpl::HostTreeScorerImpl;
 
-TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
+TEST_CASE("Application::run_simulation()", "[Application]") {
   /*
    * This test runs the MCMC chain for an simple, constructed setup to see if it
    * finds it. This is not a statistical test, just a simple sanity check.
@@ -81,8 +84,11 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
     data[14] = 0b00000000;
   }
 
-  cl::sycl::queue working_queue(
-      (cl::sycl::ext::intel::fpga_emulator_selector()));
+  cl::sycl::device device =
+      cl::sycl::ext::intel::fpga_emulator_selector().select_device();
+  cl::sycl::property_list queue_properties = {
+      cl::sycl::property::queue::enable_profiling{}};
+  cl::sycl::queue working_queue(device, queue_properties);
 
   Parameters parameters;
   parameters.set_alpha_mean(alpha);
@@ -91,21 +97,21 @@ TEST_CASE("MCMCKernel::operator()", "[MCMCKernel]") {
   parameters.set_n_chains(n_chains);
   parameters.set_chain_length(chain_length);
 
-  auto result = MCMCKernelImpl::run_simulation(data_buffer, working_queue,
-                                               parameters, n_cells, n_genes);
-  std::vector<AncestorMatrix> best_am = std::get<0>(result);
-  std::vector<float> best_beta = std::get<1>(result);
-  MutationTreeImpl found_tree(best_am[0], n_genes, best_beta[0]);
+  ApplicationImpl app(data_buffer, working_queue, parameters, n_cells, n_genes);
+  app.run_simulation();
 
-  REQUIRE(best_am.size() >= 1);
-  REQUIRE(best_am.size() == best_beta.size());
+  AncestorMatrix best_am = app.get_best_am();
+  float best_beta = app.get_best_beta();
+  float best_score = app.get_best_score();
+  MutationTreeImpl best_tree(best_am, n_genes, best_beta);
 
-  MCMCKernelImpl::MutationDataMatrix data;
-  MCMCKernelImpl::HostTreeScorerImpl host_scorer(
+  MutationDataMatrix data;
+  HostTreeScorerImpl host_scorer(
       alpha, beta, beta_sd, n_cells, n_genes,
       data_buffer.get_access<cl::sycl::access::mode::read>(), data);
   float correct_score = host_scorer.logscore_tree(correct_tree);
-  float found_score = host_scorer.logscore_tree(found_tree);
+  float found_score = host_scorer.logscore_tree(best_tree);
 
   REQUIRE(found_score == Catch::Approx(correct_score));
+  REQUIRE(found_score == Catch::Approx(best_score));
 }

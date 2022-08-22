@@ -131,7 +131,7 @@ def quality_test(args: argparse.Namespace):
         exit(1)
 
 def performance_analysis(args: argparse.Namespace):
-    makespan_re = re.compile("Time elapsed: ([0-9]+\.[0-9]+)")
+    makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
 
     def analyze_makespans(out_dir):
         all_makespans = dict()
