@@ -28,9 +28,9 @@ MISSING=0.25
 
 INPUT=$OUT_DIR/input.csv
 
-for N_CHAINS in `seq 1 1 3`
+for N_CHAINS in `seq 2 2 8`
 do
-    for N_STEPS in `seq 100000 100000 1000000`
+    for N_STEPS in `seq 500000 500000 1000000`
     do
         for i in `seq 10`
         do
