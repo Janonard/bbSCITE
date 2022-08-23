@@ -110,7 +110,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \label{def:tree_moves}
     Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$, $t_1 \in V$ with $v \not\leadsto t_1$, and $t_2 \in V$ with $v \leadsto t_2$. We define four different moves:
     \begin{itemize}
-        \item ``Swap nodes:'' $T' = (V, E', r)$ with $E' := \{(f(x), f(w)) : (v, w) \in E\}$ and
+        \item ``Swap nodes:'' $T' = (V, E', r)$ with $E' := \{(f(x), f(y)) : (x, y) \in E\}$ and
         \begin{align*}
             f: V \rightarrow V, x \mapsto \begin{cases}
                 v & x = w \\
@@ -132,25 +132,51 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{itemize}
 \end{definition}
 
-\begin{theorem}[Correctness of ``Swap nodes'' update]
+\begin{figure}[p]
+    \begin{algorithmic}[1]
+        \Function{AM::SwapNodes}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
+            \ForAll{$x \in V$}
+                \If{$x = v$}
+                    \State $d_\mathrm{new} \leftarrow a[w]$
+                \ElsIf{$x = w$}
+                    \State $d_\mathrm{new} \leftarrow a[v]$
+                \Else
+                    \State $d_\mathrm{new} \leftarrow a[x]$
+                \EndIf
+                \State $d_\mathrm{new}[v], d_\mathrm{new}[w] \leftarrow d_\mathrm{new}[w], d_\mathrm{new}[v]$ \Comment Bit Swap
+                \State $a[x] \leftarrow d_\mathrm{new}$
+            \EndFor
+            \State \Return $a$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to perform the ``swap nodes'' move on an ancestor matrix. All edges from and to $v$ are $w$ are swapped, assuming that we have $v \neq w$.}
+    \label{alg:am_swap_nodes}
+\end{figure}
+
+\begin{theorem}[Correctness of the ``Swap nodes'' update]
     \label{theo:swap_nodes_correctness}
     Let $T = (V, E, r)$ be a mutation tree, $v, w \in V$ with $v \neq w$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, a, v, w)$ (Figure \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of the tree $T'$ after the ``Swap nodes'' move (Definition \ref{def:tree_moves}).
 \end{theorem}
 
 \begin{proof}
-    We need to show that the ancestor matrix has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $a[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. We let $x, y \in V$ and distinguish several cases:
+    Let $a'$ be the return value of the mentioned function call. We need to show that $a'$ has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $a'[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. The word $a'[x]$ is set by the algorithm exactly once, and it is done in the $x$-th iteration of the for-loop. Therefore, we distinguish several cases for the node pair and analyze the resulting value of the $y$-th bit:
     \begin{itemize}
-        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm sets $d_\mathrm{new}$ to $a[x]$, but the $y$-th bit is untouched by the bit swap, so we have $a'[x][y] = a[x][y] = f(x) \leadsto_T f(y)$.
+        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm sets $d_\mathrm{new}$ to $a[x]$ and the $y$-th bit is untouched by the bit swap, so we have $a'[x][y] = a[x][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$, $x = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $d[w] = a[w]$, but the $y$-th bit is untouched by the bit swap. Therefore, we have $a'[x][y] = a[w][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$ since $x = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[w]$ and the $y$-th bit is untouched by the bit swap. Therefore, we have $a'[x][y] = a[w][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. Again, we show the sub-case $y = v$ since $y = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[x]$, but swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[x][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. We show the sub-case $y = v$ since $y = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[x]$, but swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[x][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $d[w] = a[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[v][v] = a[w][w] = 1$ since every node reaches itself via an empty path.
+        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[w][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. From $x = v$ and $x \neq y$, $y = w$ follows. The algorithm sets $d_\mathrm{new}$ to $d[w] = a[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $a'[x][y] = a[w][v] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. We have $x = v \wedge x \neq y \Rightarrow y = w$. The algorithm sets $d_\mathrm{new}$ to $d[w] = a[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $a'[x][y] = a[w][v] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
     \end{itemize}
 \end{proof}
+
+\begin{corollary}
+    \label{col:swap_nodes_runtime}
+    The invocation of \textsc{AM::SwapNodes} in theorem \ref{theo:swap_nodes_correctness} has runtime and space requirements in $O(|V|)$. The for-loop in line 4ff. is perfectly pipelinable.
+\end{corollary}
 
 \begin{lemma}
     \label{lem:swap_nodes_property}
@@ -165,29 +191,6 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
         &\Rightarrow f(x) \leadsto_{T'} f(y)
     \end{align*}
 \end{proof}
-
-\begin{figure}[p]
-    \begin{algorithmic}[1]
-        \Function{AM::SwapNodes}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
-            \State $d_v \leftarrow a[v]$
-            \State $d_w \leftarrow a[w]$
-            \ForAll{$x \in V$}
-                \If{$x = v$}
-                    \State $d_\mathrm{new} \leftarrow d[w]$
-                \ElsIf{$x = w$}
-                    \State $d_\mathrm{new} \leftarrow d[v]$
-                \Else
-                    \State $d_\mathrm{new} \leftarrow a[x]$
-                \EndIf
-                \State $d_\mathrm{new}[v], d_\mathrm{new}[w] \leftarrow d_\mathrm{new}[w], d_\mathrm{new}[v]$
-                \State $a[x] \leftarrow d_\mathrm{new}$
-            \EndFor
-            \State \Return $a$
-        \EndFunction
-    \end{algorithmic}
-    \caption{Algorithm to perform the ``swap nodes'' move on an ancestor matrix. All edges from and to $v$ are $w$ are swapped, assuming that we have $v \neq w$.}
-    \label{alg:am_swap_nodes}
-\end{figure}
 
 \begin{figure}[p]
     \begin{algorithmic}[1]
