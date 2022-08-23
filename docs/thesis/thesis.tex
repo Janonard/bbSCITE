@@ -31,7 +31,7 @@
 
 % start with the titlepage, the formalities, and then the abstract
 \input{pretext/titlepage} % prints the title page
-\includepdf[pages={1}]{pretext/EidesstattlicheVersicherung-fixed.pdf}
+\cleardoublepage
 \vspace*{\fill}
 \begin{abstract}
 	\input{abstract}
@@ -60,5 +60,8 @@
 %%%%%%%%%
 \appendix
 \input{appendix}
+
+\cleardoublepage
+\includepdf[pages={1}]{pretext/EidesstattlicheVersicherung-fixed.pdf}
 
 \end{document}
