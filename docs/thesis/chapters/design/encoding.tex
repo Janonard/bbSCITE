@@ -135,18 +135,18 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 \begin{figure}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapNodes}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
+            \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
             \ForAll{$x \in V$}
                 \If{$x = v$}
-                    \State $d_\mathrm{new} \leftarrow a[w]$
+                    \State $a'[x] \leftarrow a[w]$
                 \ElsIf{$x = w$}
-                    \State $d_\mathrm{new} \leftarrow a[v]$
+                    \State $a'[x] \leftarrow a[v]$
                 \Else
-                    \State $d_\mathrm{new} \leftarrow a[x]$
+                    \State $a'[x] \leftarrow a[x]$
                 \EndIf
-                \State $d_\mathrm{new}[v], d_\mathrm{new}[w] \leftarrow d_\mathrm{new}[w], d_\mathrm{new}[v]$ \Comment Bit Swap
-                \State $a[x] \leftarrow d_\mathrm{new}$
+                \State $a'[x][v], a'[x][w] \leftarrow a'[x][w], a'[x][v]$ \Comment Bit Swap
             \EndFor
-            \State \Return $a$
+            \State \Return $a'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``swap nodes'' move on an ancestor matrix. All edges from and to $v$ are $w$ are swapped, assuming that we have $v \neq w$.}
@@ -159,24 +159,19 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 \end{theorem}
 
 \begin{proof}
-    Let $a'$ be the return value of the mentioned function call. We need to show that $a'$ has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $a'[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. The word $a'[x]$ is set by the algorithm exactly once, and it is done in the $x$-th iteration of the for-loop. Therefore, we distinguish several cases for the node pair and analyze the resulting value of the $y$-th bit:
+    Let $a'$ be the return value of the mentioned function call. We need to show that $a'$ has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $a'[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. We distinguish several cases for the node pair:
     \begin{itemize}
-        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm sets $d_\mathrm{new}$ to $a[x]$ and the $y$-th bit is untouched by the bit swap, so we have $a'[x][y] = a[x][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm initially sets $a'[x]$ to $a[x]$ and the $y$-th bit is untouched by the bit swap, so we have $a'[x][y] = a[x][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$ since $x = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[w]$ and the $y$-th bit is untouched by the bit swap. Therefore, we have $a'[x][y] = a[w][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$ since $x = w$ is analogous. The algorithm initially sets $a'[x]$ to $a[w]$ and the $y$-th bit is untouched by the bit swap. Therefore, we have $a'[x][y] = a[w][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. We show the sub-case $y = v$ since $y = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[x]$, but swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[x][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. We show the sub-case $y = v$ since $y = w$ is analogous. The algorithm initially sets $a'[x]$ to $a[x]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[x][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm sets $d_\mathrm{new}$ to $a[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[w][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm initially sets $a'[x]$ to $a[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[w][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. We have $x = v \wedge x \neq y \Rightarrow y = w$. The algorithm sets $d_\mathrm{new}$ to $d[w] = a[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $a'[x][y] = a[w][v] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. We have $x = v \wedge x \neq y \Rightarrow y = w$. The algorithm initially sets $a'[x]$ to $a[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $a'[x][y] = a[w][v] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
     \end{itemize}
 \end{proof}
-
-\begin{corollary}
-    \label{col:swap_nodes_runtime}
-    The invocation of \textsc{AM::SwapNodes} in theorem \ref{theo:swap_nodes_correctness} has runtime and space requirements in $O(|V|)$. The for-loop in line 4ff. is perfectly pipelinable.
-\end{corollary}
 
 \begin{lemma}
     \label{lem:swap_nodes_property}
@@ -195,21 +190,17 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 \begin{figure}[p]
     \begin{algorithmic}[1]
         \Function{AM::PruneReattach}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
-            \State $d_v \leftarrow a[v]$
-            \State $d_w \leftarrow a[w]$
+            \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
             \ForAll{$x \in V$}
-                \State $d_\mathrm{old} \leftarrow a[x]$
-                \State $d_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
                 \ForAll{$y \in V$} \Comment Unroll completely
-                    \If{$d_v[y]$}
-                        \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[t] \vee (d_v[x] \wedge d_\mathrm{old}[y])$
+                    \If{$a[v][y]$}
+                        \State $a'[x][y] \leftarrow a[x][t] \vee (a[v][x] \wedge a[x][y])$
                     \Else
-                        \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[y]$
+                        \State $a'[x][y] \leftarrow a[x][y]$
                     \EndIf
                 \EndFor
-                \State $a[x] \leftarrow d_\mathrm{new}$
             \EndFor
-            \State \Return $a$
+            \State \Return $a'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``prune and reattach'' move on an ancestor matrix. The node $v$ is attached to the node $t$, assuming that we have $v \not\leadsto_T t$.}
@@ -219,66 +210,94 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 \begin{figure}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
-        \State $d_v \leftarrow a[v]$
-        \State $d_w \leftarrow a[w]$
+        \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
         \ForAll{$x \in V$}
-            \State $d_\mathrm{old} \leftarrow a[x]$
-            \State $d_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
             \ForAll{$y \in V$} \Comment Unroll completely
-                \If{$d_v[y] \wedge \neg d_w[y]$}
-                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[p_T(w)] \vee (d_v[x] \wedge d_\mathrm{old}[y])$
-                \ElsIf{$\neg d_v[y] \wedge d_w[y]$}
-                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[p_T(v)] \vee (d_v[x] \wedge d_\mathrm{old}[y])$
+                \If{$a[v][y] \wedge \neg a[w][y]$}
+                    \State $a'[x][y] \leftarrow a[x][p_T(w)] \vee (a[v][x] \wedge a[x][y])$
+                \ElsIf{$\neg a[v][y] \wedge a[w][y]$}
+                    \State $a'[x][y] \leftarrow a[x][p_T(v)] \vee (a[v][x] \wedge a[x][y])$
                 \Else
-                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[y]$
+                    \State $a'[x][y] \leftarrow a[x][y]$
                 \EndIf
             \EndFor
-            \State $a[x] \leftarrow d_\mathrm{new}$
         \EndFor
-        \State \Return $a$
+        \State \Return $a'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``swab subtrees'' move for unrelated subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $p_T(v)$, assuming that we have $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$.}
     \label{alg:am_swap_unrelated}
 \end{figure}
 
+\begin{lemma}
+    \label{lem:prune_reattach_property}
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ with $E' := (E \setminus \{(p_T(v), v)\}) \cup \{(t, v)\}$ (The mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}). Let also $x, y \in V$. We then have:
+    \begin{enumerate}
+        \item $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$
+        \item If $v \not\leadsto_T y$: $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$
+        \item If $v \leadsto_T y$: $x \leadsto_{T'} y \Leftrightarrow (v \leadsto_T x \leadsto_T y \vee x \leadsto_T t)$.
+    \end{enumerate}
+\end{lemma}
+
+\todo[inline]{Damn you're ugly!}
+
+\begin{proof}[Proof of statement 1]
+    We have:
+    \begin{align*}
+        v \leadsto_T y &\Rightarrow \exists p = (v, \dots, y) \subseteq E \\
+        (p_T(v), v) \notin p &\Rightarrow p \subseteq E' \Rightarrow v \leadsto_{T'} y
+    \end{align*}
+    $v \leadsto_{T'} y \Rightarrow v \leadsto_T y$ is analogous:
+    \begin{align*}
+        v \leadsto_{T'} y &\Rightarrow \exists p = (v, \dots, y) \subseteq E' \\
+        (t, v) \notin p &\Rightarrow p \subseteq E \Rightarrow v \leadsto_T y
+    \end{align*}
+\end{proof}
+
+\begin{proof}[Proof of statement 2]
+    Let's first assume $x \leadsto_{T'} y$ and $x \not\leadsto_{T} y$ to prove $x \leadsto_{T'} y \Rightarrow x \leadsto_T y$ by contradiction. There is a path $p = (p_1, \dots, p_l) \subseteq E'$ with $p_1 = x$ and $p_l = y$. We have $p \not\subseteq E$ since we would otherwise have $x \leadsto_T y$. This means that there is an edge $e \in (p \setminus E) \subseteq (E' \setminus E)$. $(t, v)$ is the only edge in $E' \setminus E$ per definition and we therefore have $e = (t, v)$ and $\exists i \leq l: p_i = v$. This however means that the $p' := (v, p_{i+1}, \dots, y)$ is a suffix to the path $p$. Since $e \notin p'$, we have $p' \subseteq E \Rightarrow v \leadsto_{T} y$, which contradicts our assumptions.
+
+    Using an analogous argumentation with the assumption of $x \not\leadsto_{T'} y$ and $x \leadsto_T y$ leads to $v \leadsto_{T'} y$. From this and statement 1, $v \leadsto_T y$ follows. This is the same contradiction as above and proves $x \leadsto_T y \Rightarrow x \leadsto_{T'} y$.
+\end{proof}
+
+\begin{proof}[Proof of statement 3]
+    We first show $\Leftarrow$: If we have $x \leadsto_T t$, we also have $x \leadsto_{T'} t$ with $v \not\leadsto_T t$ and statement 2. From this, $x \leadsto_{T'} t \leadsto_{T'} v \leadsto_{T'} y \Rightarrow x \leadsto_{T'} y$ follows. If we have $v \leadsto_T x \leadsto_T y$, we also have $x \not\leadsto_T p_T(v)$ since we would otherwise have a circle in $T$. However, this means that the edge $(p_T(v), v)$ is not an element of the path from $x$ to $y$ and we still have $x \leadsto_{T'} y$.
+
+    We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$. If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and statement 2 also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto y$ since the edge $(t, v)$ is not contained in the relevant path.
+\end{proof}
+
 \begin{figure}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapRelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$, $t$}
-        \State $d_v \leftarrow a[v]$
-        \State $d_w \leftarrow a[w]$
+        \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
         \ForAll{$x \in V$}
-            \If{$d_v[x]$}
+            \If{$a[v][x]$}
                 \State $c_x \leftarrow 2$
-            \ElsIf{$d_w[x]$}
+            \ElsIf{$a[w][x]$}
                 \State $c_x \leftarrow 1$
             \Else
                 \State $c_x \leftarrow 0$
             \EndIf
 
-            \State $d_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
-
             \ForAll{$y \in V$} \Comment Unroll completely
-                \If{$d_v[y]$}
+                \If{$a[v][y]$}
                     \State $c_y \leftarrow 2$
-                \ElsIf{$d_w[x]$}
+                \ElsIf{$a[w][x]$}
                     \State $c_y \leftarrow 1$
                 \Else
                     \State $c_y \leftarrow 0$
                 \EndIf
 
-                \If{$(c_x = x_y) \vee (c_x = 0 \wedge c_y \neq 0)$}
-                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[y]$
+                \If{$(c_x = c_y) \vee (c_x = 0 \wedge c_y \neq 0)$}
+                    \State $a'[x][y] \leftarrow a[x][y]$
                 \ElsIf{$c_x = 2 \wedge c_y = 1$}
-                    \State $d_\mathrm{new}[y] \leftarrow d_\mathrm{old}[t]$
+                    \State $a'[x][y] \leftarrow a[x][t]$
                 \Else
-                    \State $d_\mathrm{new}[y] \leftarrow 0$
+                    \State $a'[x][y] \leftarrow 0$
                 \EndIf
             \EndFor
-
-            \State $a[x] \leftarrow d_\mathrm{new}$
         \EndFor
-        \State \Return $a$
+        \State \Return $a'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``swab subtrees'' move for related subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $t$, assuming that we have $v \neq w$ and $w \leadsto_T v$.}
