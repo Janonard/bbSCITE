@@ -207,6 +207,15 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \label{alg:am_prune_reattach}
 \end{figure}
 
+\begin{theorem}[Correctness of the ``Prune and Reattach'' update]
+    \label{theo:prune_reattach_correctness}
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::PruneReattach}$(V, a, v, t)$ (Figure \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of the tree $T'$ after the ``Prune and Reattach'' move (Definition \ref{def:tree_moves}).
+\end{theorem}
+
+\begin{proof}
+    This theorem follows directly from lemma \ref{lem:prune_reattach_property}, statement 2 and 3.    
+\end{proof}
+
 \begin{figure}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
