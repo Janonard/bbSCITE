@@ -179,7 +179,7 @@ Informally, $\sigma_{\max, T}$ simply picks the most-likely attachment node for 
     We define the \ac{SCITE} Markov chain as the Markov chain $(T_i)_{i \in \mathbb{N}_0} \in \{(V, E, r) : (V, E, r) \text{ is mutation tree}\}$. $T_0$ is uniformly distributed over the set of all mutation trees, and for every $i \in \mathbb{N}_0$, we set $T_{i+1} := \textsc{ChainStep}(T_i)$.
 \end{definition}
 
-The \textsc{ChainStep} algorithm (Figure \ref{alg:scite-step}) works by introducing one of three modifications to the tree and accepting it as the new state with a probability related to the increase in likelihood. The first of these modifications is the ``swap nodes'' move. In this move, two distinct non-root nodes $v$ and $w$ are sampled and their position in the tree is swapped. In the simplest case, $v$ itself is attached to $w$'s parent and $v$'s previous children are directly attached to $w$; $w$ and its children are handled analogously. There is however a special case when $v$ and $w$ themselves are in a child-parent relationship. This needs to be handled correctly to avoid introducing a circle to the mutation tree. In the end, the shape of the tree is exactly the same as before and only $v$ and $w$ have swapped their position in the tree. If the node-gene relationship were modeled with a node labeling function instead of identity, one would simply need to swap the labels of $v$ and $w$. The next and most basic modification is ``prune and reattach.'' In this move, a node $v$ is sampled from all non-root nodes and a node $w$ is sampled from all nodes that are not descendants of $v$, including the root $r$. Then, the node $v$ is simply attached to $w$. Lastly, there is the ``swap subtrees'' modification. Here, two distinct non-root nodes $v$ and $w$ are sampled too. If $v$ and $w$ are unrelated (formally $v \not\leadsto_T w \wedge w \not\leadsto_T v$), $v$ is simply attached to $w$'s former parent and $w$ is attached to $v$'s former parent. However, if we have $w \leadsto_T v$, a third node $t$ is sampled from all descendants of $v$ and $w$ is attached to $t$ instead of $v$'s parent. This assures that no circles are introduced to the tree. If we have $v \leadsto_T w$, we can simply swap $v$ and $w$ and do the same.
+The \textsc{ChainStep} algorithm (Figure \ref{alg:scite-step}) works by introducing one of three modifications to the tree and accepting it as the new state with a probability related to the increase in likelihood. The first of these modifications is the ``swap nodes'' move. In this move, two distinct non-root nodes $v$ and $w$ are sampled and their position in the tree is swapped. The resulting edge set is just defined as the original edge set where every occurrence of $v$ and $w$ are swapped. ``swap nodes'' is therefore also referred to as ``label swap'' since if the node-gene relationship were modeled with a node labeling function, one would simply need to swap the labels of $v$ and $w$. The next and most basic modification is ``prune and reattach.'' In this move, a node $v$ is sampled from all non-root nodes and a node $w$ is sampled from all nodes that are not descendants of $v$, including the root $r$. Then, the node $v$ is simply attached to $w$. Lastly, there is the ``swap subtrees'' modification. Here, two distinct non-root nodes $v$ and $w$ are sampled too. If $v$ and $w$ are unrelated (formally $v \not\leadsto_T w \wedge w \not\leadsto_T v$), $v$ is simply attached to $w$'s former parent and $w$ is attached to $v$'s former parent. However, if we have $w \leadsto_T v$, a third node $t$ is sampled from all descendants of $v$ and $w$ is attached to $t$ instead of $v$'s parent. This assures that no circles are introduced to the tree. If we have $v \leadsto_T w$, we can simply swap $v$ and $w$ and do the same.
 
 If we would now accept every modified tree, we would eventually encounter a high- or even maximum-likelihood tree. However, the probability of this is low since the chain wanders through the search space aimlessly. Therefore, Jahn et al. employed a rejection sampling method that accepts solutions with a high likelihood and rejects solutions with a low likelihood. The exact way how this is achieved is documented in Figure \ref{alg:scite-step} and according to the authors, this assures that the chain converges on trees with a high likelihood.
     
@@ -193,16 +193,12 @@ The \ac{SCITE} algorithm simulates the \ac{SCITE} Markov chain for a user-reques
             \If{$\mathrm{move} = \text{``swap nodes''}$}
                 \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
                 \State $w \leftarrow \text{sample uniformly from } V \setminus \{r, v\}$
-                \State $E' \leftarrow \{(w, x) : (v, x) \in E \wedge x \neq w\}$ \Comment Edges of $v$'s former children
-                \State $E' \leftarrow \{(v, x) : (w, x) \in E \wedge x \neq v\}$ \Comment Edges of $w$'s former children
-                \State $E' \leftarrow E' \cup \{(x, y) \in E: \{x, y\} \cap \{v, w\} \neq \emptyset\}\}$ \Comment Unrelated edges
-                \If{$(v, w) \in E$} \Comment Edges for $v$ and $w$
-                    \State $E' \leftarrow E' \cup \{(w, v), (p_T(v), w)\}$
-                \ElsIf{$(w, v) \in E$}
-                    \State $E' \leftarrow E' \cup \{(v, w), (p_T(w), v)\}$
-                \Else
-                    \State $E' \leftarrow E' \cup \{(p_T(w), v), (p_T(v), w)\}$
-                \EndIf
+                \State $f : V \rightarrow V, x \mapsto \begin{cases}
+                    w & x = v \\
+                    v & x = w \\
+                    x & \text{else} \\
+                \end{cases}$
+                \State $E' \leftarrow \{(f(x), f(y)) : (x, y) \in E\}$
                 \State $f_\mathrm{correction} \leftarrow 1$
             \ElsIf{$\mathrm{move} = \text{``prune and reattach''}$}
                 \State $v \leftarrow \text{sample uniformly from } V \setminus \{r\}$
