@@ -13,7 +13,7 @@ Our first and most impactful contribution is an improvement to the used mutation
     \end{align*}
 \end{definition}
 
-Using this encoding has the obvious advantage that most of the tree moves are simple: The updates in the ``prune and reattach'' and ``swap subtrees'' moves of \textsc{ChainStep} (Figure \ref{alg:scite-step}, lines 21, 36, and 37) are mere constant operations. The update operations in the ``swap nodes'' move are more involved since every edge needs to be visited and checked, but it's still in linear runtime. However, sampling moves and computing the likelihood function requires many connectivity queries: Both the ``prune and reattach'' and the ``swap subtrees'' moves may need to sample a target that is not a descendant of the moved node, and the induced mutation matrix (Definition \ref{def:induced_mutmatrix}) is defined by node connectivity. Therefore, a separate data structure is used to answer these queries quickly:
+Using this encoding has the obvious advantage that most of the tree moves are simple: The updates in the ``prune and reattach'' and ``swap subtrees'' moves of \textsc{ChainStep} (Algorithm \ref{alg:scite-step}, lines 21, 36, and 37) are mere constant operations. The update operations in the ``swap nodes'' move are more involved since every edge needs to be visited and checked, but it's still in linear runtime. However, sampling moves and computing the likelihood function requires many connectivity queries: Both the ``prune and reattach'' and the ``swap subtrees'' moves may need to sample a target that is not a descendant of the moved node, and the induced mutation matrix (Definition \ref{def:induced_mutmatrix}) is defined by node connectivity. Therefore, a separate data structure is used to answer these queries quickly:
 
 \begin{definition}[Ancestor matrix, \cite{tree2016}]
     \label{def:ancestor_matrix}
@@ -27,7 +27,7 @@ Using this encoding has the obvious advantage that most of the tree moves are si
     for all $v, w \in V$.
 \end{definition}
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{AncestorMatrix}{$(p_v)_{v \in V} \subseteq V, r \in V$} \Comment $r$ is the root of the tree.
             \State $n \leftarrow |V|$
@@ -45,17 +45,17 @@ Using this encoding has the obvious advantage that most of the tree moves are si
     \end{algorithmic}
     \caption{Algorithm to construct an ancestor matrix (Definition \ref{def:ancestor_matrix}) from a parent vector (Definition \ref{def:parent_vector}), \cite{tree2016}}
     \label{alg:ancestor_matrix}
-\end{figure}
+\end{algorithm}
 
 It is obvious that connectivity queries can be executed in constant time using an ancestor matrix. Additionally, since we assume an upper bound for the number of nodes, we can use the flexibility of \acp{FPGA} to implement ancestor matrices as an array with $n$ $n$-bit words, where $n$ is the maximal number of nodes. To answer the query $i \leadsto_T j$, we only need to load the word with index $i$ and extract the bit with index $j$.
 
-Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it in figure \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. Hardware implementations of this algorithm are however inefficient since it is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with theorem \ref{theo:am_reverse} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with theorem \ref{theo:am_update} that every move of the \textsc{ChainStep} algorithm (Figure \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with two linear, perfectly pipelinable loops, a certain improvement on the previous implementation.
+Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it as algorithm \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. Hardware implementations of this algorithm are however inefficient since it is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with theorem \ref{theo:am_reverse} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with theorem \ref{theo:am_update} that every move of the \textsc{ChainStep} algorithm (Algorithm \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with two linear, perfectly pipelinable loops, a certain improvement on the previous implementation.
 
 \subsection{Reversing the ancestor matrix construction}
 
 \begin{theorem}
     \label{theo:am_reverse}
-    Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} in Figure \ref{alg:is_parent} returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$. If we implement \textsc{IsParent} as a hardware design and unroll the for-loop at line 8ff., it has a runtime in $O(1)$ and a space usage in $O(|V|)$. Finding a node's parent by iterating over all nodes has a runtime in $O(|V|)$, a space usage $O(|V|)$, and is perfectly pipelinable.
+    Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$. If we implement \textsc{IsParent} as a hardware design and unroll the for-loop at line 8ff., it has a runtime in $O(1)$ and a space usage in $O(|V|)$. Finding a node's parent by iterating over all nodes has a runtime in $O(|V|)$, a space usage $O(|V|)$, and is perfectly pipelinable.
 \end{theorem}
 
 The algorithm uses Lemma \ref{lem:am_reverse} to check whether the requested edge exists in the tree, with an additional shortcut for the root. Unrolling the for-loop is possible since we assume an upper bound for the number of genes, and apart from that, the runtime and space requirement should be obvious to see.
@@ -83,7 +83,7 @@ We first show $\Rightarrow$: We obviously have $v \leadsto w$. Let $x \in V \set
 Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \in V \setminus \{v, w\}$ with $v \leadsto y \leadsto w$. Since we have $y \neq w$, $y \leadsto w \Rightarrow y \leadsto v$ follows. However, this means that we have $v \leadsto y \leadsto v$ and that our tree has a circle, which is a contradiction. Therefore, such a $y$ can not exist and we have in fact $p = (v, \dots, w) = (v, w) \Rightarrow (v, w) \in E$.
 \end{proof}
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{IsParent}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $(v, w) \in V^2$}
             \If{$a_{v,w} = 0$}
@@ -102,7 +102,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{algorithmic}
     \caption{Algorithm to query whether an edge exists in a tree, using an ancestor matrix}
     \label{alg:is_parent}
-\end{figure}
+\end{algorithm}
 
 \subsection{Ancestor matrix updates}
 
@@ -132,7 +132,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{itemize}
 \end{definition}
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapNodes}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
             \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
@@ -151,11 +151,11 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{algorithmic}
     \caption{Algorithm to perform the ``swap nodes'' move on an ancestor matrix. All edges from and to $v$ are $w$ are swapped, assuming that we have $v \neq w$.}
     \label{alg:am_swap_nodes}
-\end{figure}
+\end{algorithm}
 
 \begin{theorem}[Correctness of the ``Swap nodes'' update]
     \label{theo:swap_nodes_correctness}
-    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V$ with $v \neq w$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, a, v, w)$ (Figure \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of the tree $T'$ after the ``Swap nodes'' move (Definition \ref{def:tree_moves}).
+    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V$ with $v \neq w$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of the tree $T'$ after the ``Swap nodes'' move (Definition \ref{def:tree_moves}).
 \end{theorem}
 
 \begin{proof}
@@ -187,7 +187,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{align*}
 \end{proof}
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{AM::PruneReattach}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
             \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
@@ -205,18 +205,18 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{algorithmic}
     \caption{Algorithm to perform the ``prune and reattach'' move on an ancestor matrix. The node $v$ is attached to the node $t$, assuming that we have $v \not\leadsto_T t$.}
     \label{alg:am_prune_reattach}
-\end{figure}
+\end{algorithm}
 
 \begin{theorem}[Correctness of the ``Prune and Reattach'' update]
     \label{theo:prune_reattach_correctness}
-    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::PruneReattach}$(V, a, v, t)$ (Figure \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of the tree $T'$ after the ``Prune and Reattach'' move (Definition \ref{def:tree_moves}).
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::PruneReattach}$(V, a, v, t)$ (Algorithm \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of the tree $T'$ after the ``Prune and Reattach'' move (Definition \ref{def:tree_moves}).
 \end{theorem}
 
 \begin{proof}
     This theorem follows directly from lemma \ref{lem:prune_reattach_property}, statement 2 and 3.    
 \end{proof}
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
         \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
@@ -236,7 +236,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{algorithmic}
     \caption{Algorithm to perform the ``swab subtrees'' move for unrelated subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $p_T(v)$, assuming that we have $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$.}
     \label{alg:am_swap_unrelated}
-\end{figure}
+\end{algorithm}
 
 \begin{lemma}
     \label{lem:prune_reattach_property}
@@ -275,7 +275,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$. If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and statement 2 also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto y$ since the edge $(t, v)$ is not contained in the relevant path.
 \end{proof}
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{AM::SwapRelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$, $t$}
         \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
@@ -311,5 +311,5 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \end{algorithmic}
     \caption{Algorithm to perform the ``swab subtrees'' move for related subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $t$, assuming that we have $v \neq w$ and $w \leadsto_T v$.}
     \label{alg:am_swap_related}
-\end{figure}
+\end{algorithm}
 

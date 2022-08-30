@@ -11,6 +11,8 @@ In this chapter, we describe the theoretical framework in which this thesis oper
         \mathbb{P}(D_{i,j} = 0 \mid E_{i,j} = 0 \wedge D_{i,j} \neq 2) &:= (1-\alpha) & \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 1 \wedge D_{i,j} \neq 2) &:= (1-\beta)
     \end{align*}
     The additional prior $D_{i,j} \neq 2$ is not present in the original formalization, but technically necessary since we would otherwise have $\mathbb{P}(D_{i,j} = 2 \mid E_{i,j} = e) = 0$ for all $e \in \{0,1\}$, which is not useful.
+    
+    Although this thesis was initially very applied in nature, it has become very theoretical. Therefore, we have decided to use theoretical indexing conventions in this thesis. Therefore, we use the first index to indicate the column of the matrix and the second index to indicate the row. We also use 1 as our first index and upper index bounds are inclusive.
 \end{definition}
 
 \begin{definition}[Likelihood function]
@@ -156,7 +158,7 @@ This function $\Lambda_d$ is the likelihood function we wish to maximize. We cou
         \Lambda_d(e_{T, \sigma'}) = (1-\alpha)^{9} \cdot \alpha^{0} \cdot (1-\beta)^{4} \cdot \beta^{0} &\approx 0.12 \\
         &\approx \exp(-2.13) 
     \end{align*}
-    This is one of the solutions found by \ac{SCITE} and it shows that the true, underlying mutation tree and attachment function is not necessarily the most likely one.
+    This is one of the solutions found by \ac{SCITE}. This shows that the true, underlying mutation tree and attachment function is not necessarily the most likely one. It is not easy to tell whether this is a problem with the model itself or whether this information is simply lost in the errors. However, we have decided to not look into this issue as it does not align with our goals.
 \end{example}
 
 Next, we have a lemma that shows that it is not necessary to search for the maximal attachment function given a mutation tree:
@@ -179,13 +181,13 @@ Informally, $\sigma_{\max, T}$ simply picks the most-likely attachment node for 
     We define the \ac{SCITE} Markov chain as the Markov chain $(T_i)_{i \in \mathbb{N}_0} \in \{(V, E, r) : (V, E, r) \text{ is mutation tree}\}$. $T_0$ is uniformly distributed over the set of all mutation trees, and for every $i \in \mathbb{N}_0$, we set $T_{i+1} := \textsc{ChainStep}(T_i)$.
 \end{definition}
 
-The \textsc{ChainStep} algorithm (Figure \ref{alg:scite-step}) works by introducing one of three modifications to the tree and accepting it as the new state with a probability related to the increase in likelihood. The first of these modifications is the ``swap nodes'' move. In this move, two distinct non-root nodes $v$ and $w$ are sampled and their position in the tree is swapped. The resulting edge set is just defined as the original edge set where every occurrence of $v$ and $w$ are swapped. ``swap nodes'' is therefore also referred to as ``label swap'' since if the node-gene relationship were modeled with a node labeling function, one would simply need to swap the labels of $v$ and $w$. The next and most basic modification is ``prune and reattach.'' In this move, a node $v$ is sampled from all non-root nodes and a node $w$ is sampled from all nodes that are not descendants of $v$, including the root $r$. Then, the node $v$ is simply attached to $w$. Lastly, there is the ``swap subtrees'' modification. Here, two distinct non-root nodes $v$ and $w$ are sampled too. If $v$ and $w$ are unrelated (formally $v \not\leadsto_T w \wedge w \not\leadsto_T v$), $v$ is simply attached to $w$'s former parent and $w$ is attached to $v$'s former parent. However, if we have $w \leadsto_T v$, a third node $t$ is sampled from all descendants of $v$ and $w$ is attached to $t$ instead of $v$'s parent. This assures that no circles are introduced to the tree. If we have $v \leadsto_T w$, we can simply swap $v$ and $w$ and do the same.
+The \textsc{ChainStep} algorithm (Algorithm \ref{alg:scite-step}) works by introducing one of three modifications to the tree and accepting it as the new state with a probability related to the increase in likelihood. The first of these modifications is the ``swap nodes'' move. In this move, two distinct non-root nodes $v$ and $w$ are sampled and their position in the tree is swapped. The resulting edge set is just defined as the original edge set where every occurrence of $v$ and $w$ are swapped. ``swap nodes'' is therefore also referred to as ``label swap'' since if the node-gene relationship were modeled with a node labeling function, one would simply need to swap the labels of $v$ and $w$. The next and most basic modification is ``prune and reattach.'' In this move, a node $v$ is sampled from all non-root nodes and a node $w$ is sampled from all nodes that are not descendants of $v$, including the root $r$. Then, the node $v$ is simply attached to $w$. Lastly, there is the ``swap subtrees'' modification. Here, two distinct non-root nodes $v$ and $w$ are sampled too. If $v$ and $w$ are unrelated (formally $v \not\leadsto_T w \wedge w \not\leadsto_T v$), $v$ is simply attached to $w$'s former parent and $w$ is attached to $v$'s former parent. However, if we have $w \leadsto_T v$, a third node $t$ is sampled from all descendants of $v$ and $w$ is attached to $t$ instead of $v$'s parent. This assures that no circles are introduced to the tree. If we have $v \leadsto_T w$, we can simply swap $v$ and $w$ and do the same.
 
-If we would now accept every modified tree, we would eventually encounter a high- or even maximum-likelihood tree. However, the probability of this is low since the chain wanders through the search space aimlessly. Therefore, Jahn et al. employed a rejection sampling method that accepts solutions with a high likelihood and rejects solutions with a low likelihood. The exact way how this is achieved is documented in Figure \ref{alg:scite-step} and according to the authors, this assures that the chain converges on trees with a high likelihood.
+If we would now accept every modified tree, we would eventually encounter a high- or even maximum-likelihood tree. However, the probability of this is low since the chain wanders through the search space aimlessly. Therefore, Jahn et al. employed a rejection sampling method that accepts solutions with a high likelihood and rejects solutions with a low likelihood. The exact way how this is achieved is documented in algorithm \ref{alg:scite-step} and according to the authors, this assures that the chain converges on trees with a high likelihood.
     
 The \ac{SCITE} algorithm simulates the \ac{SCITE} Markov chain for a user-requested number of steps and repetitions and outputs the state $T$ with the highest $\Lambda_d(T)$ it has encountered. The goal of the thesis is to simulate the \ac{SCITE} Markov chain as quickly as possible, at least as quickly as the original implementation.
 
-\begin{figure}[p]
+\begin{algorithm}[p]
     \begin{algorithmic}[1]
         \Function{ChainStep}{$T$}
             \State $(V, E, r) \leftarrow T$
@@ -231,4 +233,62 @@ The \ac{SCITE} algorithm simulates the \ac{SCITE} Markov chain for a user-reques
     \end{algorithmic}
     \caption{Algorithm to compute the next chain step of a SCITE Markov Chain, adapted from \cite{tree2016}}
     \label{alg:scite-step}
-\end{figure}
+\end{algorithm}
+
+\begin{example}
+    \label{exmpl:chain_step}
+    We will give examples of different chain steps. We use the same tree as in example \ref{exmpl:scite_problem}, but without the attached cells since these are not relevant now:
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[every node/.style={draw}, edge from parent/.append style={-stealth}]
+                node[circle] {r}
+                child {
+                    node[circle] {3} 
+                    child { node[circle] {1} }
+                    child { node[circle] {2} }
+                }
+                child { node[circle] {4} };
+        \end{tikzpicture}
+    \end{center}
+    If we now execute a ``swap nodes'' move with $v = 3$ and $w = 4$, the resulting tree looks like this:
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[every node/.style={draw}, edge from parent/.append style={-stealth}]
+                node[circle] {r}
+                child {
+                    node[circle] {4} 
+                    child { node[circle] {1} }
+                    child { node[circle] {2} }
+                }
+                child { node[circle] {3} };
+        \end{tikzpicture}
+    \end{center}
+    Nodes 4 and 3 just have swapped their labels. Everything else is still the same. Now, we execute the ``prune and reattach'' move with $v = 4$ and $w = 3$, so we take node 4 and attach it to node 3. This is possible since there is no path from node 4 to node 3:
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[every node/.style={draw}, edge from parent/.append style={-stealth}]
+                node[circle] {r}
+                child {
+                    node[circle] {3}
+                    child {
+                        node[circle] {4} 
+                        child { node[circle] {1} }
+                        child { node[circle] {2} }
+                    }
+                };
+        \end{tikzpicture}
+    \end{center}
+    Now, we will give an example of the ``swap nodes'' move with related subtrees. Firstly, we choose $v = 4$ and $w = 3$. Since we have $w \leadsto_T v$, we don't need to swap $v$ and $w$, but we need to sample a new target node $t$ among the descendants of $v$. Since every node is also its own descendant, we can choose $t = v = 4$. Now, we attach $v = 4$ to $r$, which is the parent of $w = 3$, and attach 3 to $t = 4$. The resulting tree looks like this:
+    \begin{center}
+        \begin{tikzpicture}
+            \draw[every node/.style={draw}, edge from parent/.append style={-stealth}]
+                node[circle] {r}
+                child {
+                    node[circle] {4} 
+                    child { node[circle] {1} }
+                    child { node[circle] {2} }
+                    child { node[circle] {3} }
+                };
+        \end{tikzpicture}
+    \end{center}
+\end{example}
