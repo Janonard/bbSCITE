@@ -1,6 +1,6 @@
 \section{Tree encoding and operations}
 
-Our first and most impactful contribution is an improvement to the used mutation tree encoding and the operations on this code. The original \ac{SCITE} implementation \cite{tree2016} uses a parent vector as the canonical data structure of a mutation tree:
+Our first and most impactful contribution is an improvement to the used mutation tree encoding and the operations on this code. The original \ac{SCITE} implementation \cite{tree2016} uses a parent vector as the canonical data structure to encode a mutation tree:
 
 \begin{definition}[Parent vector, \cite{tree2016}]
     \label{def:parent_vector}
@@ -13,7 +13,7 @@ Our first and most impactful contribution is an improvement to the used mutation
     \end{align*}
 \end{definition}
 
-Using this encoding has the obvious advantage that most of the tree moves are simple: The updates in the ``prune and reattach'' and ``swap subtrees'' moves of \textsc{ChainStep} (Algorithm \ref{alg:scite-step}, lines 21, 36, and 37) are mere constant operations. The update operations in the ``swap nodes'' move are more involved since every edge needs to be visited and checked, but it's still in linear runtime. However, sampling moves and computing the likelihood function requires many connectivity queries: Both the ``prune and reattach'' and the ``swap subtrees'' moves may need to sample a target that is not a descendant of the moved node, and the induced mutation matrix (Definition \ref{def:induced_mutmatrix}) is defined by node connectivity. Therefore, a separate data structure is used to answer these queries quickly:
+Using this encoding has the obvious advantage that most of the tree moves are simple: The updates in the ``prune and reattach'' and ``swap subtrees'' moves of \textsc{ChainStep} (Algorithm \ref{alg:scite-step}) are mere constant operations. The update operations in the ``swap nodes'' move are more involved since every edge needs to be visited and checked, but it is still in linear runtime. However, sampling moves and computing the likelihood function requires many connectivity queries: Both the ``prune and reattach'' and the ``swap subtrees'' moves may need to sample a target that is not a descendant of the moved node, and the induced mutation matrix (Definition \ref{def:induced_mutmatrix}) is defined by node connectivity. Therefore, a separate data structure is used to answer these queries quickly:
 
 \begin{definition}[Ancestor matrix, \cite{tree2016}]
     \label{def:ancestor_matrix}
@@ -49,38 +49,43 @@ Using this encoding has the obvious advantage that most of the tree moves are si
 
 It is obvious that connectivity queries can be executed in constant time using an ancestor matrix. Additionally, since we assume an upper bound for the number of nodes, we can use the flexibility of \acp{FPGA} to implement ancestor matrices as an array with $n$ $n$-bit words, where $n$ is the maximal number of nodes. To answer the query $i \leadsto_T j$, we only need to load the word with index $i$ and extract the bit with index $j$.
 
-Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it as algorithm \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. Hardware implementations of this algorithm are however inefficient since it is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with theorem \ref{theo:am_reverse} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with theorem \ref{theo:am_update} that every move of the \textsc{ChainStep} algorithm (Algorithm \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with two linear, perfectly pipelinable loops, a certain improvement on the previous implementation.
+Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it as algorithm \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm twice per chain step, once before sampling a move and once after the move was executed to compute the likelihood function. Hardware implementations of this algorithm are however inefficient since it is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with theorem \ref{theo:am_reverse} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with theorem \ref{theo:am_update} that every move of the \textsc{ChainStep} algorithm (Algorithm \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with one linear, perfectly pipelinable loop to update the ancestor matrix for a move. Compared to the two quadratic, barely pipelinable loops to compute the ancestor matrix twice, this is certainly an improvement.
 
 \subsection{Reversing the ancestor matrix construction}
 
 \begin{theorem}
     \label{theo:am_reverse}
-    Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$. If we implement \textsc{IsParent} as a hardware design and unroll the for-loop at line 8ff., it has a runtime in $O(1)$ and a space usage in $O(|V|)$. Finding a node's parent by iterating over all nodes has a runtime in $O(|V|)$, a space usage $O(|V|)$, and is perfectly pipelinable.
+    Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$.
 \end{theorem}
 
-The algorithm uses Lemma \ref{lem:am_reverse} to check whether the requested edge exists in the tree, with an additional shortcut for the root. Unrolling the for-loop is possible since we assume an upper bound for the number of genes, and apart from that, the runtime and space requirement should be obvious to see.
+The algorithm uses Lemma \ref{lem:am_reverse} to check whether the requested edge exists in the tree, with an additional shortcut for the root.
 
 \begin{lemma}
     \label{lem:am_reverse}
     Let $T = (V, E)$ be a tree and $v, w \in V$. We have:
     \begin{align*}
-        (v, w) \in E \Leftrightarrow (\forall x \in V \setminus \{w\}: x \leadsto v \Leftrightarrow x \leadsto w) \wedge (v \leadsto w)
+        (v, w) \in E \Leftrightarrow (\forall x \in V \setminus \{w\}: x \leadsto_T v \Leftrightarrow x \leadsto_T w) \wedge (v \leadsto_T w)
     \end{align*}
 \end{lemma}
 
 \begin{proof}
-
-We first show $\Rightarrow$: We obviously have $v \leadsto w$. Let $x \in V \setminus \{v\}$. Then, we have:
-\begin{align*}
-    x \leadsto w    &\Rightarrow \exists p = (x, \dots, w) \subseteq E \\
-                    &\stackrel{(v, w) \in E}{\Rightarrow} p = (x, \dots, v, w) \subseteq E \\
-                    &\Rightarrow p' := (x, \dots, v) \subseteq E \\
-                    &\Rightarrow x \leadsto v \\
-    x \leadsto v    &\Rightarrow \exists p = (x, \dots, v) \subseteq E \\
-                    &\stackrel{(v, w) \in E}{\Rightarrow} p = (x, \dots, v, w) \subseteq E \\
-                    &\Rightarrow x \leadsto w
-\end{align*}
-Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \in V \setminus \{v, w\}$ with $v \leadsto y \leadsto w$. Since we have $y \neq w$, $y \leadsto w \Rightarrow y \leadsto v$ follows. However, this means that we have $v \leadsto y \leadsto v$ and that our tree has a circle, which is a contradiction. Therefore, such a $y$ can not exist and we have in fact $p = (v, \dots, w) = (v, w) \Rightarrow (v, w) \in E$.
+    We first show $\Rightarrow$: We obviously have $v \leadsto_T w$. Let $x \in V \setminus \{v\}$. Then, we have:
+    \begin{align*}
+        x \leadsto_T w  &\Rightarrow \exists p = (x, \dots, w) \subseteq E \\
+                        &\stackrel{(v, w) \in E}{\Rightarrow} (v, w) \in p \\
+                        &\Rightarrow p' := p \setminus \{(v, w)\} = (x, \dots, v) \subseteq E \\
+                        &\Rightarrow x \leadsto_T v \\
+        x \leadsto_T v  &\Rightarrow \exists p = (x, \dots, v) \subseteq E \\
+                        &\stackrel{(v, w) \in E}{\Rightarrow} p' := p \cup \{(v, w)\} = (x, \dots, v, w) \subseteq E \\
+                        &\Rightarrow x \leadsto_T w
+    \end{align*}
+    Now, we show $\Leftarrow$: Let's assume for a contradiction that we have $(\forall x \in V \setminus \{w\}: x \leadsto_T v \Leftrightarrow x \leadsto_T w) \wedge (v \leadsto_T w)$ and $(v, w) \notin E$. We have:
+    \begin{align*}
+        v \leadsto_T w \wedge (v, w) \notin E &\Rightarrow \exists y \in V \setminus \{v, w\}: v \leadsto_T y \leadsto_T w \\
+        y \leadsto_T w \wedge y \neq w &\Rightarrow y \leadsto_T v \\
+        &\Rightarrow y \leadsto_T v \leadsto_T y
+    \end{align*}
+    This means that our tree has a circle, which is a contradiction. Therefore, such a $y$ can not exist and we have in fact $p = (v, \dots, w) = (v, w) \Rightarrow (v, w) \in E$.
 \end{proof}
 
 \begin{algorithm}[p]
@@ -108,7 +113,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 
 \begin{definition}[Tree moves, \cite{tree2016}]
     \label{def:tree_moves}
-    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$, $t_1 \in V$ with $v \not\leadsto t_1$, and $t_2 \in V$ with $v \leadsto t_2$. We define four different moves:
+    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$, $t_1 \in V$ with $v \not\leadsto_T t_1$, and $t_2 \in V$ with $v \leadsto_T t_2$. We define four different moves:
     \begin{itemize}
         \item ``Swap nodes:'' $T' = (V, E', r)$ with $E' := \{(f(x), f(y)) : (x, y) \in E\}$ and
         \begin{align*}
@@ -179,7 +184,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 \end{lemma}
 
 \begin{proof}
-    First, it should be noted that $f$ is obviously self-inverse. We therefore only need to show $x \leadsto_{T} y \Rightarrow f(x) \leadsto_{T'} f(y)$ since the rest follows. We have:
+    First, it should be noted that $f$ is obviously self-inverse, so that we have $f(f(x)) = x$ and $f(f(T)) = T$. We therefore only need to show $x \leadsto_{T} y \Rightarrow f(x) \leadsto_{T'} f(y)$ since the rest follows. We have:
     \begin{align*}
         x \leadsto_T y &\Rightarrow \exists p = (x, \dots, y) = \{(x, p_2), (p_2, p_3), \dots, (p_{l-1}, y)\} \subseteq E \\
         &\Rightarrow p' = \{(f(x), f(p_2)), (f(p_2), f(p_3)), \dots, (f(p_{l-1}), f(y))\} \subseteq E' \\
@@ -194,9 +199,9 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
             \ForAll{$x \in V$}
                 \ForAll{$y \in V$} \Comment Unroll completely
                     \If{$a[v][y]$}
-                        \State $a'[x][y] \leftarrow a[x][t] \vee (a[v][x] \wedge a[x][y])$
+                        \State $a'[x][y] \leftarrow a[x][t] \vee (a[v][x] \wedge a[x][y])$ \Comment See lemma \ref{lem:prune_reattach_rel}
                     \Else
-                        \State $a'[x][y] \leftarrow a[x][y]$
+                        \State $a'[x][y] \leftarrow a[x][y]$ \Comment See lemma \ref{lem:prune_reattach_unrel}
                     \EndIf
                 \EndFor
             \EndFor
@@ -213,7 +218,7 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
 \end{theorem}
 
 \begin{proof}
-    This theorem follows directly from lemma \ref{lem:prune_reattach_property}, statement 2 and 3.    
+    This theorem follows directly from lemmata \ref{lem:prune_reattach_unrel} and \ref{lem:prune_reattach_rel}.
 \end{proof}
 
 \begin{algorithm}[p]
@@ -238,41 +243,41 @@ Now, we show $\Leftarrow$: Let's assume for a contradiction that there is a $y \
     \label{alg:am_swap_unrelated}
 \end{algorithm}
 
+\begin{remark}
+    \label{rem:prune_reattach}
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. We remark that we have $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ for all $y \in V$ and that we have $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$.
+\end{remark}
+
+The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply that children of $v$ still stay connected to $v$ after the move. $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$ can simply be checked by writing them out.
+
 \begin{lemma}
-    \label{lem:prune_reattach_property}
-    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ with $E' := (E \setminus \{(p_T(v), v)\}) \cup \{(t, v)\}$ (The mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}). Let also $x, y \in V$. We then have:
-    \begin{enumerate}
-        \item $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$
-        \item If $v \not\leadsto_T y$: $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$
-        \item If $v \leadsto_T y$: $x \leadsto_{T'} y \Leftrightarrow (v \leadsto_T x \leadsto_T y \vee x \leadsto_T t)$.
-    \end{enumerate}
+    \label{lem:prune_reattach_unrel}
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. Let also $x, y \in V$ with $v \not\leadsto_T y$. We then have:
+    \begin{align*}
+        x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y
+    \end{align*}
+    The idea behind this lemma is that paths in the tree are unharmed if they do not go via the removed edge $(p_T(v), v)$.
 \end{lemma}
 
-\todo[inline]{Damn you're ugly!}
+\begin{proof}
+    Let's first assume $x \leadsto_{T'} y$ and $x \not\leadsto_{T} y$ to prove $x \leadsto_{T'} y \Rightarrow x \leadsto_T y$ by contradiction. There is a path $p = (p_1, \dots, p_l) \subseteq E'$ with $p_1 = x$ and $p_l = y$. We have $p \not\subseteq E$ since we would otherwise have $x \leadsto_T y$. This means that there is an edge $e \in (p \setminus E) \subseteq (E' \setminus E)$. One can easily check that $(t, v)$ is the only edge in $E' \setminus E$. We therefore have $e = (t, v)$ and $\exists i \leq l: p_i = v$. This however means that $p' := (v, p_{i+1}, \dots, y)$ is a suffix of $p$. Since $e = (t,v) \notin p'$, we have $p' \subseteq E \Rightarrow v \leadsto_{T} y$, which contradicts our precondition of $v \not\leadsto_T y$.
 
-\begin{proof}[Proof of statement 1]
-    We have:
-    \begin{align*}
-        v \leadsto_T y &\Rightarrow \exists p = (v, \dots, y) \subseteq E \\
-        (p_T(v), v) \notin p &\Rightarrow p \subseteq E' \Rightarrow v \leadsto_{T'} y
-    \end{align*}
-    $v \leadsto_{T'} y \Rightarrow v \leadsto_T y$ is analogous:
-    \begin{align*}
-        v \leadsto_{T'} y &\Rightarrow \exists p = (v, \dots, y) \subseteq E' \\
-        (t, v) \notin p &\Rightarrow p \subseteq E \Rightarrow v \leadsto_T y
-    \end{align*}
+    Using an analogous argumentation with the assumption of $x \not\leadsto_{T'} y$ and $x \leadsto_T y$ leads to $v \leadsto_{T'} y$. From this and remark \ref{rem:prune_reattach}, $v \leadsto_T y$ follows. This is the same contradiction as above and proves $x \leadsto_T y \Rightarrow x \leadsto_{T'} y$.
 \end{proof}
 
-\begin{proof}[Proof of statement 2]
-    Let's first assume $x \leadsto_{T'} y$ and $x \not\leadsto_{T} y$ to prove $x \leadsto_{T'} y \Rightarrow x \leadsto_T y$ by contradiction. There is a path $p = (p_1, \dots, p_l) \subseteq E'$ with $p_1 = x$ and $p_l = y$. We have $p \not\subseteq E$ since we would otherwise have $x \leadsto_T y$. This means that there is an edge $e \in (p \setminus E) \subseteq (E' \setminus E)$. $(t, v)$ is the only edge in $E' \setminus E$ per definition and we therefore have $e = (t, v)$ and $\exists i \leq l: p_i = v$. This however means that the $p' := (v, p_{i+1}, \dots, y)$ is a suffix to the path $p$. Since $e \notin p'$, we have $p' \subseteq E \Rightarrow v \leadsto_{T} y$, which contradicts our assumptions.
+\begin{lemma}
+    \label{lem:prune_reattach_rel}
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. Let also $x, y \in V$ with $v \leadsto_T y$. We then have:
+    \begin{align*}
+        x \leadsto_{T'} y \Leftrightarrow (v \leadsto_T x \leadsto_T y \vee x \leadsto_T t)
+    \end{align*}
+    The idea of this lemma is that paths over the node $v$ exist in the new tree iff they are either entirely in the subtree below $v$ or are newly established via the edge $(t, v)$.
+\end{lemma}
 
-    Using an analogous argumentation with the assumption of $x \not\leadsto_{T'} y$ and $x \leadsto_T y$ leads to $v \leadsto_{T'} y$. From this and statement 1, $v \leadsto_T y$ follows. This is the same contradiction as above and proves $x \leadsto_T y \Rightarrow x \leadsto_{T'} y$.
-\end{proof}
+\begin{proof}
+    We have nothing to show for $x = v$ due to remark \ref{rem:prune_reattach}. Therefore, we can assume $x \neq v$ in the following. We first show $\Leftarrow$: If we have $x \leadsto_T t$, we also have $x \leadsto_{T'} t$ with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel}. From this and $(t, v) \in E' \Rightarrow t \leadsto_{T'} v$, it follows that we have $x \leadsto_{T'} t \leadsto_{T'} v \leadsto_{T'} y \Rightarrow x \leadsto_{T'} y$.
 
-\begin{proof}[Proof of statement 3]
-    We first show $\Leftarrow$: If we have $x \leadsto_T t$, we also have $x \leadsto_{T'} t$ with $v \not\leadsto_T t$ and statement 2. From this, $x \leadsto_{T'} t \leadsto_{T'} v \leadsto_{T'} y \Rightarrow x \leadsto_{T'} y$ follows. If we have $v \leadsto_T x \leadsto_T y$, we also have $x \not\leadsto_T p_T(v)$ since we would otherwise have a circle in $T$. However, this means that the edge $(p_T(v), v)$ is not an element of the path from $x$ to $y$ and we still have $x \leadsto_{T'} y$.
-
-    We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$. If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and statement 2 also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto y$ since the edge $(t, v)$ is not contained in the relevant path.
+    We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$ ($p_1 = x$ and $p_l = y$). If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel} also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto_T y$ with remark \ref{rem:prune_reattach} and since we neither have $(v, t) \in p$ nor $(p_T(v), v) \in p$.
 \end{proof}
 
 \begin{algorithm}[p]
