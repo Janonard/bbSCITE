@@ -221,28 +221,6 @@ The algorithm uses Lemma \ref{lem:am_reverse} to check whether the requested edg
     This theorem follows directly from lemmata \ref{lem:prune_reattach_unrel} and \ref{lem:prune_reattach_rel}.
 \end{proof}
 
-\begin{algorithm}[p]
-    \begin{algorithmic}[1]
-        \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
-        \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
-        \ForAll{$x \in V$}
-            \ForAll{$y \in V$} \Comment Unroll completely
-                \If{$a[v][y] \wedge \neg a[w][y]$}
-                    \State $a'[x][y] \leftarrow a[x][p_T(w)] \vee (a[v][x] \wedge a[x][y])$
-                \ElsIf{$\neg a[v][y] \wedge a[w][y]$}
-                    \State $a'[x][y] \leftarrow a[x][p_T(v)] \vee (a[v][x] \wedge a[x][y])$
-                \Else
-                    \State $a'[x][y] \leftarrow a[x][y]$
-                \EndIf
-            \EndFor
-        \EndFor
-        \State \Return $a'$
-        \EndFunction
-    \end{algorithmic}
-    \caption{Algorithm to perform the ``swab subtrees'' move for unrelated subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $p_T(v)$, assuming that we have $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$.}
-    \label{alg:am_swap_unrelated}
-\end{algorithm}
-
 \begin{remark}
     \label{rem:prune_reattach}
     Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. We remark that we have $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ for all $y \in V$ and that we have $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$.
@@ -279,6 +257,49 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
 
     We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$ ($p_1 = x$ and $p_l = y$). If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel} also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto_T y$ with remark \ref{rem:prune_reattach} and since we neither have $(v, t) \in p$ nor $(p_T(v), v) \in p$.
 \end{proof}
+
+\begin{algorithm}[p]
+    \begin{algorithmic}[1]
+        \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
+        \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
+        \ForAll{$x \in V$}
+            \ForAll{$y \in V$} \Comment Unroll completely
+                \If{$a[v][y] \wedge \neg a[w][y]$}
+                    \State $a'[x][y] \leftarrow a[x][p_T(w)] \vee (a[v][x] \wedge a[x][y])$
+                \ElsIf{$\neg a[v][y] \wedge a[w][y]$}
+                    \State $a'[x][y] \leftarrow a[x][p_T(v)] \vee (a[v][x] \wedge a[x][y])$
+                \Else
+                    \State $a'[x][y] \leftarrow a[x][y]$
+                \EndIf
+            \EndFor
+        \EndFor
+        \State \Return $a'$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Algorithm to perform the ``swab subtrees'' move for unrelated subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $p_T(v)$, assuming that we have $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$.}
+    \label{alg:am_swap_unrelated}
+\end{algorithm}
+
+\begin{theorem}[Correctness of the ``Swap unrelated Subtrees'' update]
+    \label{theo:swap_unrelated_correctness}
+    Let $T = (V, E, r)$ be a mutation tree, $v,w \in V \setminus \{r\}$, with $v \not\leadsto_T w$ and $w \not\leadsto_T v$, and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapUnrelatedSubtrees}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_unrelated}) is the corresponding ancestor matrix of the tree $T'$ after the ``Swap unrelated subtrees'' move (Definition \ref{def:tree_moves}).
+\end{theorem}
+
+\begin{proof}
+    First of all, we can remark that the ``Swap unrelated subtrees'' move is equivalent to two ``Prune and Reattach'' moves, first with parameters $v, p_T(w)$ and then with parameters $w, p_T(v)$ ($p_T(v)$ represents the parent of $v$ \textit{before} the first move). Therefore, we can prove the correctness by looking at every pair $x,y \in V$ and showing that \textsc{AM::SwapUnrelatedSubtrees} \ref{alg:am_swap_unrelated} assigns the same values as two \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach} calls would. Like the algorithm, we consider the following cases:
+    \begin{itemize}
+        \item $v \leadsto_T y$ and $w \not\leadsto_T y$: The first call $a' \leftarrow \textsc{AM::PruneReattach}(V, a, v, p_T(w))$ assigns 
+        \begin{align*}
+            a'[x][y] \leftarrow a[x][p_T(w)] \vee (a[v][x] \wedge a[x][y])
+        \end{align*}
+        and the second call $a'' \leftarrow \textsc{AM::PruneReattach}(V, a', w, p_T(v))$ assigns $a''[x][y] \leftarrow a'[x][y]$. \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in this case.
+        \item $v \not\leadsto_T y$ and $w \leadsto_T y$: This case is analogous to the previous one.
+        \item $v \not\leadsto_T y$ and $w \not\leadsto_T y$: Both calls to \textsc{AM::PruneReattach} forward the previous value of $a[x][y]$, just like \textsc{AM::SwapUnrelatedSubtrees} does.
+        \item $v \leadsto_T y$ and $w \leadsto_T y$: This case is not possible since it would lead to either $v \leadsto_T w \leadsto_T y$ or $w \leadsto_T v \leadsto_T y$, which would contradict our assumption of $v \not\leadsto_T w$ and $w \not\leadsto_T v$. It is therefore safe for \textsc{AM::SwapUnrelatedSubtrees} to not catch this case.
+    \end{itemize}
+    \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in all cases.
+\end{proof}
+
 
 \begin{algorithm}[p]
     \begin{algorithmic}[1]
