@@ -369,7 +369,7 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
 
 \begin{lemma}
     \label{lem:related_swap_abc}
-    Let $A$, $B$ and $C$ be the classes from definition \ref{def:related_swap_classes}, $x \in A$, and $y \in B \cup C$. We have $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$.
+    Let $x \in A$, and $y \in B \cup C$. We have $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$.
 \end{lemma}
 
 \begin{proof}
@@ -397,18 +397,11 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
 \end{proof}
 
 \begin{lemma}
-    \label{lem:related_swap_ac}
-    Let $A$ and $C$ be the classes from definition \ref{def:related_swap_classes}, $x \in A$, and $y \in C$. We have $`x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y`$.
-\end{lemma}
-
-\begin{proof}
-    The proof is analogous to lemma \ref{lem:related_swap_ab}, only that the middle section in the path is removed by the swap operation, not added.
-\end{proof}
-
-\begin{lemma}
     \label{lem:related_swap_bac}
-    If $x \in B$ and $y \in A$  or $y \in C$, we have $x \not\leadsto_{T'} y$, since every possible link would be broken (to be extended, but obvious with the diagram).
+    If $x \in B$ and $y \in A \cup C$, we have $x \not\leadsto_{T'} y$.
 \end{lemma}
+
+\todo[inline]{Prove!}
 
 \begin{lemma}
     \label{lem:related_swap_cb}
@@ -416,9 +409,15 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
 \end{lemma}
 
 \begin{proof}
-    Proof of $\Rightarrow$. We have $y \in B \Rightarrow w \leadsto_{T'} y \Rightarrow t \leadsto_{T'} y$. Since the path from $x$ has to go via $t$ and we have $t \in C$, it follows that $x \leadsto_T t$.
-
-    Proof of $\Leftarrow$. Since we have $y \in B \Rightarrow w \leadsto_{T'} y \Rightarrow t \leadsto_{T'} y$  and $x \in C \Rightarrow x \leadsto_{T'} t$, it follows that $x \leadsto_{T'} t \leadsto_{T'} y$.
+    We have:
+    \begin{align*}
+        x \leadsto_{T'} y \wedge y \in B \wedge x \in C &\Rightarrow x \leadsto_{T'} y \wedge w \leadsto_{T'} y \wedge w \not\leadsto_{T'} x \\
+        &\Rightarrow x \leadsto_{T'} w \leadsto_{T'} y \\
+        &\Rightarrow x \leadsto_{T'} t \\
+        &\stackrel{x, t \in C}{\Rightarrow} x \leadsto_T t \\
+        x \leadsto_T t &\stackrel{x, t \in C}{\Rightarrow} x \leadsto_{T'} t \\
+        &\Rightarrow x \leadsto_{T'} t \stackrel{\text{move}}{\leadsto_{T'}} w \stackrel{y \in B}{\leadsto_{T'}} y
+    \end{align*}
 \end{proof}
 
 
