@@ -1,10 +1,52 @@
 \chapter{Design of ffSCITE}
 
-This chapter contains a description of the \ac{ffSCITE} design, which is essentially our biggest contribution. First, we will give an overview of how the design is structured and which parts of the design implement which subtasks of the \ac{SCITE} algorithm. Then, we will provide detailed insights into certain aspects of the design in individual sections.
+Our implementation of \ac{SCITE} is a multi-kernel design. We initially tried to implement the algorithm with a single kernel, but we soon encountered feedback problems that we were not able to resolve inside a single kernel. Therefore, we split the parts of the algorithm with problematic feedback into separate kernels, connected via pipes. Figure \ref{fig:design_schematic} gives an overview of the design: The change proposer kernel receives the current state from the IO kernel and samples all random parameters of a chain step. Everything else like finding the deterministic parameters of the move, computing the resulting tree, computing its likelihood, and evaluating it is done by the ``Tree Scorer'' kernel. It contains four internal loops that have to be completed for every tree. Once the likelihood score of the new tree is computed and the new current state is decided, it is fed back to the IO kernel. Additionally, it keeps track of the most-likely state it encounters and writes this state to a global buffer once the execution is finished. The change proposer kernel and the loops inside the tree scorer kernel all operate independently of each other in a macro-pipeline. The IO kernel dispatches and receives states for the pipeline: Chain states from the tree scorer are fed back to the pipeline as often as requested by the user and when these chains are finished, new initial states are read from global memory. These states are precomputed by the host since we did not want to waste chip space on hardware that is rarely used. It is also not necessary to write the intermediate or final chain states back to global memory since the application only evaluates the best states.
 
-\input{chapters/design/overview.tex}
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \draw[every rectangle node/.style={draw}]
+            node (IOKernel) at (-2,0) {IO Kernel}
+            node (ChangeProposer) at (6,0) {Change Proposer}
+            node (FindParentLoop) at (2,-3) {Find Parent Loop}
+            node (TreeUpdateLoop) at (2,-4) {Tree Update Loop}
+            node (TreeScoreMapLoop) at (2,-5) {Tree Score Mapping Loop}
+            node (TreeScoreReductionLoop) at (2,-6) {Tree Score Reduction Loop}
+            node (InitialStates) at (-5.5,0) {Initial States}
+            node (BestStates) at (-5.5,-6) {Best State};
+
+        \node[draw,thick,fit=(FindParentLoop) (TreeUpdateLoop) (TreeScoreMapLoop) (TreeScoreReductionLoop),inner sep=.4cm] (TreeScorer) {};
+        \node[above] at (TreeScorer.north) {Tree Scorer};
+
+        \draw[-{Stealth[length=.2cm]}] (IOKernel) 
+            -- node[above] (IOCPLink) {current tree \& score}
+            (ChangeProposer);
+        \draw[-{Stealth[length=.2cm]}] (ChangeProposer) 
+            |- node[left,text width=2.5cm,pos=0.1] (CPTSLink) {current tree \& score, move metadata}
+            (TreeScorer);
+        \draw[-{Stealth[length=.2cm]}] (TreeScorer)
+            -| node[right,text width=2.5cm,pos=0.9] (TSIOLink) {current tree \& score}
+            (IOKernel);
+        \draw[-{Stealth[length=.2cm]}] (InitialStates) 
+            -- node[above,text width=2.5cm] {}
+            (IOKernel);
+        \draw[-{Stealth[length=.2cm]}] (TreeScorer.190) -- +(-1,0) -- +(-1,-1) 
+            -- node[below,text width=2.5cm] {}
+            (BestStates);
+
+        \node[draw,ultra thick,fit=(IOKernel) (IOCPLink) (ChangeProposer) (CPTSLink) (TreeScorer) (TSIOLink),inner sep=.4cm] (FPGA) {};
+        \node[above] at (FPGA.north) {FPGA chip design};
+
+        \node[draw,ultra thick,fit=(InitialStates) (BestStates),inner sep=.4cm] (DDR) {};
+        \node[above] at (DDR.north) {Global DDR memory};
+    \end{tikzpicture}
+    \caption{Schematic of the \ac{ffSCITE} chip design.}
+    \label{fig:design_schematic}
+\end{figure}
+
+In this chapter, we discuss noteworthy contributions and optimizations. First, we describe how we used both logical properties of mutation trees and technical properties of \acp{FPGA} to efficiently use, modify and transfer mutation trees in the design. Secondly, we describe how we have rewritten the likelihood score computation to make use of wide parallelism available on \acp{FPGA}. Thirdly, we describe our difficulties with move proposals, especially with random number generators, and how we have minimized their impact. Lastly, we describe how we have set up the IO and feedback kernel to saturate the computation pipeline.
+
 \input{chapters/design/encoding.tex}
-\input{chapters/design/proposal.tex}
 \input{chapters/design/scoring.tex}
+\input{chapters/design/proposal.tex}
 \input{chapters/design/io.tex}
-\input{chapters/design/misc.tex}
