@@ -8,5 +8,7 @@ cd build
 
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j8 scite
-dpcpp -fintelfpga -qactypes -DHARDWARE -Xshardware -Xsv -Xsparallel=8 -Xsprofile -Xsclock="250MHz" -Xshigh-effort -reuse-exe=./ffSCITE ../src/main.cpp -o ffSCITE
+dpcpp -fintelfpga -qactypes -DHARDWARE \
+    -Xshardware -Xsv -Xsparallel=8 -Xsprofile -Xshigh-effort -Xsseed=1 \
+    -reuse-exe=./ffSCITE ../src/main.cpp -o ffSCITE
 tar -caf build.tar.gz scite ffSCITE ffSCITE.prj/reports

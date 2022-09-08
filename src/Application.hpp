@@ -20,16 +20,21 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
-template <uint32_t max_n_cells, uint32_t max_n_genes, uint32_t pipeline_capacity> class Application {
+template <uint32_t max_n_cells, uint32_t max_n_genes,
+          uint32_t pipeline_capacity>
+class Application {
 public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
+  using AncestryVector = typename MutationTreeImpl::AncestryVector;
   using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
   using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
                                         cl::sycl::access::target::host_buffer>;
   using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
+
+  static constexpr uint32_t max_n_nodes = MutationTreeImpl::max_n_nodes;
 
   Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
@@ -97,26 +102,29 @@ public:
     }
   }
 
-  struct ChainState {
-    AncestorMatrix ancestor_matrix;
+  struct ChainMeta {
     float beta;
     float score;
   };
 
-  using InputPipe = cl::sycl::pipe<class InputPipeID, ChainState>;
-  using OutputPipe = cl::sycl::pipe<class OutputPipeID, ChainState>;
+  using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
+  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
+  using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
+  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
 
-  struct ProposedChangeState {
-    ChainState current_state;
-
+  struct ProposedChangeMeta {
+    float current_beta;
+    float current_score;
     MoveType move_type;
     uint32_t v, w, descendant_of_v, nondescendant_of_v;
     float new_beta;
     float acceptance_level;
   };
 
-  using ProposedChangePipe =
-      cl::sycl::pipe<class ChangedStatePipeID, ProposedChangeState>;
+  using ProposedChangeMetaPipe =
+      cl::sycl::pipe<class ChangedStateMetaPipeID, ProposedChangeMeta>;
+  using ProposedChangeTreePipe =
+      cl::sycl::pipe<class ChangedStateTreePipeID, AncestryVector>;
 
   float run_simulation() {
     using namespace cl::sycl;
@@ -182,33 +190,48 @@ private:
         uint32_t i_initial_state = 0;
 
         for (uint32_t i = 0; i < n_steps * n_chains + pipeline_capacity; i++) {
-          // Always read the result from the output pipe if we can expect an
-          // output, even if the result is not written back.
-          ChainState feedback_state;
-          if (i > pipeline_capacity) {
-            feedback_state = OutputPipe::read();
+          bool read_output = i >= pipeline_capacity;
+          bool write_input = i < n_steps * n_chains;
+          ac_int<1, false> input_source =
+              (i % (n_steps * pipeline_capacity) < pipeline_capacity) ? 1 : 0;
+
+          ChainMeta initial_meta;
+          AncestorMatrix initial_am;
+          if (input_source == 1) {
+            initial_meta = ChainMeta{
+                .beta = current_beta_ac[i_initial_state],
+                .score = current_score_ac[i_initial_state],
+            };
+            initial_am = current_am_ac[i_initial_state];
+            i_initial_state++;
           }
 
-          // We only provide inputs for the first `n_steps * n_chains`
-          // iterations. The rest is just the tail to empty the pipes.
-          if (i < n_steps * n_chains) {
-
-            ChainState input_state;
-            if (i % (n_steps * pipeline_capacity) < pipeline_capacity) {
-              // For the first couple of iterations of a group, we read the
-              // inputs from our initial state buffer.
-              input_state = ChainState{
-                  .ancestor_matrix = current_am_ac[i_initial_state],
-                  .beta = current_beta_ac[i_initial_state],
-                  .score = current_score_ac[i_initial_state],
-              };
-              i_initial_state++;
-            } else {
-              // After that, we simply use the previous output.
-              input_state = feedback_state;
+          ChainMeta output_meta;
+          AncestorMatrix output_am;
+          if (read_output) {
+            output_meta = OutputMetaPipe::read();
+          }
+          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            if (read_output) {
+              output_am[word_i] = OutputTreePipe::read();
             }
+          }
 
-            InputPipe::write(input_state);
+          if (write_input) {
+            ChainMeta input_meta =
+                (input_source == 1) ? initial_meta : output_meta;
+            InputMetaPipe::write(input_meta);
+          }
+          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            if (write_input) {
+              AncestryVector input_vector;
+              if (input_source == 1) {
+                input_vector = initial_am[word_i];
+              } else {
+                input_vector = output_am[word_i];
+              }
+              InputTreePipe::write(input_vector);
+            }
           }
         }
       });
@@ -244,12 +267,13 @@ private:
         beta_rng.seed(seed[3]);
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
-          ChainState input_state = InputPipe::read();
+          ChainMeta input_meta = InputMetaPipe::read();
+          AncestorMatrix current_am;
+          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            current_am[word_i] = InputTreePipe::read();
+          }
 
-          AncestorMatrix current_am = input_state.ancestor_matrix;
-          float current_beta = input_state.beta;
-
-          MutationTreeImpl current_tree(current_am, n_genes, current_beta);
+          MutationTreeImpl current_tree(current_am, n_genes, input_meta.beta);
 
           std::array<uint32_t, 2> v_and_w =
               current_tree.sample_nonroot_nodepair(nodepair_rng);
@@ -270,8 +294,9 @@ private:
           float acceptance_level =
               oneapi::dpl::uniform_real_distribution(0.0, 1.0)(move_rng);
 
-          ProposedChangeState proposed_change_state{
-              .current_state = input_state,
+          ProposedChangeMeta proposed_change_meta{
+              .current_beta = input_meta.beta,
+              .current_score = input_meta.score,
               .move_type = move_type,
               .v = v,
               .w = w,
@@ -279,8 +304,11 @@ private:
               .nondescendant_of_v = nondescendant_of_v,
               .new_beta = new_beta,
               .acceptance_level = acceptance_level};
+          ProposedChangeMetaPipe::write(proposed_change_meta);
 
-          ProposedChangePipe::write(proposed_change_state);
+          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            ProposedChangeTreePipe::write(current_am[word_i]);
+          }
         }
       });
     });
@@ -320,17 +348,20 @@ private:
         float best_score = -std::numeric_limits<float>::infinity();
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
-          ProposedChangeState proposed_change_state =
-              ProposedChangePipe::read();
+          ProposedChangeMeta proposed_change_meta =
+              ProposedChangeMetaPipe::read();
 
-          AncestorMatrix current_am =
-              proposed_change_state.current_state.ancestor_matrix;
-          float current_beta = proposed_change_state.current_state.beta;
-          float current_score = proposed_change_state.current_state.score;
+          AncestorMatrix current_am;
+          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            current_am[word_i] = ProposedChangeTreePipe::read();
+          }
+
+          float current_beta = proposed_change_meta.current_beta;
+          float current_score = proposed_change_meta.current_score;
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
-          uint32_t v = proposed_change_state.v;
-          uint32_t w = proposed_change_state.w;
+          uint32_t v = proposed_change_meta.v;
+          uint32_t w = proposed_change_meta.w;
 
           uint32_t parent_of_v, parent_of_w;
           for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
@@ -346,14 +377,14 @@ private:
           }
 
           typename MutationTreeImpl::ModificationParameters mod_params{
-              .move_type = proposed_change_state.move_type,
-              .v = proposed_change_state.v,
-              .w = proposed_change_state.w,
+              .move_type = proposed_change_meta.move_type,
+              .v = proposed_change_meta.v,
+              .w = proposed_change_meta.w,
               .parent_of_v = parent_of_v,
               .parent_of_w = parent_of_w,
-              .descendant_of_v = proposed_change_state.descendant_of_v,
-              .nondescendant_of_v = proposed_change_state.nondescendant_of_v,
-              .new_beta = proposed_change_state.new_beta,
+              .descendant_of_v = proposed_change_meta.descendant_of_v,
+              .nondescendant_of_v = proposed_change_meta.nondescendant_of_v,
+              .new_beta = proposed_change_meta.new_beta,
           };
 
           AncestorMatrix proposed_am;
@@ -362,7 +393,7 @@ private:
           float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
           float neighborhood_correction;
-          if (proposed_change_state.move_type == MoveType::SwapSubtrees &&
+          if (proposed_change_meta.move_type == MoveType::SwapSubtrees &&
               current_tree.is_ancestor(w, v)) {
             neighborhood_correction = float(current_tree.get_n_descendants(v)) /
                                       float(current_tree.get_n_descendants(w));
@@ -374,15 +405,24 @@ private:
               neighborhood_correction *
               std::exp((proposed_score - current_score) * gamma);
           bool accept_move =
-              acceptance_probability > proposed_change_state.acceptance_level;
+              acceptance_probability > proposed_change_meta.acceptance_level;
 
-          ChainState output_state{
-              .ancestor_matrix = accept_move ? proposed_am : current_am,
+          ChainMeta output_meta{
               .beta = accept_move ? proposed_beta : current_beta,
               .score = accept_move ? proposed_score : current_score,
           };
 
-          OutputPipe::write(output_state);
+          OutputMetaPipe::write(output_meta);
+
+          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            AncestryVector output_vector;
+            if (accept_move) {
+              output_vector = proposed_am[word_i];
+            } else {
+              output_vector = current_am[word_i];
+            }
+            OutputTreePipe::write(output_vector);
+          }
 
           if (i == 0 || proposed_score > best_score) {
             best_am = proposed_am;
