@@ -1,5 +1,42 @@
 \section{Likelihood computation}
 \label{sec:scoring}
 
+The reference implementation works as follows: For every cell, it iterates over all possible attachment nodes and identifies the mutations the cell would have if it were attached to this node. This is done by walking up the tree from the attachment node to the root using a parent vector (definition \ref{def:parent_vector}), just like in the construction function for ancestor matrices (algorithm \ref{alg:ancestor_matrix}). Then, it computes the local likelihood for this cell and attachment node combination. In the maximum-likelihood model, which is the one we use, the attachment node that yields the highest likelihood for a node is stored and the local likelihoods of the nodes are multiplied to receive the final tree likelihood. We have already discussed that it is not feasible to walk up a tree on \acp{FPGA} in section \ref{sec:encoding} since it is not possible to predict how many steps it takes to walk up the tree. The reference implementation also directly combines found scores, which leads to feedback issues in our design. Our implementation, therefore, uses an ancestor matrix (definition \ref{def:ancestor_matrix}) to answer ancestry queries and we use the map-reduce pattern to first map cell-node-combinations to local likelihood values and then run a maximum-reduction along the node-axis and a sum-reduction along the cell axis.
+
 \todo[inline]{Describe how tree likelihoods are computed}
 \todo[inline]{List smaller optimizations: Floats instead of Doubles, prefetched mutation data}
+
+\begin{itemize}
+    \item No ``fast'' and ``accurate'' modes. Makes no sense since we would need space for both scorers and probably would need to execute both every time.
+    \item Usage of 32-bit floats instead of 64-bit. The quality benchmark proves us right.
+    \item Computing Log-likelihoods. Just like reference, using "simple" additions and multiplications instead of multiplications and powers; Enhanced precision.
+    \item Reference uses structure similar to ancestor matrix building: Starting from an attachment node and walking up to the root to find the mutations for this node. Not feasible, as discussed in ``Encoding.''
+    \item (List and describe scoring algorithm)
+\end{itemize}
+
+\begin{algorithm}[p]
+    \begin{algorithmic}
+        \Function{Likelihood}{$a \in \{0,1\}^{|V| \times |V|}$, $d \in \{0, 1, 2\}^{|C| \times |G|}$, $\alpha, \beta \in [0,1]$}
+            \State $s_\mathrm{indiv.} \leftarrow 0 \in \mathbb{R}^{|C| \times |V|}$
+            \ForAll{$(c,v) \in C \times V$} \Comment Unroll as much as possible
+                \State $\mathrm{occurrences} \leftarrow 0 \in \mathbb{N}_0^{3 \times 2}$
+                \ForAll{$g \in G$} \Comment Unroll completely
+                    \State $\mathrm{posterior} \leftarrow d[c][g]$
+                    \State $\mathrm{prior} \leftarrow a[g][v]$
+                    \State $\mathrm{occurrences}[\mathrm{posterior}][\mathrm{prior}] \leftarrow \mathrm{occurrences}[\mathrm{posterior}][\mathrm{prior}] + 1$
+                \EndFor
+                \State $s_\mathrm{indiv.}[c][r] \leftarrow \log(1-\alpha) \cdot \mathrm{occurrences}[0][0]$
+                \State $s_\mathrm{indiv.}[c][r] \leftarrow s_\mathrm{indiv.}[c][r] + \log(\alpha) \cdot \mathrm{occurrences}[1][0]$
+                \State $s_\mathrm{indiv.}[c][r] \leftarrow s_\mathrm{indiv.}[c][r] + \log(\beta) \cdot \mathrm{occurrences}[0][1]$
+                \State $s_\mathrm{indiv.}[c][r] \leftarrow s_\mathrm{indiv.}[c][r] + \log(1-\beta) \cdot \mathrm{occurrences}[1][1]$
+            \EndFor
+            \State $s_\mathrm{cell} \leftarrow 0 \in \mathbb{R}^{|C|}$
+            \ForAll{$c \in C$}
+                \State $s_\mathrm{cell}[c] \leftarrow \max \{s_\mathrm{indiv.}[c][v] : v \in V\}$ \Comment Unrolled for-loop in maximum operation
+            \EndFor
+            \State \Return $\sum_{c \in C} s_\mathrm{cell}$ \Comment Unrolled for-loop in sum
+        \EndFunction
+    \end{algorithmic}
+    \label{alg:likelihood}
+    \caption{Algorithm to compute the likelihood of a mutation tree, encoded as an ancestor matrix $a$, given a data matrix $d$ and error probabilities $\alpha$ and $\beta$}
+\end{algorithm}
