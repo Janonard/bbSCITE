@@ -5,12 +5,12 @@ In this chapter, we describe the theoretical framework in which this thesis oper
 
 \begin{definition}[Mutation matrix]
     \label{def:mutmatrix}
-    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{n \times m}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{n \times m}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $i \leq n, j \leq m$:
+    Let $C$ be the set of cells with $|C| \in \mathbb{N}$ and $G$ be the set of genes with $|G| \in \mathbb{N}$. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{|C| \times |G|}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{|C| \times |G|}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $c \in C, g \in G$:
     \begin{align*}
-        \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 0 \wedge D_{i,j} \neq 2) &:= \alpha & \mathbb{P}(D_{0,j} = 0\mid E_{i,j} = 1 \wedge D_{i,j} \neq 2) &:= \beta \\
-        \mathbb{P}(D_{i,j} = 0 \mid E_{i,j} = 0 \wedge D_{i,j} \neq 2) &:= (1-\alpha) & \mathbb{P}(D_{i,j} = 1 \mid E_{i,j} = 1 \wedge D_{i,j} \neq 2) &:= (1-\beta)
+        \mathbb{P}(D_{c,g} = 1 \mid E_{c,g} = 0 \wedge D_{c,g} \neq 2) &:= \alpha & \mathbb{P}(D_{0,j} = 0\mid E_{c,g} = 1 \wedge D_{c,g} \neq 2) &:= \beta \\
+        \mathbb{P}(D_{c,g} = 0 \mid E_{c,g} = 0 \wedge D_{c,g} \neq 2) &:= (1-\alpha) & \mathbb{P}(D_{c,g} = 1 \mid E_{c,g} = 1 \wedge D_{c,g} \neq 2) &:= (1-\beta)
     \end{align*}
-    The additional prior $D_{i,j} \neq 2$ is not present in the original formalization, but technically necessary since we would otherwise have $\mathbb{P}(D_{i,j} = 2 \mid E_{i,j} = e) = 0$ for all $e \in \{0,1\}$, which is not useful.
+    The additional prior $D_{c,g} \neq 2$ is not present in the original formalization, but technically necessary since we would otherwise have $\mathbb{P}(D_{c,g} = 2 \mid E_{c,g} = e) = 0$ for all $e \in \{0,1\}$, which is not useful.
     
     Although this thesis was initially very applied in nature, it has become very theoretical. Therefore, we have decided to use theoretical indexing conventions in this thesis. Therefore, we use the first index to indicate the column of the matrix and the second index to indicate the row. We also use 1 as our first index and upper index bounds are inclusive.
 \end{definition}
@@ -29,11 +29,11 @@ In this chapter, we describe the theoretical framework in which this thesis oper
     \end{align*}
     We, therefore, have 
     \begin{align*}
-        \lambda(d_{i,j}, e_{i,j}) = \mathbb{P}(D_{i,j} = d_{i,j} \mid E_{i,j} = e_{i,j} \wedge D_{i,j} \neq 2)
+        \lambda(d_{c,g}, e_{c,g}) = \mathbb{P}(D_{c,g} = d_{c,g} \mid E_{c,g} = e_{c,g} \wedge D_{c,g} \neq 2)
     \end{align*}
-    for all $d \in \{0,1,2\}^{n \times m}, e \in \{0,1\}^{n \times m}, i \leq n, j \leq m$ with $d_{i,j} \neq 2$. We make the distinction between $d = 2$ and $d \neq 2$ since we are not interested in lost data, with the underlying assumption that data loss is independent of the true mutation status of a cell. This distinction is not present in the original formalization, but it is present in the original implementation. Given an observed mutation data matrix $d \in \{0,1,2\}^{n \times m}$, we then define the global likelihood function as follows:
+    for all $d \in \{0,1,2\}^{n \times m}, e \in \{0,1\}^{n \times m}, g \in G, c \in C$ with $d_{c,g} \neq 2$. We make the distinction between $d_{c,g} = 2$ and $d_{c,g} \neq 2$ since we are not interested in lost data, with the underlying assumption that data loss is independent of the true mutation status of a cell. This distinction is not present in the original formalization, but it is present in the original implementation. Given an observed mutation data matrix $d \in \{0,1,2\}^{n \times m}$, we then define the global likelihood function as follows:
     \begin{align*}
-        \Lambda_d : \{0,1\}^{n \times m} \rightarrow [0,1], e \mapsto \prod_{i = 1}^{n} \prod_{j = 1}^{m} \lambda(d_{i,j}, e_{i,j})
+        \Lambda_d : \{0,1\}^{|C| \times |G|} \rightarrow [0,1], e \mapsto \prod_{c \in C} \prod_{g \in C} \lambda(d_{c,g}, e_{c,g})
     \end{align*}
 \end{definition}
 
@@ -41,7 +41,7 @@ This function $\Lambda_d$ is the likelihood function we wish to maximize. We cou
 
 \begin{definition}[Mutation trees]
     \label{def:mutation_tree}
-    Let $m \in \mathbb{N}$ be the number of considered genes. A mutation tree is a rooted, directed tree $T = (V, E, r)$ with $V = \{1, 2, 3, \dots, m, r\}$, $|V| = m+1$.
+    Let $G$ be the set of considered genes. A mutation tree is a rooted, directed tree $T = (V, E, r)$ with $V = G \cup \{r\}$. We, therefore, have $E \subseteq V^2$ and $|V| = |G| + 1$.
 \end{definition}
 
 \begin{definition}[Tree-related notations]
@@ -51,29 +51,29 @@ This function $\Lambda_d$ is the likelihood function we wish to maximize. We cou
 
 \begin{definition}[Attachment functions]
     \label{def:attachment}
-    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, and $T = (V, E, r)$ a mutation tree. An attachment function is a function $\sigma: \{1, \dots, n\} \rightarrow V$ that maps cells onto tree nodes.
+    Let $C$ and $G$ be the set of considered cells and genes, respectively, and $T$ a mutation tree. An attachment function is a function $\sigma: C \rightarrow V$ that maps cells onto tree nodes.
 \end{definition}
 
 \begin{definition}[Induced mutation matrix]
     \label{def:induced_mutmatrix}
-    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, $T$ be a mutation tree and $\sigma$ be an attachment function. We define the mutation matrix $e_{T, \sigma} \in \{0,1\}^{n \times m}$ induced by the mutation matrix and attachment function as follows:
+    Let $C$ and $G$ be the set of considered cells and genes, respectively, $T$ be a mutation tree and $\sigma$ be an attachment function. We define the mutation matrix $e_{T, \sigma} \in \{0,1\}^{|C| \times |G|}$ induced by the mutation matrix and attachment function as follows:
     \begin{align*}
-        \forall i \leq n, j \leq m: (e_{T, \sigma})_{i,j} := \begin{cases}
-            1 & j \leadsto_T \sigma(i) \\
+        \forall c \leq C, g \leq G: (e_{T, \sigma})_{c,g} := \begin{cases}
+            1 & g \leadsto_T \sigma(c) \\
             0 & \mathrm{else}
         \end{cases}
     \end{align*}
-    This means that a cell $i$ has a mutation $j$ iff $j$ is an ancestor of its attachment node $\sigma(i)$. An example of an induced mutation matrix is found in example \ref{exmpl:scite_problem}.
+    This means that a cell $c$ has a mutation at the gene $g$ iff $g$ is an ancestor of its attachment node $\sigma(c)$. An example of an induced mutation matrix is found in example \ref{exmpl:scite_problem}.
 \end{definition}
 
 \begin{definition}[The SCITE problem]
     \label{def:scite_problem}
-    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, and $d \in \{0,1\}^{n \times m}$ an observed mutation matrix. The \ac{SCITE} problem is: Find a mutation tree $T$ and an attachment function $\sigma$ so that $\Lambda_d(e_{T, \sigma})$ is maximal.
+    Let $C$ and $G$ be the set of considered cells and genes, respectively, and $d \in \{0,1\}^{|C| \times |G|}$ an observed mutation matrix. The \ac{SCITE} problem is: Find a mutation tree $T$ and an attachment function $\sigma$ so that $\Lambda_d(e_{T, \sigma})$ is maximal.
 \end{definition}
 
 \begin{example}
     \label{exmpl:scite_problem}
-    We consider $n = 4$ cells and $m = 4$ genes in this example. We assume that the true, underlying mutation tree $T$ and attachments $\sigma$ look like this:
+    We consider 4 cells and 4 genes in this example and therefore set $C = \{1,2,3,4\}$ and $G = \{1,2,3,4\}$. We assume that the true, underlying mutation tree $T$ and attachments $\sigma$ look like this:
     \begin{center}
         \begin{tikzpicture}
             \draw[every node/.style={draw}, level 1/.style={sibling distance=3cm}, level 2/.style={sibling distance=1.5cm}, edge from parent/.append style={-stealth}]
@@ -165,14 +165,14 @@ Next, we have a lemma that shows that it is not necessary to search for the maxi
 
 \begin{lemma}[Maximum-likelihood attachment function]
     \label{lem:max_attachment}
-    Let $n, m \in \mathbb{N}$ be the considered number of cells and genes, respectively, $d \in \{0,1\}^{n \times m}$ an observed mutation matrix, and $T$ a mutation tree. We define:
+    Let $C$ and $G$ be the set of considered cells and genes, respectively, $d \in \{0,1\}^{|C| \times |G|}$ an observed mutation matrix, and $T$ a mutation tree. We define:
     \begin{align*}
-        \sigma_{\max, T}: \{1, \dots, n\} \rightarrow V, i \mapsto \argmax_{v \in V} \prod_{j = 1}^m \lambda \left(d_{i,j}, \begin{cases}
-            1 & j \leadsto_T v \\
+        \sigma_{\max, T}: C \rightarrow V, c \mapsto \argmax_{v \in V} \prod_{g \in G} \lambda \left(d_{c,g}, \begin{cases}
+            1 & g \leadsto_T v \\
             0 & \mathrm{else} \\
         \end{cases}\right)
     \end{align*}
-    $\sigma_{\max, T}$ maximizes $\Lambda_d (e_{T, \sigma})$ among all $\sigma: \{1, \dots, n\} \rightarrow V$.
+    $\sigma_{\max, T}$ maximizes $\Lambda_d (e_{T, \sigma})$ among all $\sigma: C \rightarrow V$.
 \end{lemma}
 
 Informally, $\sigma_{\max, T}$ simply picks the most-likely attachment node for every individual cell and using this attachment function yields the maximum likelihood for every tree, respectively. This lemma is already assumed to be true in the original SCITE paper \cite{tree2016}. Therefore, we see no need to prove it. However, it means that we only need to try different trees, not tree-attachment combinations, and we can simply write $\Lambda_d(T)$ instead of $\Lambda_d(e_{T, \sigma_{\max, T}})$ to express the likelihood of a mutation tree. Now, we can finally describe the \ac{SCITE} Markov chain and algorithm:

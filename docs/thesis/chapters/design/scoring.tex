@@ -16,8 +16,8 @@ The reference implementation works as follows: For every cell, it iterates over 
 
 \begin{algorithm}[p]
     \begin{algorithmic}
-        \Function{Likelihood}{$a \in \{0,1\}^{|V| \times |V|}$, $d \in \{0, 1, 2\}^{|C| \times |G|}$, $\alpha, \beta \in [0,1]$}
-            \State $s_\mathrm{indiv.} \leftarrow 0 \in \mathbb{R}^{|C| \times |V|}$
+        \Function{LogLikelihood}{$V$, $C$, $G$, $a \in \{0,1\}^{|V| \times |V|}$, $d \in \{0, 1, 2\}^{|C| \times |G|}$, $\{\alpha, \beta\} \subseteq [0,1]$}
+            \State $s_\mathrm{indiv.} \leftarrow 0 \in (-\infty,0]^{|C| \times |V|}$
             \ForAll{$(c,v) \in C \times V$} \Comment Unroll as much as possible
                 \State $\mathrm{occurrences} \leftarrow 0 \in \mathbb{N}_0^{3 \times 2}$
                 \ForAll{$g \in G$} \Comment Unroll completely
@@ -25,12 +25,12 @@ The reference implementation works as follows: For every cell, it iterates over 
                     \State $\mathrm{prior} \leftarrow a[g][v]$
                     \State $\mathrm{occurrences}[\mathrm{posterior}][\mathrm{prior}] \leftarrow \mathrm{occurrences}[\mathrm{posterior}][\mathrm{prior}] + 1$
                 \EndFor
-                \State $s_\mathrm{indiv.}[c][r] \leftarrow \log(1-\alpha) \cdot \mathrm{occurrences}[0][0]$
-                \State $s_\mathrm{indiv.}[c][r] \leftarrow s_\mathrm{indiv.}[c][r] + \log(\alpha) \cdot \mathrm{occurrences}[1][0]$
-                \State $s_\mathrm{indiv.}[c][r] \leftarrow s_\mathrm{indiv.}[c][r] + \log(\beta) \cdot \mathrm{occurrences}[0][1]$
-                \State $s_\mathrm{indiv.}[c][r] \leftarrow s_\mathrm{indiv.}[c][r] + \log(1-\beta) \cdot \mathrm{occurrences}[1][1]$
+                \State $s_\mathrm{indiv.}[c][v] \leftarrow \log(1-\alpha) \cdot \mathrm{occurrences}[0][0]$
+                \State $s_\mathrm{indiv.}[c][v] \leftarrow s_\mathrm{indiv.}[c][v] + \log(\alpha) \cdot \mathrm{occurrences}[1][0]$
+                \State $s_\mathrm{indiv.}[c][v] \leftarrow s_\mathrm{indiv.}[c][v] + \log(\beta) \cdot \mathrm{occurrences}[0][1]$
+                \State $s_\mathrm{indiv.}[c][v] \leftarrow s_\mathrm{indiv.}[c][v] + \log(1-\beta) \cdot \mathrm{occurrences}[1][1]$
             \EndFor
-            \State $s_\mathrm{cell} \leftarrow 0 \in \mathbb{R}^{|C|}$
+            \State $s_\mathrm{cell} \leftarrow 0 \in (-\infty,0]^{|C|}$
             \ForAll{$c \in C$}
                 \State $s_\mathrm{cell}[c] \leftarrow \max \{s_\mathrm{indiv.}[c][v] : v \in V\}$ \Comment Unrolled for-loop in maximum operation
             \EndFor
@@ -38,5 +38,5 @@ The reference implementation works as follows: For every cell, it iterates over 
         \EndFunction
     \end{algorithmic}
     \label{alg:likelihood}
-    \caption{Algorithm to compute the likelihood of a mutation tree, encoded as an ancestor matrix $a$, given a data matrix $d$ and error probabilities $\alpha$ and $\beta$}
+    \caption{Algorithm to compute the log-likelihood of a mutation tree (definition \ref{def:likelihood}) with the maximum-likelihood attachment function (lemma \ref{lem:max_attachment}), encoded as an ancestor matrix $a$, and given the mutation data matrix $d$ and error probabilities $\alpha$ and $\beta$}
 \end{algorithm}
