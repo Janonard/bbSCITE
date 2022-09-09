@@ -1,4 +1,23 @@
 \section{Move Proposals}
 \label{sec:move_proposal}
 
-\todo[inline]{Describe the various issues with RNGs (High hardware usage due to 64-bit integer modulo, feedback), reduction of draws, separation of move proposals for better loop characteristics.}
+\begin{itemize}
+    \item SCITE uses \texttt{rand} syscall. Not available on FPGAs, undefined characteristics.
+    \item Pseodorandom framework of C++ standard library: URNG and distribution classes.
+    \item Minstd0-URNG: Minimal standard as advertised by author, implemented in C++ standard library and OneDPL.
+    \item Initial plan: start with minstd0, write URNG-agnostic code, research better alternative
+    \item Research not possible in time, State of the art not easily identifiable by outsider
+    \begin{itemize}
+        \item Every URNG has drawbacks (obviously)
+        \item Set of URNGs usable for MCMC very small (most research done on cryptographic URNGs)
+        \item Set of URNGs usable on FPGA also very small
+        \item No intersection found, little to no implementations for HLS designs.
+    \end{itemize}
+    \item Further research efforts appeared to be very time consuming, the quality test was already successful
+    \item Decision: Work with minstd0 and leave the issue be.
+    \item Minstd0 is linear congruential engine, $X_{n+1} = (a \cdot X_n) \mod m$.
+    \item Problem: Implementation uses 64-bit integer. 64-bit integer is \emph{very} resource intensive. Every call to URNG creates one instance.
+    \item Random draws make up XX\% of the final design, independently of input size.
+    \item Next state of URNG is it's output, which is supposed to appear random: Next state unpredictable, random draws barely pipelinable.
+    \item Necessary: Reduce random draws to a minimum, move them into own kernel, make kernel loop as short as possible.
+\end{itemize}
