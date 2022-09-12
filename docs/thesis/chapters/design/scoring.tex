@@ -11,7 +11,7 @@ Running many power operations however costs a lot of time, and in the case of \a
 
 There are however two big differences between our implementation and the reference: The reference implementation identifies the mutations of a cell-node pair by walking up the tree from the attachment node to the root using a parent vector (definition \ref{def:parent_vector}), just like in the construction function for ancestor matrices (algorithm \ref{alg:ancestor_matrix}). This is not feasible on \acp{FPGA}, as we have already discussed in section \ref{sec:encoding}. Instead, our implementation iterates over all genes and uses an ancestor matrix to check whether this gene is an ancestor of the attachment node and therefore mutated. The tradeoffs of iterating over all nodes/genes instead of walking up a tree are already discussed in subsection \ref{sec:encoding_implementation}; In summary, it improves the structural performance of the design in favor of scalability. The next difference is in how the resulting values are reduced: The reference implementation directly reduces found values by always keeping the best-known likelihood of a cell-node pair and an accumulator for the final likelihood. We encountered feedback problems with this approach which inhibited loop pipelining. Therefore, we chose a clear map-reduce approach: We first compute and store the likelihood of every cell-node pair in a buffer, max-reduce the node axis and then sum-reduce the cell axis. Every one of these three operations is executed by separate, independent loops, which are perfectly pipelinable and unrolled by at least one dimension. Additionally, we were able to coalesce and partially unroll the two remaining dimensions of the likelihood mapping loop. However, this obviously increases the memory and chip space requirements of our design. Our resulting log-likelihood computation algorithm is listed as algorithm \ref{alg:likelihoodimpl}.
 
-\begin{algorithm}[p]
+\begin{algorithm}
     \begin{algorithmic}
         \Function{Likelihood}{$C$, $G$, $T = (V, E, r)$, $d \in \{0,1,2\}^{|C| \times |G|}, \{\alpha, \beta\} \subseteq [0,1]$}
             \State $l_T \leftarrow 1$
@@ -35,7 +35,7 @@ There are however two big differences between our implementation and the referen
     \label{alg:likelihood}
 \end{algorithm}
 
-\begin{algorithm}[p]
+\begin{algorithm}
     \begin{algorithmic}
         \Function{LogLikelihood}{$V$, $C$, $G$, $a \in \{0,1\}^{|V| \times |V|}$, $d \in \{0, 1, 2\}^{|C| \times |G|}$, $\{\alpha, \beta\} \subseteq [0,1]$}
             \State $l_\mathrm{pair} \leftarrow 0 \in (-\infty,0]^{|C| \times |V|}$
