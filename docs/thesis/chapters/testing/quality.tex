@@ -1,5 +1,76 @@
 \section{Quality Testing}
 
+We first look at the solution quality. While we were able to verify that most internal components behave correctly using unit tests, this does not suffice to verify that the entire application behaves correctly. This however can not be done by deterministic tests since \ac{SCITE} is a stochastic algorithm: Given different seeds, it produces different solutions which may or may not be perfect. We also could not implement \ac{ffSCITE} as a bit-exact copy of \ac{SCITE}, especially since we could not use the same \ac{URNG} as the reference implementation. We, therefore, needed to introduce a statistical test that verifies that given the same input, both \ac{SCITE} and \ac{ffSCITE} produce equivalent outputs. In this section, we discuss how we designed the test and what the results are.
+
+\subsection{Methods}
+
+Let $C$ be the set of considered cells, $G$ be the set of considered genes, and $d \in \{0,1,2\}^{|C| \times |G|}$. We model the output mutation trees of \ac{SCITE} and \ac{ffSCITE} given the inputs $C$, $G$, and $d$ as the random variables $T_\mathrm{SCITE}$ and $T_\mathrm{ffSCITE}$. The true likelihood score of the outputs given practically sized inputs is too close to 0 to express them using the common 64-bit floating-point numbers. Therefore, we compare the outputs using log-likelihood scores instead. Therefore, we want to find support for the alternative hypothesis 
+\begin{align*}
+    H_1: \log\Lambda_d(T_\mathrm{SCITE}) = \log\Lambda_d(T_\mathrm{ffSCITE})
+\end{align*}
+However, classical hypothesis tests only provide support for inequality statements, for example $\log\Lambda_d(T_\mathrm{SCITE}) < \log\Lambda_d(T_\mathrm{ffSCITE})$. This is not what we aim for and not what we claim. Therefore, we need a different method to find support for our $H_1$.
+
+In the field of clinical studies, non-inferiority and equivalence trials are common. There, these kinds of trials ``are intended to show that the effect of a new treatment is not worse than that of an active control by more than a specified margin.'' \cite{snapinn2000noninferiority} Although there are some complications with using non-inferiority trails for drug testing as pointed out by Snapinn \cite{snapinn2000noninferiority}, these complications do not apply to our scenario. The exact procedure that we use is called \acf{TOST} \cite{walker2011understanding} and it requires its designer to set an equivalence margin $\delta$, where absolute differences below this margin are considered negligible. Then, our alternative and null hypotheses are:
+\begin{align*}
+    H_1&: |\log\Lambda_d(T_\mathrm{SCITE}) - \log\Lambda_d(T_\mathrm{ffSCITE})| < \delta \\
+    H_0&: |\log\Lambda_d(T_\mathrm{SCITE}) - \log\Lambda_d(T_\mathrm{ffSCITE})| \geq \delta \\
+    &\Leftrightarrow \log\Lambda_d(T_\mathrm{SCITE}) - \log\Lambda_d(T_\mathrm{ffSCITE}) \leq \delta \vee \log\Lambda_d(T_\mathrm{SCITE}) - \log\Lambda_d(T_\mathrm{ffSCITE}) \geq \delta
+\end{align*}
+Once our hypotheses are established, we execute a one-sided t-test for each half of $H_0$ and if both fail, we have provided evidence for the equivalence for \ac{ffSCITE} and \ac{SCITE}.
+
+\begin{lemma}
+    \label{lem:bitflip}
+    Let $C$ be the set of considered cells, $G$ be the set of considered genes, $d \in \{0,1,2\}^{|C| \times |G|}$, and $e, e' \in \{0,1\}^{|C| \times |G|}$ where $e$ is arbitrary and $e'$ is defined as:
+    \begin{align*}
+        e'_{c,g} &:= \begin{cases}
+            \overline{e_{c,g}} & c = x \wedge g = y \\
+            e_{c,g} & \text{else}
+        \end{cases}
+    \end{align*}
+    for some $x \in C$, $y \in G$. In other words, $e'$ is a version of $e$ where the bit at position $(x,y)$ is flipped. Let also $\alpha, \beta \in [0,1]$ be the probabilities of false positives and negatives, respectively. Then, we have:
+    \begin{align*}
+        |\log\Lambda_d(e) - \log\Lambda_d(e')| &\leq \max\{|\log(\alpha) - \log(1-\beta)|, |\log(\beta) - \log(1-\alpha)|\}
+    \end{align*}
+    where $\Lambda_d$ is the likelihood function of definition \ref{def:likelihood}. In other words, the difference in log-likelihood induced by a single bit flip is equal to or less than $\max\{|\log(\alpha) - \log(1-\beta)|, |\log(\beta) - \log(1-\alpha)|\}$.
+\end{lemma}
+
+\begin{proof}
+    First of all, we should remark that we have
+    \begin{align*}
+        \log\Lambda_d(e) &= \sum_{c \in C} \sum_{g \in G} \log\lambda(d_{c,g}, e_{c,g}) \\
+        \Rightarrow |\log\Lambda_d(e) - \log\Lambda_d(e')| &= |\log\lambda(d_{x,y}, e_{x,y}) - \log\lambda(d_{x,y}, e'_{x,y})| \\
+        &= |\log\lambda(d_{x,y}, e_{x,y}) - \log\lambda(d_{x,y}, \overline{e_{x,y}})|
+    \end{align*}
+    If we have $d_{x,y} = 2$, we therefore have
+    \begin{align*}
+        |\log\Lambda_d(e) - \log\Lambda_d(e')| &= |\log(1) - \log(1)| = 0
+    \end{align*}
+    Our lemma is therefore true in this case and we can assume $d_{x,y} \neq 2 \Rightarrow d_{x,y} \in \{0,1\}$. We now have four cases:
+    \begin{itemize}
+        \item $d_{x,y} = 0, e_{x,y} = 0$: We then have
+        \begin{align*}
+            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(0,0) - \log\lambda(0,1)| = |\log(1-\alpha) - \log(\beta)|
+        \end{align*}
+        \item $d_{x,y} = 0, e_{x,y} = 1$: We then have
+        \begin{align*}
+            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(0,1) - \log\lambda(0,0)| = |\log(\beta) - \log(1-\alpha)|
+        \end{align*}
+        \item $d_{x,y} = 1, e_{x,y} = 0$: We then have
+        \begin{align*}
+            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(1,0) - \log\lambda(1,1)| = |\log(1-\beta) - \log(\alpha)|
+        \end{align*}
+        \item $d_{x,y} = 1, e_{x,y} = 1$: We then have
+        \begin{align*}
+            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(1,1) - \log\lambda(1,0)| = |\log(\alpha) - \log(1-\beta)|
+        \end{align*}
+    \end{itemize}
+    $|\log\Lambda_d(e) - \log\Lambda_d(e')|$ is always equal to or less than the maximum of all these cases and we therefore have
+    \begin{align*}
+        |\log\Lambda_d(e) - \log\Lambda_d(e')| &\leq \max\{|\log(\alpha) - \log(1-\beta)|, |\log(\beta) - \log(1-\alpha)|\}
+    \end{align*}
+\end{proof}
+
+
 \begin{itemize}
     \item Problem with traditional hypothesis testing: $H_1$ is always inequality, however equality required.
     \item Describe TOST
