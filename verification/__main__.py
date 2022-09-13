@@ -121,8 +121,8 @@ def quality_test(args: argparse.Namespace):
 
     print(f"H0: µ <= -{epsilon:.2f} or µ >= {epsilon:.2f}")
     print(f"H1: -{epsilon:.2f} < µ < {epsilon:.2f}")
-    print(f"p-value for lower part of H0: {lower_p_value:.4f}")
-    print(f"p-value for upper part of H0: {upper_p_value:.4f}")
+    print(f"p-value for lower part of H0: {lower_p_value}")
+    print(f"p-value for upper part of H0: {upper_p_value}")
     print(f"maximal p-value to reject H0 parts: {p_value_bound:.4f}")
 
     if lower_p_value < p_value_bound and upper_p_value < p_value_bound:
