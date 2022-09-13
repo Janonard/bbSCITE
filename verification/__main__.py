@@ -159,43 +159,63 @@ def quality_test(args: argparse.Namespace):
     exit(return_value)
 
 def performance_analysis(args: argparse.Namespace):
-    makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
-
-    def analyze_makespans(out_dir):
-        all_makespans = dict()
-        for logfile_path in Path(out_dir).glob("*.log"):
-            parts = logfile_path.stem.split("_")
-            n_chains = int(parts[0])
-            n_steps = int(parts[1])
-
-            with open(logfile_path, mode="r") as logfile:
-                lines = (makespan_re.match(line) for line in logfile.readlines())
-                makespans = (float(match[1]) for match in lines if match is not None)
-                mean_makespan = mean(makespans)
-            all_makespans[(n_chains, n_steps)] = mean_makespan
-        return all_makespans
-
-    ffscite_makespans = analyze_makespans(args.basedir / Path("ffSCITE"))
-    scite_makespans = analyze_makespans(args.basedir / Path("SCITE"))
-
     if args.out_file is None:
         out_file = sys.stdout
     else:
         out_file = open(args.out_file, mode="w")
 
-    print("| no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: mean step makespan | SCITE: mean total makespan | SCITE: mean step makespan | total makespan ratio |", file=out_file)
-    print("|-|-|-|-|-|-|-|", file=out_file)
+    print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: mean step makespan | SCITE: mean total makespan | SCITE: mean step makespan | total makespan ratio |", file=out_file)
+    print("|-|-|-|-|-|-|-|-|-|", file=out_file)
 
-    keys = list(set(ffscite_makespans.keys()) | set(scite_makespans.keys()))
-    keys.sort()
+    n_cell_dirs = list(args.basedir.iterdir())
+    n_cell_dirs.sort(key=lambda dir: int(dir.name))
 
-    for key in keys:
-        ffscite_m = ffscite_makespans.get(key)
-        ffscite_per_step = ffscite_m * 1e3 / (key[0] * key[1]) if ffscite_m is not None else None
-        scite_m = scite_makespans.get(key)
-        scite_per_step = scite_m * 1e3 / (key[0] * key[1]) if scite_m is not None else None
-        ratio = ffscite_m / scite_m if ffscite_m is not None and scite_m is not None else None
-        print(f"| {key[0]} | {key[1]} | {ffscite_m :.2f} ms | {ffscite_per_step:.2f} µs | {scite_m:.2f} ms | {scite_per_step:.2f} µs | {ratio:.2f} |", file=out_file)
+    for n_cell_dir in n_cell_dirs:
+        n_cells = int(n_cell_dir.name)
+        n_genes = n_cells - 1
+        makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
+
+        def analyze_makespans(out_dir):
+            all_makespans = dict()
+            for logfile_path in Path(out_dir).glob("*.log"):
+                parts = logfile_path.stem.split("_")
+                n_chains = int(parts[0])
+                n_steps = int(parts[1])
+
+                with open(logfile_path, mode="r") as logfile:
+                    lines = (makespan_re.match(line) for line in logfile.readlines())
+                    makespans = [float(match[1]) for match in lines if match is not None]
+                    if len(makespans) > 0:
+                        all_makespans[(n_chains, n_steps)] = mean(makespans)
+            return all_makespans
+
+        ffscite_makespans = analyze_makespans(n_cell_dir / Path("ffSCITE"))
+        scite_makespans = analyze_makespans(n_cell_dir / Path("SCITE"))
+
+        keys = list(set(ffscite_makespans.keys()) | set(scite_makespans.keys()))
+        keys.sort()
+
+        for key in keys:
+            if key in ffscite_makespans:
+                ffscite_m = f"{ffscite_makespans[key]:.2f}"
+                ffscite_per_step = f"{ffscite_makespans[key] * 1e3 / (key[0] * key[1]):.2f}"
+            else:
+                ffscite_m = "n/a"
+                ffscite_per_step = "n/a"
+
+            if key in scite_makespans:
+                scite_m = f"{scite_makespans[key]:.2f}"
+                scite_per_step = f"{scite_makespans[key] * 1e3 / (key[0] * key[1]):.2f}"
+            else:
+                scite_m = "n/a"
+                scite_per_step = "n/a"
+            
+            if key in ffscite_makespans and key in scite_makespans:
+                ratio = f"{scite_makespans[key] / ffscite_makespans[key]:.2f}"
+            else:
+                ratio = "n/a"
+            
+            print(f"| {n_cells} | {n_genes} | {key[0]} | {key[1]} | {ffscite_m} ms | {ffscite_per_step} µs | {scite_m} ms | {scite_per_step} µs | {ratio} |", file=out_file)
 
 
 parser = argparse.ArgumentParser(
