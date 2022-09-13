@@ -1,3 +1,4 @@
+from email.quoprimime import unquote
 import sys
 from verification.lib import *
 from networkx.drawing.nx_pydot import write_dot
@@ -6,6 +7,7 @@ import argparse
 from pathlib import Path
 from scipy.stats import ttest_1samp
 from statistics import mean
+from matplotlib import pyplot
 import re
 
 
@@ -125,10 +127,36 @@ def quality_test(args: argparse.Namespace):
 
     if lower_p_value < p_value_bound and upper_p_value < p_value_bound:
         print(f"ffSCITE is non-inferior to SCITE!")
-        exit(0)
+        return_value = 0
     else:
         print(f"ffSCITE may not be non-inferior to SCITE!")
-        exit(1)
+        return_value = 1
+
+    print()
+    print("# Additional statistics:")
+    print(f"max difference (ffSCITE better): {max(differences):.2f} ≌ {max(differences) / max_bit_flip_difference:.2f} bit flips")
+    print(f"min difference (SCITE better): {min(differences):.2f} ≌ {min(differences) / max_bit_flip_difference:.2f} bit flips")
+    print(f"no. inputs ffSCITE better: {len([diff for diff in differences if diff > 0])}")
+    print(f"no. inputs both equal: {len([diff for diff in differences if diff == 0])}")
+    print(f"no. inputs SCITE better: {len([diff for diff in differences if diff < 0])}")
+
+    diff_counts = dict()
+    for diff in differences:
+        diff = round(diff / max_bit_flip_difference)
+        if diff not in diff_counts:
+            diff_counts[diff] = 1
+        else:
+            diff_counts[diff] += 1
+    unique_diffs = list(diff_counts.keys())
+    unique_diffs.sort()
+    diff_counts = [diff_counts[diff] for diff in unique_diffs]
+
+    pyplot.bar(unique_diffs, diff_counts)
+    pyplot.xlabel("Log-likelihood difference, in bit-flips")
+    pyplot.ylabel("Number of outputs with the given difference")
+    pyplot.savefig("differences.png", dpi=750)
+
+    exit(return_value)
 
 def performance_analysis(args: argparse.Namespace):
     makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
