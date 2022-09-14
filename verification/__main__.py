@@ -202,14 +202,14 @@ def performance_analysis(args: argparse.Namespace):
                 ffscite_throughput = f"{(key[0] * key[1]) / ffscite_makespans[key]:.2f} ksteps/s"
             else:
                 ffscite_m = "n/a"
-                ffscite_per_step = "n/a"
+                ffscite_throughput = "n/a"
 
             if key in scite_makespans:
                 scite_m = f"{scite_makespans[key] * 1e-3:.2f} s"
                 scite_throughput = f"{(key[0] * key[1]) / scite_makespans[key]:.2f} ksteps/s"
             else:
                 scite_m = "n/a"
-                scite_per_step = "n/a"
+                scite_throughput = "n/a"
             
             if key in ffscite_makespans and key in scite_makespans:
                 ratio = f"{scite_makespans[key] / ffscite_makespans[key]:.2f}"
