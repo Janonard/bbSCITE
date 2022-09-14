@@ -164,7 +164,7 @@ def performance_analysis(args: argparse.Namespace):
     else:
         out_file = open(args.out_file, mode="w")
 
-    print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: mean step makespan | SCITE: mean total makespan | SCITE: mean step makespan | total makespan ratio |", file=out_file)
+    print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: throughput | SCITE: mean total makespan | SCITE: throughput | speedup |", file=out_file)
     print("|-|-|-|-|-|-|-|-|-|", file=out_file)
 
     n_cell_dirs = list(args.basedir.iterdir())
@@ -192,20 +192,21 @@ def performance_analysis(args: argparse.Namespace):
         ffscite_makespans = analyze_makespans(n_cell_dir / Path("ffSCITE"))
         scite_makespans = analyze_makespans(n_cell_dir / Path("SCITE"))
 
-        keys = list(set(ffscite_makespans.keys()) | set(scite_makespans.keys()))
+        assert set(ffscite_makespans.keys()) == set(scite_makespans.keys())
+        keys = list(ffscite_makespans.keys())
         keys.sort()
 
         for key in keys:
             if key in ffscite_makespans:
-                ffscite_m = f"{ffscite_makespans[key]:.2f}"
-                ffscite_per_step = f"{ffscite_makespans[key] * 1e3 / (key[0] * key[1]):.2f}"
+                ffscite_m = f"{ffscite_makespans[key] * 1e-3:.2f} s"
+                ffscite_throughput = f"{(key[0] * key[1]) / ffscite_makespans[key]:.2f} ksteps/s"
             else:
                 ffscite_m = "n/a"
                 ffscite_per_step = "n/a"
 
             if key in scite_makespans:
-                scite_m = f"{scite_makespans[key]:.2f}"
-                scite_per_step = f"{scite_makespans[key] * 1e3 / (key[0] * key[1]):.2f}"
+                scite_m = f"{scite_makespans[key] * 1e-3:.2f} s"
+                scite_throughput = f"{(key[0] * key[1]) / scite_makespans[key]:.2f} ksteps/s"
             else:
                 scite_m = "n/a"
                 scite_per_step = "n/a"
@@ -215,7 +216,7 @@ def performance_analysis(args: argparse.Namespace):
             else:
                 ratio = "n/a"
             
-            print(f"| {n_cells} | {n_genes} | {key[0]} | {key[1]} | {ffscite_m} ms | {ffscite_per_step} µs | {scite_m} ms | {scite_per_step} µs | {ratio} |", file=out_file)
+            print(f"| {n_cells} | {n_genes} | {key[0]} | {key[1]} | {ffscite_m} | {ffscite_throughput} | {scite_m} | {scite_throughput} | {ratio} |", file=out_file)
 
 
 parser = argparse.ArgumentParser(
