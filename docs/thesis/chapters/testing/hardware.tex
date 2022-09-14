@@ -1,0 +1,48 @@
+\section{Hardware usage}
+
+Tables \ref{tab:abs-usage} and \ref{tab:rel-usage} list the hardware usages of the different kernels for our target \ac{FPGA} and input sizes. The overall design is very logic-intensive, which makes sense since most of the work is done with custom logic and very few floating-point operations. Of all individual components indicated in the design schematic (Figure \ref{fig:design_schematic}), the tree score mapping loop is the heaviest and makes up roughly 37.7\% and 37.5\% of the entire design's \ac{LUT} and \ac{FF} usage, respectively. This makes sense since it is a three-dimensional loop where the inner-most loop is completely unrolled (i.e. unroll factor 64) and the middle loop is eight times partially unrolled, as we have discussed in section \ref{sec:scoring}. Therefore, the inner loop's body is replicated 512 times, which leads to the reported resource usage. The next-biggest component is the change proposer with 33.3\% and 25\% of the design's \ac{LUT} and \ac{FF} usage, respectively. This resource usage is independent of the input size since it is dominated by the \ac{URNG} executions which involve a 64-bit integer multiplication and remainder operation; Compiling the design for smaller input sizes yields similar resource usages for the change proposer.
+
+It may be possible to further unroll the middle loop of the tree score mapping loop and double its potential throughput and hardware usage, and an extension to bigger inputs may be possible if the compiler issues were resolved. However, experience has shown us that designs with a total logic usage over 75\% start to run into issues regarding compilation times and clock frequencies. Therefore, we decided to settle with this configuration. It is however impossible to replicate the entire design another time to double the potential performance.
+
+\begin{table}
+    \centering
+    \begin{tabular}{l|l|l|l|l|l}
+        &                           \textbf{LUTs}&      \textbf{FFs} &      \textbf{RAMs} & \textbf{MLABs} &    \textbf{DSPs} \\
+        \hline
+        Pipe resources &            90 &                1.9k &              0  &            0  &                0 	\\
+        IO-Kernel &                 12.3k &             3.9k &              180 &           431 &               1.5 \\
+        Tree Scorer &               537.4k &            817.7k &            2.0k &          1.6k &              340.5  \\
+        - Find Parent Loop &        34.1k &         	48.2k &	            22 &            46 &                0 \\
+        - Tree Update Loop &        54.1k &             61.5k &             131 &           32 &                0 \\
+        - Tree Score Mapping Loop & 313.4k &            439.9k &            332 &           262 &               72 \\
+        - Tree Score Reduction Loop& 31.5k &            70.3k &             309 &           32 &                0 \\
+        Change Proposer &           274.1k &            307.4k &            114 &           299 &               40.5 \\
+        \hline
+        \textbf{Kernels} &          \textbf{843.8k} &   \textbf{1.2M} &     \textbf{2.4k} &	\textbf{2.4k} &     \textbf{382.5} \\
+        \textbf{Static Partition} & \textbf{455.2k} &   \textbf{910.5k} &   \textbf{2627} &	\textbf{0} &        \textbf{1.0k}	
+    \end{tabular}
+    \caption{Hardware usage of \ac{ffSCITE} in absolute numbers, supporting up to 64 cells and 63 genes, as reported in the ``Area Analysis'' report.}
+    \label{tab:abs-usage}
+\end{table}
+
+\begin{table}
+    \centering
+    \begin{tabular}{l|l|l|l|l|l}
+        &                               \textbf{LUTs}&  \textbf{FFs} &  \textbf{RAMs} & \textbf{MLABs} &    \textbf{DSPs} \\
+        \hline
+        Pipe resources &                <1\% &          <1\% &          0\% &           0\% &               0\%	\\
+        IO-Kernel &                     1\% &           1\% &           2\% &           <1\% &              <1\% \\
+        Tree Scorer &                   29\% &          22\% &          17\% &          2\% &               6\% \\
+        - Find Parent Loop &            2\% &           1\% &           <1\% &          <1\% &              0\% \\
+        - Tree Update Loop &            3\% &           2\% &           1\% &           <1\% &              0\% \\
+        - Tree Score Mapping Loop &     17\% &          12\% &          3\% &           0\% &               1\% \\
+        - Tree Score Reduction Loop&    2\% &           2\% &           3\% &           <1\% &              0\% \\
+        Change Proposer &               15\% &          8\% &           1\% &           <1\% &              1\% \\
+        \hline
+        \textbf{Kernels} &              \textbf{45\%} & \textbf{32\%} & \textbf{20\%} & \textbf{3\%} &      \textbf{7\%} \\
+        \textbf{Static Partition} &     \textbf{24\%}&  \textbf{24\%} & \textbf{22\%} & \textbf{0\%} &      \textbf{18\%}	
+    \end{tabular}
+    \caption{Hardware usage of \ac{ffSCITE} relative to the resources available on Intel Stratix 10 GX 2800 \acp{FPGA}, supporting up to 64 cells and 63 genes, as reported in the ``Area Analysis'' report.}
+    \label{tab:rel-usage}
+\end{table}
+
