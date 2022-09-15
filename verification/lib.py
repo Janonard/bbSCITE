@@ -1,7 +1,8 @@
-from lib2to3.pgen2 import token
-from math import inf, log, exp
+from math import inf, log
 from pathlib import Path
-from typing import List
+import re
+from statistics import mean
+from typing import Any, List
 import networkx as nx
 import random
 import numpy as np
@@ -234,3 +235,48 @@ def read_mutation_matrix(path: Path) -> np.ndarray:
             for line in in_file.readlines()
         ]
         return np.array(matrix, dtype=np.int8)
+
+def load_performance_data(base_dir: Path, verify_coverage: bool = False) -> Any:
+    ffscite_perf_data = dict()
+    scite_perf_data = dict()
+
+    makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
+
+    def analyze_makespans(out_dir):
+        all_makespans = dict()
+        for logfile_path in Path(out_dir).glob("*.log"):
+            parts = logfile_path.stem.split("_")
+            n_chains = int(parts[0])
+            n_steps = int(parts[1])
+
+            with open(logfile_path, mode="r") as logfile:
+                lines = (makespan_re.match(line) for line in logfile.readlines())
+                makespans = [float(match[1]) for match in lines if match is not None]
+
+            if len(makespans) == 0:
+                continue
+
+            if n_chains not in all_makespans:
+                all_makespans[n_chains] = dict()
+            
+            assert (not verify_coverage) or (n_steps not in all_makespans[n_chains])
+            all_makespans[n_chains][n_steps] = mean(makespans)
+        return all_makespans
+
+    for n_cell_dir in base_dir.iterdir():
+        n_cells = int(n_cell_dir.name)
+        assert (not verify_coverage) or (n_cells not in ffscite_perf_data)
+        assert (not verify_coverage) or (n_cells not in scite_perf_data)
+
+        ffscite_perf_data[n_cells] = analyze_makespans(n_cell_dir / Path("ffSCITE"))
+        scite_perf_data[n_cells] = analyze_makespans(n_cell_dir / Path("SCITE"))
+
+        if verify_coverage:
+            # Assert that there are runs with the same number of chains.
+            assert set(ffscite_perf_data.keys()) == set(scite_perf_data.keys())
+
+            # Assert that every run had the same number of steps per chain.
+            for n_chains in ffscite_perf_data.keys():
+                assert set(ffscite_perf_data[n_chains].keys()) == set(scite_perf_data[n_chains].keys())
+
+    return ffscite_perf_data, scite_perf_data

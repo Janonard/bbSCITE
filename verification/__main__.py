@@ -160,7 +160,7 @@ def quality_test(args: argparse.Namespace):
 
     exit(return_value)
 
-def performance_analysis(args: argparse.Namespace):
+def performance_table(args: argparse.Namespace):
     if args.out_file is None:
         out_file = sys.stdout
     else:
@@ -169,100 +169,150 @@ def performance_analysis(args: argparse.Namespace):
     print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: throughput | SCITE: mean total makespan | SCITE: throughput | speedup |", file=out_file)
     print("|-|-|-|-|-|-|-|-|-|", file=out_file)
 
-    n_cell_dirs = list(args.basedir.iterdir())
-    n_cell_dirs.sort(key=lambda dir: int(dir.name))
-        
-    fig = pyplot.figure(figsize=(18,10))
-    ax_makespan = [fig.add_subplot(2,3,1), fig.add_subplot(2,3,4)]
-    ax_throughput = [fig.add_subplot(2,3,2), fig.add_subplot(2,3,5)]
-    ax_speedup = [fig.add_subplot(2,3,3), fig.add_subplot(2,3,6)]
+    ffscite_perf_data, scite_perf_data = load_performance_data(args.basedir)
 
-    for (i_cell_dir, n_cell_dir) in enumerate(n_cell_dirs):
-        n_cells = int(n_cell_dir.name)
+    all_n_cells = list(set(ffscite_perf_data.keys()) | set(scite_perf_data.keys()))
+    all_n_cells.sort()
+
+    for n_cells in all_n_cells:
         n_genes = n_cells - 1
-        makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
 
-        def analyze_makespans(out_dir):
-            all_makespans = dict()
-            for logfile_path in Path(out_dir).glob("*.log"):
-                parts = logfile_path.stem.split("_")
-                n_chains = int(parts[0])
-                n_steps = int(parts[1])
+        ffscite_m = ffscite_perf_data[n_cells]
+        scite_m = scite_perf_data[n_cells]
 
-                with open(logfile_path, mode="r") as logfile:
-                    lines = (makespan_re.match(line) for line in logfile.readlines())
-                    makespans = [float(match[1]) for match in lines if match is not None]
-                    if len(makespans) > 0:
-                        all_makespans[(n_chains, n_steps)] = mean(makespans)
-            return all_makespans
-
-        ffscite_m = analyze_makespans(n_cell_dir / Path("ffSCITE"))
-        scite_m = analyze_makespans(n_cell_dir / Path("SCITE"))
-
-        assert set(ffscite_m.keys()) == set(scite_m.keys())
-        keys = list(ffscite_m.keys())
-        keys.sort()
-
-        for key in keys:            
-            print(f"| {n_cells} | {n_genes} | {key[0]} | {key[1]} | {ffscite_m[key] * 1e-3:.2f} s | {(key[0] * key[1]) / ffscite_m[key]:.2f} ksteps/s | {scite_m[key] * 1e-3:.2f} s | {(key[0] * key[1]) / scite_m[key]:.2f} ksteps/s | {scite_m[key] / ffscite_m[key]:.2f} |", file=out_file)
-
-        all_n_chains = list({n_chains for n_chains, _ in keys})
+        all_n_chains = list(set(ffscite_m.keys()) | set(scite_m.keys()))
         all_n_chains.sort()
-        all_n_steps = list({n_steps for _, n_steps in keys})
-        all_n_steps.sort()
 
-        for i_n_chains, n_chains in enumerate(all_n_chains):
-            ax_makespan[i_n_chains].plot(
-                [n_steps for n_steps in all_n_steps],
-                [ffscite_m[(n_chains, n_steps)] * 1e-3 for n_steps in all_n_steps],
-                linestyle=(5 * i_cell_dir,(4,11)), c=f"C{i_cell_dir}")
-            ax_makespan[i_n_chains].plot(
-                [n_steps for n_steps in all_n_steps],
-                [scite_m[(n_chains, n_steps)] * 1e-3 for n_steps in all_n_steps],
-                c=f"C{i_cell_dir}",
-                label=f"{n_cells} x {n_genes}")
-            ax_makespan[i_n_chains].set_ylim(bottom=0, top=350)
-            ax_makespan[i_n_chains].set_title(f"Makespan, {n_chains} chains")
-            ax_makespan[i_n_chains].set_xlabel("Number of chain steps per chain")
-            ax_makespan[i_n_chains].set_ylabel("Makespan, in s")
+        for n_chains in all_n_chains:
+            all_n_steps = set()
+            if n_chains in ffscite_m:
+                all_n_steps |= set(ffscite_m[n_chains].keys())
+            if n_chains in scite_m:
+                all_n_steps |= set(scite_m[n_chains].keys())
+            all_n_steps = list(all_n_steps)
+            all_n_steps.sort()
 
-            ax_throughput[i_n_chains].plot(
-                [n_steps for n_steps in all_n_steps],
-                [(n_chains * n_steps) / ffscite_m[(n_chains, n_steps)] for n_steps in all_n_steps],
-                linestyle=(5 * i_cell_dir,(4,11)), c=f"C{i_cell_dir}")
-            ax_throughput[i_n_chains].plot(
-                [n_steps for n_steps in all_n_steps],
-                [(n_chains * n_steps) / scite_m[(n_chains, n_steps)] for n_steps in all_n_steps],
-                c=f"C{i_cell_dir}",
-                label=f"{n_cells} x {n_genes}")
-            ax_throughput[i_n_chains].set_ylim(bottom=0, top=600)
-            ax_throughput[i_n_chains].set_title(f"Throughput, {n_chains} chains")
-            ax_throughput[i_n_chains].set_xlabel("Number of chain steps per chain")
-            ax_throughput[i_n_chains].set_ylabel("Throughput in ksteps/s")
+            for n_steps in all_n_steps:
+                datapoint_in_f = (n_chains in ffscite_m) and (n_steps in ffscite_m[n_chains])
+                datapoint_in_s = (n_chains in scite_m) and (n_steps in scite_m[n_chains])
 
-            ax_speedup[i_n_chains].plot(
-                [n_steps for n_steps in all_n_steps],
-                [scite_m[(n_chains, n_steps)] / ffscite_m[(n_chains, n_steps)] for n_steps in all_n_steps],
-                c=f"C{i_cell_dir}",
-                label=f"{n_cells} x {n_genes}")
-            ax_speedup[i_n_chains].set_ylim(bottom=0, top=9)
-            ax_speedup[i_n_chains].set_title(f"Speedup, {n_chains} chains")
-            ax_speedup[i_n_chains].set_xlabel("Numer of chain steps per chain")
-            ax_speedup[i_n_chains].set_ylabel("Speedup (Throughput SCITE / Throughput ffSCITE)")
+                if datapoint_in_f:
+                    ffscite_makespan = f"{ffscite_m[n_chains][n_steps] * 1e-3:.2f} s"
+                    ffscite_throughput = f"{(n_chains * n_steps) / ffscite_m[n_chains][n_steps]:.2f} ksteps/s"
+                else:
+                    ffscite_makespan = "n/a"
+                    ffscite_throughput = "n/a"
 
-    """
-    ax_makespan.legend()
-    ax_makespan.grid(which="both")
-    ax_makespan.yaxis.set_minor_locator(MultipleLocator(base=25))
+                if datapoint_in_s:
+                    scite_makespan = f"{scite_m[n_chains][n_steps] * 1e-3:.2f} s"
+                    scite_throughput = f"{(n_chains * n_steps) / scite_m[n_chains][n_steps]:.2f} ksteps/s"
+                else:
+                    scite_makespan = "n/a"
+                    scite_throughput = "n/a"
 
-    ax_throughput.legend()
-    ax_throughput.grid(which="both")
-    ax_throughput.yaxis.set_minor_locator(MultipleLocator(base=50))
+                if datapoint_in_f and datapoint_in_s:
+                    speedup = f"{scite_m[n_chains][n_steps] / ffscite_m[n_chains][n_steps]:.2f}"
+                else:
+                    speedup = "n/a"
+                
+                print(f"| {n_cells} | {n_genes} | {n_chains} | {n_steps} | {ffscite_makespan} | {ffscite_throughput} | {scite_makespan} | {scite_throughput} | {speedup} |", file=out_file)
 
-    ax_speedup.legend()
-    ax_speedup.grid()"""
+def performance_graph(args: argparse.Namespace):
+    ffscite_perf_data, scite_perf_data = load_performance_data(args.basedir, verify_coverage=True)
 
-    fig.savefig(f"performance.png", dpi=500)
+    # Rearrange the performance data so that the index order is n_chains, cells, n_steps
+    def invert_perf_data_dict(perf_data):
+        n_perf_data = dict()
+        for (n_cells, data) in perf_data.items():
+            for n_chains in data.keys():
+                if n_chains not in n_perf_data:
+                    n_perf_data[n_chains] = dict()
+                if n_cells not in n_perf_data[n_chains]:
+                    n_perf_data[n_chains][n_cells] = dict()
+                n_perf_data[n_chains][n_cells].update(data[n_chains])
+        return n_perf_data
+    ffscite_perf_data = invert_perf_data_dict(ffscite_perf_data)
+    scite_perf_data = invert_perf_data_dict(scite_perf_data)
+        
+    all_n_chains = list(ffscite_perf_data.keys())
+    all_n_chains.sort()
+    
+    fig = pyplot.figure(figsize=(18, 5 * len(all_n_chains)))
+
+    ax_makespan = [fig.add_subplot(len(all_n_chains), 3, 1 + 3 * i) for i in range(len(all_n_chains))]
+    ax_throughput = [fig.add_subplot(len(all_n_chains), 3, 2 + 3 * i) for i in range(len(all_n_chains))]
+    ax_speedup = [fig.add_subplot(len(all_n_chains), 3, 3 + 3 * i) for i in range(len(all_n_chains))]
+        
+    max_makespan = 0
+    max_throughput = 0
+    max_speedup = 0
+
+    for (i_n_chains, n_chains) in enumerate(all_n_chains):
+
+        all_n_cells = list(ffscite_perf_data[n_chains].keys())
+        all_n_cells.sort()
+
+        for i_n_cells, n_cells in enumerate(all_n_cells):
+            n_genes = n_cells - 1
+
+            ffscite_m = ffscite_perf_data[n_chains][n_cells]
+            scite_m = scite_perf_data[n_chains][n_cells]
+
+            all_n_steps = list(ffscite_m.keys())
+            all_n_steps.sort()
+
+            dashed_linestyle = (5 * i_n_cells, (4, 5 * (len(all_n_cells) - 1) + 1))
+            color = f"C{i_n_cells}"
+            label = f"{n_cells} x {n_genes}"
+
+            ffscite_makespan_axis = [ffscite_m[n_steps] * 1e-3 for n_steps in all_n_steps]
+            ax_makespan[i_n_chains].plot(all_n_steps, ffscite_makespan_axis, linestyle=dashed_linestyle, c=color)
+
+            scite_makespan_axis = [scite_m[n_steps] * 1e-3 for n_steps in all_n_steps]
+            ax_makespan[i_n_chains].plot(all_n_steps, scite_makespan_axis, c=color, label=label)
+
+            max_makespan = max([max_makespan] + ffscite_makespan_axis + scite_makespan_axis)
+
+            ffscite_throughput_axis = [(n_chains * n_steps) / ffscite_m[n_steps] for n_steps in all_n_steps]
+            ax_throughput[i_n_chains].plot(all_n_steps, ffscite_throughput_axis, linestyle=dashed_linestyle, c=color)
+            
+            scite_throughput_axis = [(n_chains * n_steps) / scite_m[n_steps] for n_steps in all_n_steps]
+            ax_throughput[i_n_chains].plot(all_n_steps, scite_throughput_axis, c=color, label=label)
+
+            max_throughput = max([max_throughput] + ffscite_throughput_axis + scite_throughput_axis)
+
+            speedup_axis = [scite_m[n_steps] / ffscite_m[n_steps] for n_steps in all_n_steps]
+            ax_speedup[i_n_chains].plot(all_n_steps, speedup_axis, c=color, label=label)
+
+            max_speedup = max([max_speedup] + speedup_axis)
+
+        ax_makespan[i_n_chains].set_title(f"Makespan, {n_chains} chains")
+        ax_makespan[i_n_chains].set_xlabel("Number of chain steps per chain")
+        ax_makespan[i_n_chains].set_ylabel("Makespan, in s")
+        ax_makespan[i_n_chains].legend()
+        ax_makespan[i_n_chains].grid(which="both")
+
+        ax_throughput[i_n_chains].set_title(f"Throughput, {n_chains} chains")
+        ax_throughput[i_n_chains].set_xlabel("Number of chain steps per chain")
+        ax_throughput[i_n_chains].set_ylabel("Throughput in ksteps/s")
+        ax_throughput[i_n_chains].legend()
+        ax_throughput[i_n_chains].grid(which="both")
+
+        ax_speedup[i_n_chains].set_title(f"Speedup, {n_chains} chains")
+        ax_speedup[i_n_chains].set_xlabel("Numer of chain steps per chain")
+        ax_speedup[i_n_chains].set_ylabel("Speedup (Throughput SCITE / Throughput ffSCITE)")
+        ax_speedup[i_n_chains].legend()
+        ax_speedup[i_n_chains].grid(which="both")
+
+    for i in range(len(all_n_chains)):
+        ax_makespan[i].set_ylim(bottom=0, top=1.1 * max_makespan)
+        ax_throughput[i].set_ylim(bottom=0, top=1.1 * max_throughput)
+        ax_speedup[i].set_ylim(bottom=0, top=1.1 * max_speedup)
+
+    if args.out_file is None:
+        pyplot.show()
+    else:
+        fig.savefig(args.out_file, dpi=args.resolution)
 
 
 parser = argparse.ArgumentParser(
@@ -320,10 +370,16 @@ test_parser.add_argument("-b", "--beta", default=0.25, type=float,
 test_parser.add_argument("-c", "--confidence-level", default=0.95, type=float,
                          help="The confidence level used for the test.")
 
-performance_parser = subparsers.add_parser("performance", help="Analyze the outputs of the performance benchmark")
+perftable_parser = subparsers.add_parser("perftable", help="Analyze the outputs of the performance benchmark and print a table")
 
-performance_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data.")
-performance_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Stdout if not given")
+perftable_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data")
+perftable_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Stdout if not given")
+
+perfgraph_parser = subparsers.add_parser("perfgraph", help="Analyze the outputs of the performance benchmark and plot a table")
+
+perfgraph_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data")
+perfgraph_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Show the graph if not given")
+perfgraph_parser.add_argument("-r", "--resolution", default=500, type=float, help="Resolution of the output file in DPI")
 
 args = parser.parse_args()
 
@@ -333,5 +389,7 @@ elif args.subcommand == "score":
     score_tree(args)
 elif args.subcommand == "tost":
     quality_test(args)
-elif args.subcommand == "performance":
-    performance_analysis(args)
+elif args.subcommand == "perftable":
+    performance_table(args)
+elif args.subcommand == "perfgraph":
+    performance_graph(args)
