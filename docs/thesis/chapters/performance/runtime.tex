@@ -6,6 +6,8 @@ The resulting performance metrics are plotted in figure \ref{fig:performance}. \
 
 The performance metrics of \ac{SCITE} however have more variation than \ac{ffSCITE}, which is expected: It only iterates through its loops as often as necessary, which means that the throughput of \ac{SCITE} in steps per second is bigger for smaller inputs. There is also some noise in the measurements, both due to the previously mentioned measurement scope as well as warming caches and interactions with the operating system. One effect that we however do not and do not try to understand is that for the small input, \ac{SCITE}'s throughput appears to decrease with an increasing number of steps. However, the throughput is nearly constant for the mid-sized and big input and we can therefore reliably deduce that \ac{ffSCITE} has an up to 8.53 times higher throughput than \ac{SCITE}.
 
+\todo[inline]{Say something about exploring the effect of no. of chains and input sizes? However, it's actually more an analysis of \ac{SCITE}, not \ac{ffSCITE}.}
+
 \begin{sidewaysfigure}
     \includegraphics[width=\textwidth]{figures/performance.png}
     \caption{Performance metrics of \ac{ffSCITE} and \ac{SCITE}. The colors indicate the input size, while the dashed lines indicate \ac{ffSCITE}'s metrics and the solid lines indicate \ac{SCITE}'s metrics. The speedup graphs indicate \ac{SCITE}'s makespan divided by \ac{ffSCITE}'s makespan for the respective inputs.}
