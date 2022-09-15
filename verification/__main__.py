@@ -160,6 +160,22 @@ def quality_test(args: argparse.Namespace):
 
     exit(return_value)
 
+def quickperf(args: argparse.Namespace):
+    ffscite_perf_data, scite_perf_data = load_performance_data(args.basedir, verify_coverage=True)
+
+    for n_cells, cell_data in ffscite_perf_data.items():
+        throughputs = list()
+        speedups = list()
+        for n_chains, chain_data in cell_data.items():
+            throughputs += [(n_chains * n_steps) / makespan for (n_steps, makespan) in chain_data.items()]
+            speedups += [scite_makespan / ffscite_makespan
+                for (ffscite_makespan, scite_makespan)
+                in zip(chain_data.values(), scite_perf_data[n_cells][n_chains].values())]
+        print(f"# {n_cells} cells:")
+        print(f"ffSCITE mean throughput: {mean(throughputs):.2f} ksteps/s")
+        print(f"mean speedup: {mean(speedups):.2f}, min speedup: {min(speedups):.2f}, max speedup: {max(speedups):.2f}")
+        print()
+
 def performance_table(args: argparse.Namespace):
     if args.out_file is None:
         out_file = sys.stdout
@@ -370,12 +386,16 @@ test_parser.add_argument("-b", "--beta", default=0.25, type=float,
 test_parser.add_argument("-c", "--confidence-level", default=0.95, type=float,
                          help="The confidence level used for the test.")
 
+quickperf_parser = subparsers.add_parser("quickperf", help="Print quick information about the performance benchmark")
+
+quickperf_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data")
+
 perftable_parser = subparsers.add_parser("perftable", help="Analyze the outputs of the performance benchmark and print a table")
 
 perftable_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data")
 perftable_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Stdout if not given")
 
-perfgraph_parser = subparsers.add_parser("perfgraph", help="Analyze the outputs of the performance benchmark and plot a table")
+perfgraph_parser = subparsers.add_parser("perfgraph", help="Analyze the outputs of the performance benchmark and plot a graph")
 
 perfgraph_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data")
 perfgraph_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Show the graph if not given")
@@ -389,6 +409,8 @@ elif args.subcommand == "score":
     score_tree(args)
 elif args.subcommand == "tost":
     quality_test(args)
+elif args.subcommand == "quickperf":
+    quickperf(args)
 elif args.subcommand == "perftable":
     performance_table(args)
 elif args.subcommand == "perfgraph":
