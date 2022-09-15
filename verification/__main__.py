@@ -1,5 +1,5 @@
-from email.quoprimime import unquote
 import sys
+from turtle import color
 from verification.lib import *
 from networkx.drawing.nx_pydot import write_dot
 import random
@@ -8,7 +8,9 @@ from pathlib import Path
 from scipy.stats import ttest_1samp
 from statistics import mean
 from matplotlib import pyplot
+from matplotlib.ticker import MultipleLocator
 import re
+from itertools import groupby
 
 
 def generate(args: argparse.Namespace):
@@ -169,8 +171,13 @@ def performance_analysis(args: argparse.Namespace):
 
     n_cell_dirs = list(args.basedir.iterdir())
     n_cell_dirs.sort(key=lambda dir: int(dir.name))
+        
+    fig = pyplot.figure(figsize=(18,10))
+    ax_makespan = [fig.add_subplot(2,3,1), fig.add_subplot(2,3,4)]
+    ax_throughput = [fig.add_subplot(2,3,2), fig.add_subplot(2,3,5)]
+    ax_speedup = [fig.add_subplot(2,3,3), fig.add_subplot(2,3,6)]
 
-    for n_cell_dir in n_cell_dirs:
+    for (i_cell_dir, n_cell_dir) in enumerate(n_cell_dirs):
         n_cells = int(n_cell_dir.name)
         n_genes = n_cells - 1
         makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
@@ -189,34 +196,73 @@ def performance_analysis(args: argparse.Namespace):
                         all_makespans[(n_chains, n_steps)] = mean(makespans)
             return all_makespans
 
-        ffscite_makespans = analyze_makespans(n_cell_dir / Path("ffSCITE"))
-        scite_makespans = analyze_makespans(n_cell_dir / Path("SCITE"))
+        ffscite_m = analyze_makespans(n_cell_dir / Path("ffSCITE"))
+        scite_m = analyze_makespans(n_cell_dir / Path("SCITE"))
 
-        assert set(ffscite_makespans.keys()) == set(scite_makespans.keys())
-        keys = list(ffscite_makespans.keys())
+        assert set(ffscite_m.keys()) == set(scite_m.keys())
+        keys = list(ffscite_m.keys())
         keys.sort()
 
-        for key in keys:
-            if key in ffscite_makespans:
-                ffscite_m = f"{ffscite_makespans[key] * 1e-3:.2f} s"
-                ffscite_throughput = f"{(key[0] * key[1]) / ffscite_makespans[key]:.2f} ksteps/s"
-            else:
-                ffscite_m = "n/a"
-                ffscite_throughput = "n/a"
+        for key in keys:            
+            print(f"| {n_cells} | {n_genes} | {key[0]} | {key[1]} | {ffscite_m[key] * 1e-3:.2f} s | {(key[0] * key[1]) / ffscite_m[key]:.2f} ksteps/s | {scite_m[key] * 1e-3:.2f} s | {(key[0] * key[1]) / scite_m[key]:.2f} ksteps/s | {scite_m[key] / ffscite_m[key]:.2f} |", file=out_file)
 
-            if key in scite_makespans:
-                scite_m = f"{scite_makespans[key] * 1e-3:.2f} s"
-                scite_throughput = f"{(key[0] * key[1]) / scite_makespans[key]:.2f} ksteps/s"
-            else:
-                scite_m = "n/a"
-                scite_throughput = "n/a"
-            
-            if key in ffscite_makespans and key in scite_makespans:
-                ratio = f"{scite_makespans[key] / ffscite_makespans[key]:.2f}"
-            else:
-                ratio = "n/a"
-            
-            print(f"| {n_cells} | {n_genes} | {key[0]} | {key[1]} | {ffscite_m} | {ffscite_throughput} | {scite_m} | {scite_throughput} | {ratio} |", file=out_file)
+        all_n_chains = list({n_chains for n_chains, _ in keys})
+        all_n_chains.sort()
+        all_n_steps = list({n_steps for _, n_steps in keys})
+        all_n_steps.sort()
+
+        for i_n_chains, n_chains in enumerate(all_n_chains):
+            ax_makespan[i_n_chains].plot(
+                [n_steps for n_steps in all_n_steps],
+                [ffscite_m[(n_chains, n_steps)] * 1e-3 for n_steps in all_n_steps],
+                linestyle=(5 * i_cell_dir,(4,11)), c=f"C{i_cell_dir}")
+            ax_makespan[i_n_chains].plot(
+                [n_steps for n_steps in all_n_steps],
+                [scite_m[(n_chains, n_steps)] * 1e-3 for n_steps in all_n_steps],
+                c=f"C{i_cell_dir}",
+                label=f"{n_cells} x {n_genes}")
+            ax_makespan[i_n_chains].set_ylim(bottom=0, top=350)
+            ax_makespan[i_n_chains].set_title(f"Makespan, {n_chains} chains")
+            ax_makespan[i_n_chains].set_xlabel("Number of chain steps per chain")
+            ax_makespan[i_n_chains].set_ylabel("Makespan, in s")
+
+            ax_throughput[i_n_chains].plot(
+                [n_steps for n_steps in all_n_steps],
+                [(n_chains * n_steps) / ffscite_m[(n_chains, n_steps)] for n_steps in all_n_steps],
+                linestyle=(5 * i_cell_dir,(4,11)), c=f"C{i_cell_dir}")
+            ax_throughput[i_n_chains].plot(
+                [n_steps for n_steps in all_n_steps],
+                [(n_chains * n_steps) / scite_m[(n_chains, n_steps)] for n_steps in all_n_steps],
+                c=f"C{i_cell_dir}",
+                label=f"{n_cells} x {n_genes}")
+            ax_throughput[i_n_chains].set_ylim(bottom=0, top=600)
+            ax_throughput[i_n_chains].set_title(f"Throughput, {n_chains} chains")
+            ax_throughput[i_n_chains].set_xlabel("Number of chain steps per chain")
+            ax_throughput[i_n_chains].set_ylabel("Throughput in ksteps/s")
+
+            ax_speedup[i_n_chains].plot(
+                [n_steps for n_steps in all_n_steps],
+                [scite_m[(n_chains, n_steps)] / ffscite_m[(n_chains, n_steps)] for n_steps in all_n_steps],
+                c=f"C{i_cell_dir}",
+                label=f"{n_cells} x {n_genes}")
+            ax_speedup[i_n_chains].set_ylim(bottom=0, top=9)
+            ax_speedup[i_n_chains].set_title(f"Speedup, {n_chains} chains")
+            ax_speedup[i_n_chains].set_xlabel("Numer of chain steps per chain")
+            ax_speedup[i_n_chains].set_ylabel("Speedup (Throughput SCITE / Throughput ffSCITE)")
+
+    """
+    ax_makespan.legend()
+    ax_makespan.grid(which="both")
+    ax_makespan.yaxis.set_minor_locator(MultipleLocator(base=25))
+
+    ax_throughput.legend()
+    ax_throughput.grid(which="both")
+    ax_throughput.yaxis.set_minor_locator(MultipleLocator(base=50))
+
+    ax_speedup.legend()
+    ax_speedup.grid()"""
+
+    fig.savefig(f"performance.png", dpi=500)
 
 
 parser = argparse.ArgumentParser(
