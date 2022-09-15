@@ -312,7 +312,7 @@ def performance_graph(args: argparse.Namespace):
     if args.out_file is None:
         pyplot.show()
     else:
-        fig.savefig(args.out_file, dpi=args.resolution)
+        fig.savefig(args.out_file, dpi=args.resolution, bbox_inches="tight")
 
 
 parser = argparse.ArgumentParser(
