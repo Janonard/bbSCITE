@@ -52,8 +52,6 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \subsection{Reversing the ancestor matrix construction}
 
-\todo[inline]{This subsection needs a lot more polishing, transitionary texts, explainations, and one complete proof. It is by no measure complete, but I wanted to finish other, easier stuff before completing this section. Maybe, algorithms should also be moved out of ``figures'' and into the theorems?}
-
 \begin{theorem}
     \label{theo:am_reverse}
     Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$.
@@ -112,39 +110,20 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
     This means that our tree has a circle, which is a contradiction. Therefore, such a $y$ can not exist and we have in fact $p = (v, \dots, w) = (v, w) \Rightarrow (v, w) \in E$.
 \end{proof}
 
-\subsection{Ancestor matrix updates}
+\subsection{``Swap nodes'' ancestor matrix computation}
 
-\todo[inline]{Split up the definition of the different moves, structure everything into one subsection per move.}
-
-\begin{definition}[Tree moves, \cite{tree2016}]
-    \label{def:tree_moves}
-    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$, $t_1 \in V$ with $v \not\leadsto_T t_1$, and $t_2 \in V$ with $v \leadsto_T t_2$. We define four different moves:
-    \begin{itemize}
-        \item ``Swap nodes:'' $T' = (V, E', r)$ with $E' := \{(f(x), f(y)) : (x, y) \in E\}$ and
-        \begin{align*}
-            f: V \rightarrow V, x \mapsto \begin{cases}
-                v & x = w \\
-                w & x = v \\
-                x & \text{else} \\
-            \end{cases}
-        \end{align*}
-        \item ``Prune and Reattach:'' $T' = (V, E', r)$ with $E' := (E \setminus \{(p_T(v), v)\}) \cup \{(t_1, v)\}$.
-        \item ``Swap unrelated subtrees:'' $T' = (V, E', r)$ with
-        \begin{align*}
-            E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (p_T(v), w)\}
-        \end{align*}
-        if we have $v \not\leadsto_T w$ and $w \not \leadsto_T v$.
-        \item ``Swap related subtrees:'' $T' = (V, E', r)$ with 
-        \begin{align*}
-            E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (t_2, w)\}
-        \end{align*}
-        if we have $w \leadsto_T v$.
-    \end{itemize}
+\begin{definition}[Swap nodes move, \cite{tree2016}]
+    \label{def:swap_nodes}
+    Let $T = (V, E, r)$ be a mutation tree, and $v, w \in V \setminus \{r\}$ with $v \neq w$. We define the mutation tree $T'$ after the ``swap nodes'' move as $T' = (V, E', r)$ with
+    \begin{align*}
+        E' := \{(f(x), f(y)) : (x, y) \in E\}
+    \end{align*}
+    We assume these definitions for the remainder of this subsection.
 \end{definition}
 
 \begin{theorem}[Correctness of the ``Swap nodes'' update]
     \label{theo:swap_nodes_correctness}
-    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V$ with $v \neq w$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of the tree $T'$ after the ``Swap nodes'' move (Definition \ref{def:tree_moves}).
+    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
@@ -185,7 +164,7 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \begin{lemma}
     \label{lem:swap_nodes_property}
-    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$, and $T' = (V, E', r)$ be the mutation tree after the ``Swap nodes'' move from definition \ref{def:tree_moves}. We have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ for all $x, y \in V$.
+    We have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ for all $x, y \in V$.
 \end{lemma}
 
 \begin{proof}
@@ -197,9 +176,20 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
     \end{align*}
 \end{proof}
 
+\subsection{``Prune and reattach'' ancestor matrix computation}
+
+\begin{definition}[``Prune and reattach'' move, \cite{tree2016}]
+    \label{def:prune_and_reattach}
+    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$ and $t \in V$ with $v \not\leadsto_T t$. We define the mutation tree $T'$ after the ``prune and reattach'' move as $T' = (V, E', r)$ with
+    \begin{align*}
+        E' := (E \setminus \{(p_T(v), v)\}) \cup \{(t, v)\}
+    \end{align*}
+    We assume these definitions for the remainder of this subsection.
+\end{definition}
+
 \begin{theorem}[Correctness of the ``Prune and Reattach'' update]
     \label{theo:prune_reattach_correctness}
-    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::PruneReattach}$(V, a, v, t)$ (Algorithm \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of the tree $T'$ after the ``Prune and Reattach'' move (Definition \ref{def:tree_moves}).
+    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Prune\-Reattach}\-$(V, a, v, t)$ (Algorithm \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
@@ -228,19 +218,20 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \begin{remark}
     \label{rem:prune_reattach}
-    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. We remark that we have $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ for all $y \in V$ and that we have $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$.
+    We remark that we have $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ for all $y \in V$ and that we have $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$.
 \end{remark}
 
-The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply that children of $v$ still stay connected to $v$ after the move. $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$ can simply be checked by writing them out.
+The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply that children of $v$ still stay connected to $v$ after the move. $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$ can be computed manually.
 
 \begin{lemma}
     \label{lem:prune_reattach_unrel}
-    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. Let also $x, y \in V$ with $v \not\leadsto_T y$. We then have:
+    Let $x, y \in V$ with $v \not\leadsto_T y$. We have:
     \begin{align*}
         x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y
     \end{align*}
-    The idea behind this lemma is that paths in the tree are unharmed if they do not go via the removed edge $(p_T(v), v)$.
 \end{lemma}
+
+The idea behind this lemma is that paths in the tree are unharmed if they do not go via the removed edge $(p_T(v), v)$.
 
 \begin{proof}
     Let's first assume $x \leadsto_{T'} y$ and $x \not\leadsto_{T} y$ to prove $x \leadsto_{T'} y \Rightarrow x \leadsto_T y$ by contradiction. There is a path $p = (p_1, \dots, p_l) \subseteq E'$ with $p_1 = x$ and $p_l = y$. We have $p \not\subseteq E$ since we would otherwise have $x \leadsto_T y$. This means that there is an edge $e \in (p \setminus E) \subseteq (E' \setminus E)$. One can easily check that $(t, v)$ is the only edge in $E' \setminus E$. We therefore have $e = (t, v)$ and $\exists i \leq l: p_i = v$. This however means that $p' := (v, p_{i+1}, \dots, y)$ is a suffix of $p$. Since $e = (t,v) \notin p'$, we have $p' \subseteq E \Rightarrow v \leadsto_{T} y$, which contradicts our precondition of $v \not\leadsto_T y$.
@@ -250,12 +241,13 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
 
 \begin{lemma}
     \label{lem:prune_reattach_rel}
-    Let $T = (V, E, r)$ be a mutation tree, $v \in V \setminus \{r\}$, $t \in V$ with $v \not\leadsto_T t$ and $T' = (V, E', r)$ the mutation tree after the ``Prune and Reattach'' move from definition \ref{def:tree_moves}. Let also $x, y \in V$ with $v \leadsto_T y$. We then have:
+    Let $x, y \in V$ with $v \leadsto_T y$. We have:
     \begin{align*}
         x \leadsto_{T'} y \Leftrightarrow (v \leadsto_T x \leadsto_T y \vee x \leadsto_T t)
     \end{align*}
-    The idea of this lemma is that paths over the node $v$ exist in the new tree iff they are either entirely in the subtree below $v$ or are newly established via the edge $(t, v)$.
 \end{lemma}
+
+The idea of this lemma is that paths over the node $v$ exist in the new tree iff they are either entirely in the subtree below $v$ or are newly established via the edge $(t, v)$.
 
 \begin{proof}
     We have nothing to show for $x = v$ due to remark \ref{rem:prune_reattach}. Therefore, we can assume $x \neq v$ in the following. We first show $\Leftarrow$: If we have $x \leadsto_T t$, we also have $x \leadsto_{T'} t$ with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel}. From this and $(t, v) \in E' \Rightarrow t \leadsto_{T'} v$, it follows that we have $x \leadsto_{T'} t \leadsto_{T'} v \leadsto_{T'} y \Rightarrow x \leadsto_{T'} y$.
@@ -263,9 +255,20 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
     We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$ ($p_1 = x$ and $p_l = y$). If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel} also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto_T y$ with remark \ref{rem:prune_reattach} and since we neither have $(v, t) \in p$ nor $(p_T(v), v) \in p$.
 \end{proof}
 
+\subsection{``Swap unrelated subtrees'' ancestor matrix computation}
+
+\begin{definition}[``Swap unrelated subtrees'' move, \cite{tree2016}]
+    \label{def:swap_unrelated_subtrees}
+    Let $T = (V, E, r)$ be a mutation tree, and $v, w \in V \setminus \{r\}$ with $v \neq w$. We define the mutation tree $T'$ after the ``swap unrelated subtrees'' as $T' = (V, E', r)$ with
+    \begin{align*}
+        E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (p_T(v), w)\}
+    \end{align*}
+    We assume these definitions for the remainder of this subsection.
+\end{definition}
+
 \begin{theorem}[Correctness of the ``Swap unrelated Subtrees'' update]
     \label{theo:swap_unrelated_correctness}
-    Let $T = (V, E, r)$ be a mutation tree, $v,w \in V \setminus \{r\}$, with $v \not\leadsto_T w$ and $w \not\leadsto_T v$, and $a \in \{0,1\}^{|V| \times |V|}$ the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapUnrelatedSubtrees}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_unrelated}) is the corresponding ancestor matrix of the tree $T'$ after the ``Swap unrelated subtrees'' move (Definition \ref{def:tree_moves}).
+    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Unrelated\-Subtrees}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_unrelated}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
@@ -305,7 +308,21 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
     \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in all cases.
 \end{proof}
 
-\todo[inline]{Theorem for algorithm \ref{alg:am_swap_related}}
+\subsection{``Swap related subtrees'' ancestor matrix computation}
+
+\begin{definition}[``Swap related subtrees'' move, \cite{tree2016}]
+    \label{def:swap_related_subtrees}
+    Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$ and $w \leadsto_T v$, and $t \in V$ with $v \leadsto_T t$. We define the mutation tree $T'$ after the ``swap related subtrees'' move as $T = (V, E', r)$ with
+    \begin{align*}
+        E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (t, w)\}
+    \end{align*}
+    We assume these definitions for the remainder of this subsection.
+\end{definition}
+
+\begin{theorem}[Correctness of the ``swap related subtrees'' update]
+    \label{theo:swap_related_correctness}
+    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Related\-Subtrees}$(V, a, v, w, t)$ (Algorithm \ref{alg:am_swap_related}) is the corresponding ancestor matrix of $T'$.
+\end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -353,7 +370,6 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
       B &= \{x \in V: v \not\leadsto_T x \wedge w \leadsto_T x\} \\
       C &= \{x \in V: v \leadsto_T x\}
     \end{align*}
-    Let also $T'$ be the tree after the ``Swap related subtrees'' move (Definition \ref{def:tree_moves}) with parameters $v$, $w$, and $t$.
 \end{definition}
 
 \todo[inline]{Diagram for definition \ref{def:related_swap_classes}}
