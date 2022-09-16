@@ -377,42 +377,81 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 \begin{figure}
     \centering
     \begin{tikzpicture}
-        \node (r) {$r$}[level distance=1cm] child {
-            node (pw) {$p_T(w)$}[level distance=2cm] child [->] {
-                node (w) {$w$}[level distance=1cm] child {
-                    node (pv) {$p_T(v)$}[level distance=2cm] child {
-                        node (v) {$v$}[level distance=1cm] child {
-                            node (t) {$t$}
+        \node (r1) {$r$}[level distance=1cm] child {
+            node (pw1) {$p_T(w)$}[level distance=2cm] child [->] {
+                node (w1) {$w$}[level distance=1cm] child {
+                    node (pv1) {$p_T(v)$}[level distance=2cm] child {
+                        node (v1) {$v$}[level distance=1cm] child {
+                            node (t1) {$t$}
                             edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
                         }
                         child {
-                            node (cn) {}
+                            node (cn1) {}
                             edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
                         }
                     }
                     edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
                 }
                 child {
-                    node (bn) {}
+                    node (bn1) {}
                     edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
                 }
             }
             edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
         }
         child {
-            node (an) {}
+            node (an1) {}
             edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
         };
 
-        \draw[thick] ($(r) + (0,1)$) -- ($(pw) + (-\sinOffset,-\cosOffset)$) -- ($(an) + (\sinOffset,-\cosOffset)$) -- cycle;
-        \draw[thick] ($(w) + (0,1)$) -- ($(pv) + (-\sinOffset,-\cosOffset)$) -- ($(bn) + (\sinOffset,-\cosOffset)$) -- cycle;
-        \draw[thick] ($(v) + (0,1)$) -- ($(t) + (-\sinOffset,-\cosOffset)$) -- ($(cn) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(r1) + (0,1)$) -- ($(pw1) + (-\sinOffset,-\cosOffset)$) -- ($(an1) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(w1) + (0,1)$) -- ($(pv1) + (-\sinOffset,-\cosOffset)$) -- ($(bn1) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(v1) + (0,1)$) -- ($(t1) + (-\sinOffset,-\cosOffset)$) -- ($(cn1) + (\sinOffset,-\cosOffset)$) -- cycle;
 
-        \node[thick] at ($(r) + (-1,0)$) {$A$};
-        \node[thick] at ($(w) + (-1,0)$) {$B$};
-        \node[thick] at ($(v) + (-1,0)$) {$C$};
+        \node[thick] at ($(r1) + (-1,0)$) {$A$};
+        \node[thick] at ($(w1) + (-1,0)$) {$B$};
+        \node[thick] at ($(v1) + (-1,0)$) {$C$};
+
+        \node at (6,0) (r2) {$r$}[level distance=1cm] child {
+            node (pw2) {$p_T(w)$}[level distance=2cm] child [->] {
+                node (v2) {$v$}[level distance=1cm] child {
+                    node (t2) {$t$}[level distance=2cm] child {
+                        node (w2) {$w$}[level distance=1cm] child {
+                            node (pv2) {$p_T(v)$}
+                            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                        }
+                        child {
+                            node (bn2) {}
+                            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                        }
+                    }
+                    edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                }
+                child {
+                    node (cn2) {}
+                    edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                }
+            }
+            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+        }
+        child {
+            node (an2) {}
+            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+        };
+
+        \draw[thick] ($(r2) + (0,1)$) -- ($(pw2) + (-\sinOffset,-\cosOffset)$) -- ($(an2) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(w2) + (0,1)$) -- ($(pv2) + (-\sinOffset,-\cosOffset)$) -- ($(bn2) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(v2) + (0,1)$) -- ($(t2) + (-\sinOffset,-\cosOffset)$) -- ($(cn2) + (\sinOffset,-\cosOffset)$) -- cycle;
+
+        \node[thick] at ($(r2) + (-1,0)$) {$A$};
+        \node[thick] at ($(w2) + (-1,0)$) {$B$};
+        \node[thick] at ($(v2) + (-1,0)$) {$C$};
+
+        \draw[dashed] ($(v2) + (-3,-4.5)$) -- ($(v2) + (-3,4.5)$);
+        \node[] at ($(r1) + (-2,1)$) {$T:$};
+        \node[] at ($(r2) + (-2,1)$) {$T':$};
     \end{tikzpicture}
-    \caption{Illustration of the different classes from definitions \ref{def:related_swap_classes} before the move. Squiggly lines indicate $\leadsto_T$ relationships, while straight lines indicate proper edges.}
+    \caption{Illustration of the different classes from definitions \ref{def:related_swap_classes} before and after the ``swap related subtrees'' move. Squiggly lines indicate connectivity, while straight lines indicate proper edges.}
     \label{fig:related_swap_classes}
 \end{figure}
 
