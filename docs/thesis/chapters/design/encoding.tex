@@ -326,25 +326,23 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 
 \begin{algorithm}
     \begin{algorithmic}[1]
+        \Function{Classify}{$a, v, w, x$}
+            \If{$a[v][x]$}
+                \State \Return 2
+            \ElsIf{$a[w][x]$}
+                \State \Return 1
+            \Else
+                \State \Return 0
+            \EndIf
+        \EndFunction
+        \State
         \Function{AM::SwapRelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$, $t$}
         \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
         \ForAll{$x \in V$}
-            \If{$a[v][x]$}
-                \State $c_x \leftarrow 2$
-            \ElsIf{$a[w][x]$}
-                \State $c_x \leftarrow 1$
-            \Else
-                \State $c_x \leftarrow 0$
-            \EndIf
+            \State $c_x \leftarrow \textsc{Classify}(a, v, w, x)$
 
             \ForAll{$y \in V$} \Comment Unroll completely
-                \If{$a[v][y]$}
-                    \State $c_y \leftarrow 2$
-                \ElsIf{$a[w][x]$}
-                    \State $c_y \leftarrow 1$
-                \Else
-                    \State $c_y \leftarrow 0$
-                \EndIf
+                \State $c_y \leftarrow \textsc{Classify}(a, v, w, y)$
 
                 \If{$(c_x = c_y) \vee (c_x = 0 \wedge c_y \neq 0)$}
                     \State $a'[x][y] \leftarrow a[x][y]$
@@ -364,7 +362,7 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 
 \begin{definition}
     \label{def:related_swap_classes}
-    Let $T = (V, E, r)$ be a mutation tree, $v,w \in V \setminus \{r\}$, with $w \leadsto_T v$ and $w \neq v$, and $t \in V$ with $v \leadsto_T t$. We partition $V$ in the following classes:
+    We partition $V$ in the following classes:
     \begin{align*}
       A &= \{x \in V: v \not\leadsto_T x \wedge w \not\leadsto_T y\} \\
       B &= \{x \in V: v \not\leadsto_T x \wedge w \leadsto_T x\} \\
@@ -372,7 +370,53 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
     \end{align*}
 \end{definition}
 
-\todo[inline]{Diagram for definition \ref{def:related_swap_classes}}
+% Adapted from https://tex.stackexchange.com/questions/37462/placing-a-triangle-around-nodes-in-a-tree.
+\pgfmathsetmacro{\sinOffset}{sin(60)}
+\pgfmathsetmacro{\cosOffset}{cos(60)}
+
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \node (r) {$r$}[level distance=1cm] child {
+            node (pw) {$p_T(w)$}[level distance=2cm] child [->] {
+                node (w) {$w$}[level distance=1cm] child {
+                    node (pv) {$p_T(v)$}[level distance=2cm] child {
+                        node (v) {$v$}[level distance=1cm] child {
+                            node (t) {$t$}
+                            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                        }
+                        child {
+                            node (cn) {}
+                            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                        }
+                    }
+                    edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                }
+                child {
+                    node (bn) {}
+                    edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+                }
+            }
+            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+        }
+        child {
+            node (an) {}
+            edge from parent [decorate,decoration={snake,amplitude=0.05cm},->]
+        };
+
+        \draw[thick] ($(r) + (0,1)$) -- ($(pw) + (-\sinOffset,-\cosOffset)$) -- ($(an) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(w) + (0,1)$) -- ($(pv) + (-\sinOffset,-\cosOffset)$) -- ($(bn) + (\sinOffset,-\cosOffset)$) -- cycle;
+        \draw[thick] ($(v) + (0,1)$) -- ($(t) + (-\sinOffset,-\cosOffset)$) -- ($(cn) + (\sinOffset,-\cosOffset)$) -- cycle;
+
+        \node[thick] at ($(r) + (-1,0)$) {$A$};
+        \node[thick] at ($(w) + (-1,0)$) {$B$};
+        \node[thick] at ($(v) + (-1,0)$) {$C$};
+    \end{tikzpicture}
+    \caption{Illustration of the different classes from definitions \ref{def:related_swap_classes} before the move. Squiggly lines indicate $\leadsto_T$ relationships, while straight lines indicate proper edges.}
+    \label{fig:related_swap_classes}
+\end{figure}
+
+\todo[inline]{I needed to use code from stackexchange for figure \ref{fig:related_swap_classes}. How do I cite this?}
 
 \begin{remark}
     \label{rem:related_swap_classes}
@@ -382,7 +426,7 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
         \begin{align*}
             v &\in C & w &\in B & p_T(w) &\in A & t &\in C
         \end{align*}
-        \item From 1. and the definition of the move (Definition \ref{def:tree_moves}), two trivial connection chains follow:
+        \item From 1. and the definition of $E'$ (Definition \ref{def:swap_related_subtrees}), two trivial connection chains follow:
         \begin{align*}
             p_T(w) \leadsto_T w &\leadsto_T v \leadsto _T t \\
             p_T(w) \leadsto_{T'} v &\leadsto_{T'} t \leadsto_{T'} w
