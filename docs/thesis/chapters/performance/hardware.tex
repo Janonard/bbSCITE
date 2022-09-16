@@ -2,8 +2,6 @@
 
 Tables \ref{tab:abs-usage} and \ref{tab:rel-usage} list the hardware usages of the different kernels for our target \ac{FPGA} and input sizes. The overall design is very logic-intensive, which makes sense since most of the work is done with custom logic and very few floating-point operations. Of all individual components indicated in the design schematic (Figure \ref{fig:design_schematic}), the tree score mapping loop is the heaviest and makes up roughly 37.7\% and 37.5\% of the entire design's \ac{LUT} and \ac{FF} usage, respectively. This makes sense since it is a three-dimensional loop where the inner-most loop is completely unrolled (i.e. unroll factor 64) and the middle loop is eight times partially unrolled, as we have discussed in section \ref{sec:scoring}. Therefore, the inner loop's body is replicated 512 times, which leads to the reported resource usage. The next-biggest component is the change proposer with 33.3\% and 25\% of the design's \ac{LUT} and \ac{FF} usage, respectively. This resource usage is independent of the input size since it is dominated by the \ac{URNG} executions which involve a 64-bit integer multiplication and remainder operation; Compiling the design for smaller input sizes yields similar resource usages for the change proposer.
 
-It may be possible to further unroll the middle loop of the tree score mapping loop and double its potential throughput and hardware usage, and an extension to bigger inputs may be possible if the compiler issues were resolved. However, experience has shown us that designs with a total logic usage over 75\% start to run into issues regarding compilation times and clock frequencies. Therefore, we decided to settle with this configuration. It is however impossible to replicate the entire design another time to double the potential performance.
-
 \begin{table}
     \centering
     \begin{tabular}{l|l|l|l|l|l}
@@ -45,4 +43,6 @@ It may be possible to further unroll the middle loop of the tree score mapping l
     \caption{Hardware usage of \ac{ffSCITE} relative to the resources available on Intel Stratix 10 GX 2800 \acp{FPGA}, supporting up to 64 cells and 63 genes, as reported in the ``Area Analysis'' report.}
     \label{tab:rel-usage}
 \end{table}
+
+It may be possible to further unroll the middle loop of the tree score mapping loop and double its potential throughput and hardware usage, and an extension to bigger inputs may be possible if the compiler issues were resolved. However, experience has shown us that designs with a total logic usage over 75\% start to run into issues regarding compilation times and clock frequencies. Therefore, we decided to settle with this configuration. It is however impossible to replicate the entire design another time since we lack the resources.
 
