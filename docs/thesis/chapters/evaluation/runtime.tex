@@ -6,10 +6,10 @@ The resulting performance metrics are plotted in figure \ref{fig:performance}. \
 
 The performance metrics of \ac{SCITE} however have more variation than \ac{ffSCITE}, which is expected: It only iterates through its loops as often as necessary, which means that the throughput of \ac{SCITE} in steps per second is bigger for smaller inputs. There is also some noise in the measurements, both due to the previously mentioned measurement scope as well as warming caches and interactions with the operating system. One effect that we however do not and do not try to understand is that for the small input, \ac{SCITE}'s throughput appears to decrease with an increasing number of steps. However, the throughput is nearly constant for the mid-sized and big input and we can therefore reliably deduce that \ac{ffSCITE} has an up to 8.53 times higher throughput than \ac{SCITE}. It might also be interesting to further explore the effects of different input sizes and chain counts. However, this would require an in-depth analysis of \ac{SCITE}'s performance, which is outside the scope of this thesis.
 
-\todo[inline]{Write that Ernst et al. are probably faster.}
-
 \begin{figure}
     \includegraphics[width=\textwidth]{figures/performance.png}
     \caption{Performance metrics of \ac{ffSCITE} and \ac{SCITE}. The colors indicate the input size, while the dashed lines indicate \ac{ffSCITE}'s metrics and the solid lines indicate \ac{SCITE}'s metrics. The speedup graphs indicate \ac{SCITE}'s makespan divided by \ac{ffSCITE}'s makespan for the respective inputs.}
     \label{fig:performance}
 \end{figure}
+
+We had also set ourselves the optional goal to obtain a higher throughput than Ernst et al. \cite{ernst2020Performance}. We were not able to properly verify this since we neither have access to their source code nor did they list absolute performance figures or the total single-thread speedup compared to the reference implementation. However, we assume that their throughput is higher since their first single-threaded optimization alone achieved a speedup of 6.4 compared to the reference and they were able to use multiple threads to increase their throughput by a factor of 61.3 compared to their single-threaded throughput.

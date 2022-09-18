@@ -47,26 +47,15 @@ where $\alpha$ and $\beta$ are the probabilities for false positives and negativ
     \begin{align*}
         |\log\Lambda_d(e) - \log\Lambda_d(e')| &= |\log(1) - \log(1)| = 0
     \end{align*}
-    Our lemma is therefore true in this case and we can assume $d_{x,y} \neq 2 \Rightarrow d_{x,y} \in \{0,1\}$. We now have four cases:
-    \begin{itemize}
-        \item $d_{x,y} = 0, e_{x,y} = 0$: We then have
-        \begin{align*}
-            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(0,0) - \log\lambda(0,1)| = |\log(1-\alpha) - \log(\beta)|
-        \end{align*}
-        \item $d_{x,y} = 0, e_{x,y} = 1$: We then have
-        \begin{align*}
-            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(0,1) - \log\lambda(0,0)| = |\log(\beta) - \log(1-\alpha)|
-        \end{align*}
-        \item $d_{x,y} = 1, e_{x,y} = 0$: We then have
-        \begin{align*}
-            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(1,0) - \log\lambda(1,1)| = |\log(1-\beta) - \log(\alpha)|
-        \end{align*}
-        \item $d_{x,y} = 1, e_{x,y} = 1$: We then have
-        \begin{align*}
-            |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log\lambda(1,1) - \log\lambda(1,0)| = |\log(\alpha) - \log(1-\beta)|
-        \end{align*}
-    \end{itemize}
-    $|\log\Lambda_d(e) - \log\Lambda_d(e')|$ is always equal to or less than the maximum of all these cases and we therefore have
+    Now, one can consider all combinations for $d_{x,y}$ and $e_{x,y}$ to find that we either have 
+    \begin{align*}
+        |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log(1-\alpha) - \log(\beta)|
+    \end{align*}
+    or
+    \begin{align*}
+        |\log\Lambda_d(e) - \log\Lambda_d(e')| = |\log(1-\beta) - \log(\alpha)|
+    \end{align*}
+    and therefore
     \begin{align*}
         |\log\Lambda_d(e) - \log\Lambda_d(e')| &\leq \max\{|\log(\alpha) - \log(1-\beta)|, |\log(\beta) - \log(1-\alpha)|\}
     \end{align*}
