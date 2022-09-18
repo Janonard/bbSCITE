@@ -3,7 +3,7 @@
 \begin{table}
     \centering
     \begin{tabular}{l|l|l}
-        \textbf{Kernel/Loop} & \textbf{\acs{II}} & \textbf{Trip-count (unrolled)} \\
+        \textbf{Kernel/Loop} & \textbf{\acs{II}} & \textbf{No. of iterations (unrolled)} \\
         \hline
         IO-Kernel & 1 & $n_\mathrm{chains} \cdot n_\mathrm{steps} \cdot c$ \\
         - Tree Receive Loop & 1 & 64 \\
@@ -21,7 +21,7 @@
         - Tree Score Reduction Loop & 1 & 64 \\
         - Tree Send Loop & 1 & 64 \\
     \end{tabular}
-    \caption{(Simplified) throughput analysis table with the trip count of the unrolled loops.}
+    \caption{(Simplified) throughput analysis table with the number of iterations for the unrolled loops.}
     \label{tab:throughput}
 \end{table}
 
@@ -29,8 +29,8 @@ In this section, we discuss the ``Throughput Analysis'' of the synthesis report 
 
 All kernels have an outer loop that generally executes one chain step per iteration. The IO kernel's outer loop also has a warm-up and cool-down phase to fill and flush the macro-pipeline, but this is negligibly small compared to the total number of chain steps. The outer loops of the IO kernel and the tree scorer kernel have an \ac{II} of 1, but the change proposer kernel's outer loop has an \ac{II} of 263 due to the data dependency discussed in section \ref{sec:move_proposal}. This means that the outer loops of the IO and tree scorer kernels would be able to process one chain step per cycle, but the change proposer is only able to process a chain step every 263 cycles. Therefore, our first bottleneck is the change proposer kernel with 263 cycles per chain step.
 
-Within these outer loops, there is also one input loop and one output loop per kernel that send and receive ancestor matrices word by word. This is necessary since transmitting an ancestor matrix in parallel would require a $64^2 = 4096$-bit wide pipe, which has caused timing issues during compilation. These RX/TX loops execute one trip per word and therefore require 64 cycles per chain step. This also applies to the Find Parent loop and the Tree Update loop since they iterate over every one of the 64 nodes in a mutation tree, as well as the Tree Score Reduction loop since it is unrolled over one dimension and therefore also requires 64 cycles per chain step. Therefore, the change proposer remains as the current bottleneck. The only remaining loop in our discussion is the tree score mapping loop. It is a three-dimensional loop that iterates over all cells, nodes, and genes. The gene dimension is however completely unrolled and the node dimension is unrolled eight times and coalesced with the cell dimension. The remaining implementation is therefore a one-dimensional loop that requires $\frac{64 \cdot 64}{8} = 512$ cycles for one chain step. This is the new bottleneck and therefore, we predict that the design will finish one chain step every 512 cycles. Together with the final clock frequency of 295.83 MHz, we predict that \ac{ffSCITE}'s chain step throughput is
+Within these outer loops, there is also one input loop and one output loop per kernel that send and receive ancestor matrices word by word. This is necessary since transmitting an ancestor matrix in parallel would require a $64^2 = 4096$-bit wide pipe, which has caused timing issues during compilation. These RX/TX loops execute one iteration per word and therefore require 64 cycles per chain step. This also applies to the Find Parent loop and the Tree Update loop since they iterate over every one of the 64 nodes in a mutation tree, as well as the Tree Score Reduction loop since it is unrolled over one dimension and therefore also requires 64 cycles per chain step. Therefore, the change proposer remains as the current bottleneck. The only remaining loop in our discussion is the tree score mapping loop. It is a three-dimensional loop that iterates over all cells, nodes, and genes. The gene dimension is however completely unrolled and the node dimension is unrolled eight times and coalesced with the cell dimension. The remaining implementation is therefore a one-dimensional loop that requires $\frac{64 \cdot 64}{8} = 512$ cycles for one chain step. This is the new bottleneck and therefore, we predict that the design will finish one chain step every 512 cycles. Together with the final clock frequency of 295.83 MHz, we predict that \ac{ffSCITE}'s chain step throughput should be
 \begin{align*}
     \frac{295.83 \cdot 10^6 \text{ cycles}}{1 \text{ s}} \cdot \frac{1 \text{ steps}}{512 \text{ cycles}} \approx 577.79 \text{ ksteps/s} 
 \end{align*}
-Since there are no caches that can warm up and cool down and since the trip counts do not change with the input sizes, we predict that \ac{ffSCITE} will always achieve this throughput regardless of the input size and the number of chain steps.
+Since there are no caches that can warm up and cool down and since the number of iterations does not change with the input sizes, we predict that \ac{ffSCITE} will always achieve this throughput regardless of the input size and the number of chain steps.

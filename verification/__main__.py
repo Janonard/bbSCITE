@@ -253,11 +253,11 @@ def performance_graph(args: argparse.Namespace):
     all_n_chains = list(ffscite_perf_data.keys())
     all_n_chains.sort()
     
-    fig = pyplot.figure(figsize=(18, 5 * len(all_n_chains)))
+    fig = pyplot.figure(figsize=(6 * len(all_n_chains), 5 * 3))
 
-    ax_makespan = [fig.add_subplot(len(all_n_chains), 3, 1 + 3 * i) for i in range(len(all_n_chains))]
-    ax_throughput = [fig.add_subplot(len(all_n_chains), 3, 2 + 3 * i) for i in range(len(all_n_chains))]
-    ax_speedup = [fig.add_subplot(len(all_n_chains), 3, 3 + 3 * i) for i in range(len(all_n_chains))]
+    ax_makespan = [fig.add_subplot(3, len(all_n_chains), i + 1) for i in range(len(all_n_chains))]
+    ax_throughput = [fig.add_subplot(3, len(all_n_chains), len(all_n_chains) + i + 1) for i in range(len(all_n_chains))]
+    ax_speedup = [fig.add_subplot(3, len(all_n_chains), 2 * len(all_n_chains) + i + 1) for i in range(len(all_n_chains))]
         
     max_makespan = 0
     max_throughput = 0
@@ -279,26 +279,27 @@ def performance_graph(args: argparse.Namespace):
 
             dashed_linestyle = (5 * i_n_cells, (4, 5 * (len(all_n_cells) - 1) + 1))
             color = f"C{i_n_cells}"
-            label = f"{n_cells} x {n_genes}"
-
-            ffscite_makespan_axis = [ffscite_m[n_steps] * 1e-3 for n_steps in all_n_steps]
-            ax_makespan[i_n_chains].plot(all_n_steps, ffscite_makespan_axis, linestyle=dashed_linestyle, c=color)
+            scite_label = f"{n_cells} x {n_genes} (SCITE)"
+            ffscite_label = f"{n_cells} x {n_genes}(ffSCITE)"
 
             scite_makespan_axis = [scite_m[n_steps] * 1e-3 for n_steps in all_n_steps]
-            ax_makespan[i_n_chains].plot(all_n_steps, scite_makespan_axis, c=color, label=label)
+            ax_makespan[i_n_chains].plot(all_n_steps, scite_makespan_axis, c=color, label=scite_label)
+
+            ffscite_makespan_axis = [ffscite_m[n_steps] * 1e-3 for n_steps in all_n_steps]
+            ax_makespan[i_n_chains].plot(all_n_steps, ffscite_makespan_axis, linestyle=dashed_linestyle, c=color, label=ffscite_label)
 
             max_makespan = max([max_makespan] + ffscite_makespan_axis + scite_makespan_axis)
+            
+            scite_throughput_axis = [(n_chains * n_steps) / scite_m[n_steps] for n_steps in all_n_steps]
+            ax_throughput[i_n_chains].plot(all_n_steps, scite_throughput_axis, c=color)
 
             ffscite_throughput_axis = [(n_chains * n_steps) / ffscite_m[n_steps] for n_steps in all_n_steps]
             ax_throughput[i_n_chains].plot(all_n_steps, ffscite_throughput_axis, linestyle=dashed_linestyle, c=color)
-            
-            scite_throughput_axis = [(n_chains * n_steps) / scite_m[n_steps] for n_steps in all_n_steps]
-            ax_throughput[i_n_chains].plot(all_n_steps, scite_throughput_axis, c=color, label=label)
 
             max_throughput = max([max_throughput] + ffscite_throughput_axis + scite_throughput_axis)
 
             speedup_axis = [scite_m[n_steps] / ffscite_m[n_steps] for n_steps in all_n_steps]
-            ax_speedup[i_n_chains].plot(all_n_steps, speedup_axis, c=color, label=label)
+            ax_speedup[i_n_chains].plot(all_n_steps, speedup_axis, c=color, label=f"{n_cells} x {n_genes}")
 
             max_speedup = max([max_speedup] + speedup_axis)
 
@@ -311,7 +312,6 @@ def performance_graph(args: argparse.Namespace):
         ax_throughput[i_n_chains].set_title(f"Throughput, {n_chains} chains")
         ax_throughput[i_n_chains].set_xlabel("Number of chain steps per chain")
         ax_throughput[i_n_chains].set_ylabel("Throughput in ksteps/s")
-        ax_throughput[i_n_chains].legend()
         ax_throughput[i_n_chains].grid(which="both")
 
         ax_speedup[i_n_chains].set_title(f"Speedup, {n_chains} chains")
@@ -323,7 +323,7 @@ def performance_graph(args: argparse.Namespace):
     for i in range(len(all_n_chains)):
         ax_makespan[i].set_ylim(bottom=0, top=1.1 * max_makespan)
         ax_throughput[i].set_ylim(bottom=0, top=1.1 * max_throughput)
-        ax_speedup[i].set_ylim(bottom=0, top=1.1 * max_speedup)
+        ax_speedup[i].set_ylim(bottom=1, top=1.1 * max_speedup)
 
     if args.out_file is None:
         pyplot.show()

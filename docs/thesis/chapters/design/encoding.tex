@@ -34,16 +34,16 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
     \begin{algorithmic}[1]
         \Function{AncestorMatrix}{$(p_v)_{v \in V} \subseteq V, r \in V$} \Comment $r$ is the root of the tree.
             \State $n \leftarrow |V|$
-            \State $a \leftarrow 0 \in \{0,1\}^{n \times n}$
+            \State $A \leftarrow 0 \in \{0,1\}^{n \times n}$
             \ForAll{$w \in V$}
                 \State $v \leftarrow w$
                 \While{$v \neq r$}
-                    \State $a_{v, w} \leftarrow 1$
+                    \State $A_{v, w} \leftarrow 1$
                     \State $v \leftarrow p_v$
                 \EndWhile
-                \State $a_{r, w} \leftarrow r$
+                \State $A_{r, w} \leftarrow r$
             \EndFor
-            \State \Return $a$
+            \State \Return $A$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to construct an ancestor matrix (Definition \ref{def:ancestor_matrix}) from a parent vector (Definition \ref{def:parent_vector}), \cite{tree2016}}
@@ -54,20 +54,20 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \begin{theorem}
     \label{theo:am_reverse}
-    Let $T=(V, E, r)$ be a mutation tree, $a \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $a$ and $(v,w)$.
+    Let $T=(V, E, r)$ be a mutation tree, $A \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $A$ and $(v,w)$.
 \end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
-        \Function{IsParent}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $(v, w) \in V^2$}
-            \If{$a_{v,w} = 0$}
+        \Function{IsParent}{$V$, $A \in \{0,1\}^{|V| \times |V|}$, $(v, w) \in V^2$}
+            \If{$A_{v,w} = 0$}
                 \State \Return False
             \EndIf
             \If{$v = w$}
                 \State \Return $v = r$ \Comment Per convention, the root is the only node that is also its parent.
             \EndIf
             \ForAll{$x \in V \setminus \{w\}$} \Comment Unroll completely
-                \If{$a_{x,w} \neq a_{x,v}$}
+                \If{$A_{x,w} \neq A_{x,v}$}
                     \State \Return False
                 \EndIf
             \EndFor
@@ -123,24 +123,24 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \begin{theorem}[Correctness of the ``Swap nodes'' update]
     \label{theo:swap_nodes_correctness}
-    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of $T'$.
+    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, A, v, w)$ (Algorithm \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
-        \Function{AM::SwapNodes}{$V$, $a \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
-            \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
+        \Function{AM::SwapNodes}{$V$, $A \in \{0,1\}^{|V| \times |V|}$, $v$, $w$}
+            \State $A' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
             \ForAll{$x \in V$}
                 \If{$x = v$}
-                    \State $a'[x] \leftarrow a[w]$
+                    \State $A'[x] \leftarrow A[w]$
                 \ElsIf{$x = w$}
-                    \State $a'[x] \leftarrow a[v]$
+                    \State $A'[x] \leftarrow A[v]$
                 \Else
-                    \State $a'[x] \leftarrow a[x]$
+                    \State $A'[x] \leftarrow A[x]$
                 \EndIf
-                \State $a'[x][v], a'[x][w] \leftarrow a'[x][w], a'[x][v]$ \Comment Bit Swap
+                \State $A'[x][v], A'[x][w] \leftarrow A'[x][w], A'[x][v]$ \Comment Bit Swap
             \EndFor
-            \State \Return $a'$
+            \State \Return $A'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``swap nodes'' move on an ancestor matrix. All edges from and to $v$ are $w$ are swapped, assuming that we have $v \neq w$.}
@@ -148,17 +148,17 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 \end{algorithm}
 
 \begin{proof}
-    Let $a'$ be the return value of the mentioned function call. We need to show that $a'$ has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $a'[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. We distinguish several cases for the node pair:
+    Let $A'$ be the return value of the mentioned function call. We need to show that $A'$ has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $A'[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. We distinguish several cases for the node pair:
     \begin{itemize}
-        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm initially sets $a'[x]$ to $a[x]$ and the $y$-th bit is untouched by the bit swap, so we have $a'[x][y] = a[x][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm initially sets $A'[x]$ to $A[x]$ and the $y$-th bit is untouched by the bit swap, so we have $A'[x][y] = A[x][y] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$ since $x = w$ is analogous. The algorithm initially sets $a'[x]$ to $a[w]$ and the $y$-th bit is untouched by the bit swap. Therefore, we have $a'[x][y] = a[w][y] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$ since $x = w$ is analogous. The algorithm initially sets $A'[x]$ to $A[w]$ and the $y$-th bit is untouched by the bit swap. Therefore, we have $A'[x][y] = A[w][y] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. We show the sub-case $y = v$ since $y = w$ is analogous. The algorithm initially sets $a'[x]$ to $a[x]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[x][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. We show the sub-case $y = v$ since $y = w$ is analogous. The algorithm initially sets $A'[x]$ to $A[x]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $A'[x][y] = A[x][w] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm initially sets $a'[x]$ to $a[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $a'[x][y] = a[w][w] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm initially sets $A'[x]$ to $A[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $A'[x][y] = A[w][w] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
         
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. We have $x = v \wedge x \neq y \Rightarrow y = w$. The algorithm initially sets $a'[x]$ to $a[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $a'[x][y] = a[w][v] = a[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. We have $x = v \wedge x \neq y \Rightarrow y = w$. The algorithm initially sets $A'[x]$ to $A[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $A'[x][y] = A[w][v] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
     \end{itemize}
 \end{proof}
 
@@ -189,23 +189,23 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \begin{theorem}[Correctness of the ``Prune and Reattach'' update]
     \label{theo:prune_reattach_correctness}
-    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Prune\-Reattach}\-$(V, a, v, t)$ (Algorithm \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of $T'$.
+    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Prune\-Reattach}\-$(V, A, v, t)$ (Algorithm \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
-        \Function{AM::PruneReattach}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
-            \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
+        \Function{AM::PruneReattach}{$V$, $A \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
+            \State $A' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
             \ForAll{$x \in V$}
                 \ForAll{$y \in V$} \Comment Unroll completely
-                    \If{$a[v][y]$}
-                        \State $a'[x][y] \leftarrow a[x][t] \vee (a[v][x] \wedge a[x][y])$ \Comment See lemma \ref{lem:prune_reattach_rel}
+                    \If{$A[v][y]$}
+                        \State $A'[x][y] \leftarrow A[x][t] \vee (A[v][x] \wedge A[x][y])$ \Comment See lemma \ref{lem:prune_reattach_rel}
                     \Else
-                        \State $a'[x][y] \leftarrow a[x][y]$ \Comment See lemma \ref{lem:prune_reattach_unrel}
+                        \State $A'[x][y] \leftarrow A[x][y]$ \Comment See lemma \ref{lem:prune_reattach_unrel}
                     \EndIf
                 \EndFor
             \EndFor
-            \State \Return $a'$
+            \State \Return $A'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``prune and reattach'' move on an ancestor matrix. The node $v$ is attached to the node $t$, assuming that we have $v \not\leadsto_T t$.}
@@ -268,25 +268,25 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 
 \begin{theorem}[Correctness of the ``Swap unrelated Subtrees'' update]
     \label{theo:swap_unrelated_correctness}
-    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Unrelated\-Subtrees}$(V, a, v, w)$ (Algorithm \ref{alg:am_swap_unrelated}) is the corresponding ancestor matrix of $T'$.
+    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Unrelated\-Subtrees}$(V, A, v, w)$ (Algorithm \ref{alg:am_swap_unrelated}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
-        \Function{AM::SwapUnrelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
-        \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
+        \Function{AM::SwapUnrelatedSubtrees}{$V$, $A \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$}
+        \State $A' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
         \ForAll{$x \in V$}
             \ForAll{$y \in V$} \Comment Unroll completely
-                \If{$a[v][y] \wedge \neg a[w][y]$}
-                    \State $a'[x][y] \leftarrow a[x][p_T(w)] \vee (a[v][x] \wedge a[x][y])$
-                \ElsIf{$\neg a[v][y] \wedge a[w][y]$}
-                    \State $a'[x][y] \leftarrow a[x][p_T(v)] \vee (a[v][x] \wedge a[x][y])$
+                \If{$A[v][y] \wedge \neg A[w][y]$}
+                    \State $A'[x][y] \leftarrow A[x][p_T(w)] \vee (A[v][x] \wedge A[x][y])$
+                \ElsIf{$\neg A[v][y] \wedge A[w][y]$}
+                    \State $A'[x][y] \leftarrow A[x][p_T(v)] \vee (A[v][x] \wedge A[x][y])$
                 \Else
-                    \State $a'[x][y] \leftarrow a[x][y]$
+                    \State $A'[x][y] \leftarrow A[x][y]$
                 \EndIf
             \EndFor
         \EndFor
-        \State \Return $a'$
+        \State \Return $A'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``swab subtrees'' move for unrelated subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $p_T(v)$, assuming that we have $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$.}
@@ -296,13 +296,13 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 \begin{proof}
     First of all, we can remark that the ``Swap unrelated subtrees'' move is equivalent to two ``Prune and Reattach'' moves, first with parameters $v, p_T(w)$ and then with parameters $w, p_T(v)$ ($p_T(v)$ represents the parent of $v$ \textit{before} the first move). Therefore, we can prove the correctness by looking at every pair $x,y \in V$ and showing that \textsc{AM::SwapUnrelatedSubtrees} \ref{alg:am_swap_unrelated} assigns the same values as two \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach} calls would. Like the algorithm, we consider the following cases:
     \begin{itemize}
-        \item $v \leadsto_T y$ and $w \not\leadsto_T y$: The first call $a' \leftarrow \textsc{AM::PruneReattach}(V, a, v, p_T(w))$ assigns 
+        \item $v \leadsto_T y$ and $w \not\leadsto_T y$: The first call $A' \leftarrow \textsc{AM::PruneReattach}(V, A, v, p_T(w))$ assigns 
         \begin{align*}
-            a'[x][y] \leftarrow a[x][p_T(w)] \vee (a[v][x] \wedge a[x][y])
+            A'[x][y] \leftarrow A[x][p_T(w)] \vee (A[v][x] \wedge A[x][y])
         \end{align*}
-        and the second call $a'' \leftarrow \textsc{AM::PruneReattach}(V, a', w, p_T(v))$ assigns $a''[x][y] \leftarrow a'[x][y]$. \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in this case.
+        and the second call $A'' \leftarrow \textsc{AM::PruneReattach}(V, A', w, p_T(v))$ assigns $A''[x][y] \leftarrow A'[x][y]$. \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in this case.
         \item $v \not\leadsto_T y$ and $w \leadsto_T y$: This case is analogous to the previous one.
-        \item $v \not\leadsto_T y$ and $w \not\leadsto_T y$: Both calls to \textsc{AM::PruneReattach} forward the previous value of $a[x][y]$, just like \textsc{AM::SwapUnrelatedSubtrees} does.
+        \item $v \not\leadsto_T y$ and $w \not\leadsto_T y$: Both calls to \textsc{AM::PruneReattach} forward the previous value of $A[x][y]$, just like \textsc{AM::SwapUnrelatedSubtrees} does.
         \item $v \leadsto_T y$ and $w \leadsto_T y$: This case is not possible since it would lead to either $v \leadsto_T w \leadsto_T y$ or $w \leadsto_T v \leadsto_T y$, which would contradict our assumption of $v \not\leadsto_T w$ and $w \not\leadsto_T v$. It is therefore safe for \textsc{AM::SwapUnrelatedSubtrees} to not catch this case.
     \end{itemize}
     \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in all cases.
@@ -321,39 +321,39 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 
 \begin{theorem}[Correctness of the ``swap related subtrees'' update]
     \label{theo:swap_related_correctness}
-    Let $a \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Related\-Subtrees}$(V, a, v, w, t)$ (Algorithm \ref{alg:am_swap_related}) is the corresponding ancestor matrix of $T'$.
+    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Related\-Subtrees}$(V, A, v, w, t)$ (Algorithm \ref{alg:am_swap_related}) is the corresponding ancestor matrix of $T'$.
 \end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
-        \Function{Classify}{$a, v, w, x$}
-            \If{$a[v][x]$}
+        \Function{Classify}{$A, v, w, x$}
+            \If{$A[v][x]$}
                 \State \Return 2
-            \ElsIf{$a[w][x]$}
+            \ElsIf{$A[w][x]$}
                 \State \Return 1
             \Else
                 \State \Return 0
             \EndIf
         \EndFunction
         \State
-        \Function{AM::SwapRelatedSubtrees}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$, $t$}
-        \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
+        \Function{AM::SwapRelatedSubtrees}{$V$, $A \in \{0, 1\}^{|V| \times |V|}$, $v$, $w$, $t$}
+        \State $A' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
         \ForAll{$x \in V$}
-            \State $c_x \leftarrow \textsc{Classify}(a, v, w, x)$
+            \State $c_x \leftarrow \textsc{Classify}(A, v, w, x)$
 
             \ForAll{$y \in V$} \Comment Unroll completely
-                \State $c_y \leftarrow \textsc{Classify}(a, v, w, y)$
+                \State $c_y \leftarrow \textsc{Classify}(A, v, w, y)$
 
                 \If{$(c_x = c_y) \vee (c_x = 0 \wedge c_y \neq 0)$}
-                    \State $a'[x][y] \leftarrow a[x][y]$
+                    \State $A'[x][y] \leftarrow A[x][y]$
                 \ElsIf{$c_x = 2 \wedge c_y = 1$}
-                    \State $a'[x][y] \leftarrow a[x][t]$
+                    \State $A'[x][y] \leftarrow A[x][t]$
                 \Else
-                    \State $a'[x][y] \leftarrow 0$
+                    \State $A'[x][y] \leftarrow 0$
                 \EndIf
             \EndFor
         \EndFor
-        \State \Return $a'$
+        \State \Return $A'$
         \EndFunction
     \end{algorithmic}
     \caption{Algorithm to perform the ``swab subtrees'' move for related subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $t$, assuming that we have $v \neq w$ and $w \leadsto_T v$.}
@@ -531,15 +531,15 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 
 All algorithms introduced in the previous section rely on bit-level operations. Most prominently, the algorithms \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach}, \textsc{AM::SwapUnrelatedSubtrees} \ref{alg:am_swap_unrelated} and \textsc{AM::SwapRelatedSubtrees} \ref{alg:am_swap_related} iterate over and set every individual bit in the ancestor matrix. This would be hard to implement efficiently with general-purpose \acp{CPU}, but we were able to use the special properties of \acp{FPGA} to implement these algorithms efficiently.
 
-First of all, we constrained the maximal number of nodes to a power of two called $n_\mathrm{max}$. This number is arbitrary and is fixed to the executable once it is built, but it can be changed in the code by changing one constant. In the final build, we have used $n_\mathrm{max} = 64$ since it is the highest value that still resulted in a synthesizable design. Every ancestor matrix therefore technically contains $n_\mathrm{max} \times n_\mathrm{max}$ entries regardless of the input size and every loop over the set of nodes is executed exactly $n_\mathrm{max}$ times. Irrelevant entries are ignored and irrelevant loop iterations perform arbitrary but unharmful operations. This eliminates the possibility to shortcut loops and to improve the performance for small inputs, but it assures that the loops inside the tree scoring kernel do not get out of order. Without fixed trip counts, we could not pipeline the complete design, which is one of the core sources of performance on \acp{FPGA}. Continuing with our optimizations, we have encoded ancestor matrices as arrays of $n_\mathrm{max}$ $n_\mathrm{max}$-bit words, where the $i$th word describes the descendants of the $i$th node. Individual words can therefore easily be stored in registers and whole matrices can be stored in \ac{RAM} blocks. Therefore, the first index of an ancestor matrix access technically addresses a word in a memory block and the second index isolates an individual bit. Next, the memory access patterns of the update algorithms are very easy to predict: Given the previous ancestor matrix $a$ we only need to preload the words $a[v]$ and $a[w]$ and then load the word $a[x]$ for every iteration of the outer for-loop; All queries required by the algorithm can be executed with these three words. The \textsc{IsParent} algorithm \ref{alg:is_parent} even needs only two memory accesses in total to operate, namely $a[v]$ and $a[x]$. Lastly, all individual bit operations are independent of each other and so simple that the inner loops of \ref{alg:is_parent}, \ref{alg:am_prune_reattach}, \ref{alg:am_swap_unrelated} and \ref{alg:am_swap_related} can be fully unrolled. In the end, every update and every parent search can be described as a single loop that loads a word, executes custom, self-contained logic on it, and writes the resulting word back, if necessary. This loop is easily pipelinable and requires exactly $n_\mathrm{max}$ cycles to complete if its latency can be neglected. As an example, we have provided algorithm listing \ref{alg:am_prune_reattach_optimized} which is an optimized version of \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach}. Lastly, we also needed to merge the update algorithms \ref{alg:am_swap_nodes}, \ref{alg:am_prune_reattach}, \ref{alg:am_swap_unrelated}, and \ref{alg:am_swap_related} into one for-loop so that there is only one loop that is always executed instead of four individual loops of which only one is executed, which would inhibit the pipelining of the entire tree scoring kernel.
+First of all, we constrained the maximal number of nodes to a power of two called $n_\mathrm{max}$. This number is arbitrary and is fixed to the executable once it is built, but it can be changed in the code by changing one constant. In the final build, we have used $n_\mathrm{max} = 64$ since it is the highest value that still resulted in a synthesizable design. Every ancestor matrix therefore technically contains $n_\mathrm{max} \times n_\mathrm{max}$ entries regardless of the input size and every loop over the set of nodes is executed exactly $n_\mathrm{max}$ times. Irrelevant entries are ignored and irrelevant loop iterations perform arbitrary but unharmful operations. This eliminates the possibility to shortcut loops and to improve the performance for small inputs, but it assures that the loops inside the tree scoring kernel do not get out of order. Without fixed trip counts, we could not pipeline the complete design, which is one of the core sources of performance on \acp{FPGA}. Continuing with our optimizations, we have encoded ancestor matrices as arrays of $n_\mathrm{max}$ $n_\mathrm{max}$-bit words, where the $i$th word describes the descendants of the $i$th node. Individual words can therefore easily be stored in registers and whole matrices can be stored in \ac{RAM} blocks. Therefore, the first index of an ancestor matrix access technically addresses a word in a memory block and the second index isolates an individual bit. Next, the memory access patterns of the update algorithms are very easy to predict: Given the previous ancestor matrix $A$ we only need to preload the words $A[v]$ and $A[w]$ and then load the word $A[x]$ for every iteration of the outer for-loop; All queries required by the algorithm can be executed with these three words. The \textsc{IsParent} algorithm \ref{alg:is_parent} even needs only two memory accesses in total to operate, namely $A[v]$ and $A[x]$. Lastly, all individual bit operations are independent of each other and so simple that the inner loops of \ref{alg:is_parent}, \ref{alg:am_prune_reattach}, \ref{alg:am_swap_unrelated} and \ref{alg:am_swap_related} can be fully unrolled. In the end, every update and every parent search can be described as a single loop that loads a word, executes custom, self-contained logic on it, and writes the resulting word back, if necessary. This loop is easily pipelinable and requires exactly $n_\mathrm{max}$ cycles to complete if its latency can be neglected. As an example, we have provided algorithm listing \ref{alg:am_prune_reattach_optimized} which is an optimized version of \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach}. Lastly, we also needed to merge the update algorithms \ref{alg:am_swap_nodes}, \ref{alg:am_prune_reattach}, \ref{alg:am_swap_unrelated}, and \ref{alg:am_swap_related} into one for-loop so that there is only one loop that is always executed instead of four individual loops of which only one is executed, which would inhibit the pipelining of the entire tree scoring kernel.
 
 \begin{algorithm}
     \begin{algorithmic}[1]
-        \Function{AM::PruneReattach}{$V$, $a \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
-            \State $a' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
-            \State $p_v \leftarrow a[v]$
+        \Function{AM::PruneReattach}{$V$, $A \in \{0, 1\}^{|V| \times |V|}$, $v$, $t$}
+            \State $A' \leftarrow 0 \in \{0,1\}^{|V| \times |V|}$
+            \State $p_v \leftarrow A[v]$
             \ForAll{$x \in V$}
-                \State $p_\mathrm{old} \leftarrow a[x]$
+                \State $p_\mathrm{old} \leftarrow A[x]$
                 \State $p_\mathrm{new} \leftarrow 0 \in \{0,1\}^{|V|}$
                 \ForAll{$y \in V$} \Comment Unroll completely
                     \If{$p_v[y]$}
@@ -548,9 +548,9 @@ First of all, we constrained the maximal number of nodes to a power of two calle
                         \State $p_\mathrm{new}[y] \leftarrow p_\mathrm{old}[y]$
                     \EndIf
                 \EndFor
-                \State $a'[x] \leftarrow p_\mathrm{new}$
+                \State $A'[x] \leftarrow p_\mathrm{new}$
             \EndFor
-            \State \Return $a'$
+            \State \Return $A'$
         \EndFunction
     \end{algorithmic}
     \caption{A version of the ``prune and reattach'' algorithm \ref{alg:am_prune_reattach} using the optimizations described in section \ref{sec:encoding_implementation}. Reused data is preloaded as early as possible and direct memory accesses are moved out of the inner loop. This loop is then unrolled and forms a custom logic block.}
