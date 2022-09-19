@@ -48,3 +48,37 @@
 
 \newfloat{algorithm}{thp}{lop}[chapter]
 \floatname{algorithm}{Algorithm}
+
+% Customizing GanttChart
+% Taken from https://git.cs.uni-paderborn.de/syssec/templates/exposee
+\ganttset
+{%
+	y unit chart=0.6cm,
+	canvas/.append style={fill=none, draw=black!35, line width=.5pt},
+	hgrid={*1{draw=black!35, line width=.1pt}},
+	hgrid style/.style={draw=black!35,line width=.1pt},
+	vgrid={*1{draw=black!35, line width=.1pt}},
+	title/.style={draw=none, fill=none},
+	title label font=\footnotesize,
+	title label node/.append style={below=7pt},
+	progress label text={\pgfmathprintnumber[precision=0, verbatim]{#1}\%},
+	include title in canvas=false,
+	bar label font=\small,
+	bar label node/.append style={left=0cm},
+	bar/.append style={draw=none, fill=black!63},
+	bar incomplete/.append style={fill=barblue},
+	bar progress label font=\footnotesize\color{black!70},
+	bar height=.8,
+	bar top shift=0.1,
+	group top shift=0.1,
+	group incomplete/.append style={fill=groupblue},
+	group left shift=0,
+	group right shift=0,
+	group height=.8,
+	group peaks tip position=0,
+	group label node/.append style={left=.6cm},
+	group progress label font=\small,
+	link/.style={-latex, line width=1.5pt, linkred},
+	link label font=\scriptsize,
+	link label node/.append style={below left=-2pt and 0pt}
+}
