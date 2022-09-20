@@ -52,10 +52,7 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
 
 \subsection{Reversing the ancestor matrix construction}
 
-\begin{theorem}
-    \label{theo:am_reverse}
-    Let $T=(V, E, r)$ be a mutation tree, $A \in \{0, 1\}^{|V| \times |V|}$ be the corresponding ancestor matrix, and $(v, w) \in V^2$ be a node pair. The algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) returns True iff $v = p_T(w)$ given the inputs $V$, $A$ and $(v,w)$.
-\end{theorem}
+We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to answer the query whether one node is another node's parent. It simply evaluates whether the right-hand side of the following lemma \ref{lem:am_reverse} is true and returns this value. However, it also catches the case where $v = w = r$ since we used the convention that the root is the one node that is its own parent. Since the for-loop of \textsc{IsParent} is unrolled and therefore has a runtime in $O(1)$, one can use \textsc{IsParent} in a loop to find a node's parent in $O(|V|)$.
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -77,10 +74,6 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
     \caption{Algorithm to query whether an edge exists in a tree, using an ancestor matrix}
     \label{alg:is_parent}
 \end{algorithm}
-
-\begin{proof}
-    The algorithm evaluates the right-hand part of the lemma \ref{lem:am_reverse} for non-root nodes to check whether the edge exists in the graph or not. Per convention, we also assume that $(r,r) \in E$, which the algorithm checks.
-\end{proof}
 
 \begin{lemma}
     \label{lem:am_reverse}
@@ -310,6 +303,8 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 
 \subsection{``Swap related subtrees'' ancestor matrix computation}
 
+The ``swap related subtrees'' move is defined as follows:
+
 \begin{definition}[``Swap related subtrees'' move, \cite{tree2016}]
     \label{def:swap_related_subtrees}
     Let $T = (V, E, r)$ be a mutation tree, $v, w \in V \setminus \{r\}$ with $v \neq w$ and $w \leadsto_T v$, and $t \in V$ with $v \leadsto_T t$. We define the mutation tree $T'$ after the ``swap related subtrees'' move as $T = (V, E', r)$ with
@@ -449,7 +444,7 @@ The algorithm partitions the nodes of the tree into three classes:
     B &= \{x \in V: v \not\leadsto_T x \wedge w \leadsto_T x\} \\
     C &= \{x \in V: v \leadsto_T x\}
 \end{align*}
-Figure \ref{fig:related_swap_classes} illustrates the node classes before and after the move. We can therefore prove the algorithm's correctness by evaluating all class combinations. First, we walk through different cases that can be explained as one unit and then combine them into one to argue the correctness of \textsc{SC::SwapRelatedSubtrees}.
+Figure \ref{fig:related_swap_classes} illustrates the node classes before and after the move. We can therefore argue the algorithm's correctness by providing lemmata for all class combinations. One can then check the correctness by evaluating every combination, using the relevant lemma to find the correct value, and then checking that \textsc{SC::SwapRelatedSubtrees} assigns this value:
 
 \begin{lemma}
     \label{lem:related_swap_equal}
@@ -494,15 +489,6 @@ Figure \ref{fig:related_swap_classes} illustrates the node classes before and af
 
 \begin{proof}
     If there is a path from $x$ to $t$ in $T$, there is also a path from $x$ to $w$ in $T'$ since $t$ is the new parent of $w$ in $T'$. Since $w$ is the root of $B$, there is also a path from $w$ to $y$ and we therefore have $x \leadsto_{T'} y$. If there is however no path from $x$ to $t$ in $T$, then it is impossible to reach any node outside of $C$ from $x$ in $T'$.
-\end{proof}
-
-\begin{theorem}[Correctness of the ``swap related subtrees'' update]
-    \label{theo:swap_related_correctness}
-    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Related\-Subtrees}$(V, A, v, w, t)$ (Algorithm \ref{alg:am_swap_related}) is the corresponding ancestor matrix of $T'$.
-\end{theorem}
-
-\begin{proof}
-    The correctness of this algorithm follows directly from lemmata \ref{lem:related_swap_equal}, \ref{lem:related_swap_abc}, \ref{lem:related_swap_bac}, \ref{lem:related_swap_ca}, and \ref{lem:related_swap_cb}. One can simply evaluate every possible class combination, use the relevant lemma to find the correct value and check that \textsc{AM::SwapRelatedSubtrees} assigns this value.
 \end{proof}
 
 \subsection{Implementation}
