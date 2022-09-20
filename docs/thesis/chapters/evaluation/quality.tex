@@ -1,4 +1,5 @@
 \section{Quality Testing}
+\label{sec:quality test}
 
 We now look at the solution quality. Although we used the unit testing library Catch2 to verify individual components, this does not suffice to verify that the entire application behaves correctly. This however can not be done with deterministic tests since \ac{SCITE} is a stochastic algorithm: Given different seeds, it produces different solutions which may or may not be perfect. We also could not implement \ac{ffSCITE} as a bit-exact copy of \ac{SCITE}, especially since we could not use the same \ac{URNG} as the reference implementation. We, therefore, needed to introduce a statistical test that verifies that given the same input, both \ac{SCITE} and \ac{ffSCITE} produce equivalent outputs. In this section, we discuss how we designed the test and what the results are.
 
