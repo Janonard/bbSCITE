@@ -28,7 +28,7 @@ Using this encoding has the obvious advantage that most of the tree moves are si
     for all $v, w \in V$.
 \end{definition}
 
-Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it as algorithm \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm once per chain step to sample descendants and non-descendants for a move. Hardware implementations of this algorithm are however inefficient since it is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with theorem \ref{theo:am_reverse} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with theorems \ref{theo:swap_nodes_correctness}, \ref{theo:prune_reattach_correctness}, \ref{theo:swap_unrelated_correctness} and \ref{theo:swap_related_correctness} that every move of the \textsc{ChainStep} algorithm (Algorithm \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with one linear, perfectly pipelinable loop to update the ancestor matrix for a move. Compared to the two quadratic, barely pipelinable loops to compute the ancestor matrix twice, this is certainly an improvement.
+Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor matrix from a parent vector; We have listed it as algorithm \ref{alg:ancestor_matrix}. Intuitively, it walks up from every node to the root and marks all nodes it encounters as ancestors. \ac{SCITE} uses this algorithm once per chain step to sample descendants and non-descendants for a move. Hardware implementations of this algorithm are however inefficient since it is hard to predict how often the inner while-loop is executed. For example, it may be executed $|V|$ times for the leaf of a completely degenerated tree, but it may not be executed at all for the root $r$. Therefore, the outer for-loop needs to be executed serially, which severely limits the performance of the design. However, we were able to eliminate the need to construct ancestor matrices on the device. First of all, we were able to show with algorithm \ref{alg:is_parent} that it is possible to find a node's parent using an ancestor matrix. Ancestor matrices can therefore be used as the canonical data structure to encode mutation trees. More importantly, however, we were able to show with algorithms \ref{alg:am_swap_nodes}, \ref{alg:am_prune_reattach}, \ref{alg:am_swap_unrelated} and \ref{alg:am_swap_related} that every move of the \textsc{ChainStep} algorithm (Algorithm \ref{alg:scite-step}) can be executed on an ancestor matrix with linear time and space requirements. This leaves us with one linear, perfectly pipelinable loop to update the ancestor matrix for a move. Compared to a quadratic, barely pipelinable loop to compute the ancestor matrix twice, this is certainly an improvement.
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -49,6 +49,8 @@ Jahn et al. \cite{tree2016} also give an algorithm that constructs an ancestor m
     \caption{Algorithm to construct an ancestor matrix (Definition \ref{def:ancestor_matrix}) from a parent vector (Definition \ref{def:parent_vector}), \cite{tree2016}}
     \label{alg:ancestor_matrix}
 \end{algorithm}
+
+The remainder of this section is structured as follows: We first will introduce the general algorithms mentioned above and argue why they are correct. The first algorithm to be discussed is \textsc{IsParent}, which evaluates whether one node is the other node's parent, and the following algorithms are used to compute the resulting ancestor matrix of a tree move, given the previous ancestor matrix. These subsections first introduce the move again formally, present the algorithm, provide an example and argue for their correctness. Then, we describe how we implemented those algorithms and how we achieved the runtime and space behavior mentioned above.
 
 \subsection{Reversing the ancestor matrix construction}
 
@@ -103,7 +105,9 @@ We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to 
     This means that our tree has a circle, which is a contradiction. Therefore, such a $y$ can not exist and we have in fact $p = (v, \dots, w) = (v, w) \Rightarrow (v, w) \in E$.
 \end{proof}
 
-\subsection{``Swap nodes'' ancestor matrix computation}
+\subsection{``Swap nodes'' move}
+
+The first move we discuss is the ``swap nodes'' move:
 
 \begin{definition}[Swap nodes move, \cite{tree2016}]
     \label{def:swap_nodes}
@@ -111,13 +115,17 @@ We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to 
     \begin{align*}
         E' := \{(f(x), f(y)) : (x, y) \in E\}
     \end{align*}
-    We assume these definitions for the remainder of this subsection.
+    where $f$ is defined as
+    \begin{align*}
+        f: V \rightarrow V, x \mapsto \begin{cases}
+            v & x = w \\
+            w & x = v \\
+            x & \text{else}
+        \end{cases}
+    \end{align*}
 \end{definition}
 
-\begin{theorem}[Correctness of the ``Swap nodes'' update]
-    \label{theo:swap_nodes_correctness}
-    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::SwapNodes}$(V, A, v, w)$ (Algorithm \ref{alg:am_swap_nodes}) is the corresponding ancestor matrix of $T'$.
-\end{theorem}
+In essence, the move swaps the labels of the nodes that were previously labeled as $v$ and $w$, as indicated in figure \ref{fig:swap nodes}. We present the algorithm \textsc{AM::SwapNodes} \ref{alg:am_swap_nodes} that computes the resulting ancestor matrix of the ``swap nodes'' move.
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -140,20 +148,48 @@ We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to 
     \label{alg:am_swap_nodes}
 \end{algorithm}
 
-\begin{proof}
-    Let $A'$ be the return value of the mentioned function call. We need to show that $A'$ has the correct value for every node pair $x, y \in V$. To be precise, we need to show that $A'[x][y] = f(x) \leadsto_T f(y)$ for all $x, y \in V$ since we have $x \leadsto_{T'} y \Leftrightarrow f(x) \leadsto_T f(y)$ with Lemma \ref{lem:swap_nodes_property}. We distinguish several cases for the node pair:
-    \begin{itemize}
-        \item $x \notin \{v, w\} \wedge y \notin \{v, w\}$. In this case, the algorithm initially sets $A'[x]$ to $A[x]$ and the $y$-th bit is untouched by the bit swap, so we have $A'[x][y] = A[x][y] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \draw[every node/.style={draw,circle}, edge from parent/.append style={-stealth}]
+            node (r1) {$r$}
+            child {
+                node {$\mathbf{v}$} 
+                child {
+                    node {$a$}
+                }
+                child {
+                    node {$b$}
+                }
+            }
+            child {
+                node {$\mathbf{w}$}
+            };
         
-        \item $x \in \{v, w\} \wedge y \notin \{v, w\}$. We show the sub-case $x = v$ since $x = w$ is analogous. The algorithm initially sets $A'[x]$ to $A[w]$ and the $y$-th bit is untouched by the bit swap. Therefore, we have $A'[x][y] = A[w][y] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
+        \draw[every node/.style={draw,circle}, edge from parent/.append style={-stealth}]
+            node (r2) at (4,0) {$r$}
+            child {
+                node {$\mathbf{w}$} 
+                child {
+                    node {$a$}
+                }
+                child {
+                    node {$b$}
+                }
+            }
+            child {
+                node {$\mathbf{v}$}
+            };
         
-        \item $x \notin \{v, w\} \wedge y \in \{v, w\}$. We show the sub-case $y = v$ since $y = w$ is analogous. The algorithm initially sets $A'[x]$ to $A[x]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $A'[x][y] = A[x][w] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
-        
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x = y$. We show the sub-case $x = y = v$ since $x = y = w$ is analogous. The algorithm initially sets $A'[x]$ to $A[w]$ and swaps the $v$-th bit with the $w$-th bit. Therefore, we have $A'[x][y] = A[w][w] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
-        
-        \item $x \in \{v, w\} \wedge y \in \{v, w\} \wedge x \neq y$. We show the sub-case $x = v$ since $x = w$ is analogous. We have $x = v \wedge x \neq y \Rightarrow y = w$. The algorithm initially sets $A'[x]$ to $A[w]$ and swaps the $v$-th bit and the $w$-th bit. Therefore, we have $A'[x][y] = A[w][v] = A[f(x)][f(y)] = f(x) \leadsto_T f(y)$.
-    \end{itemize}
-\end{proof}
+        \draw[dashed] ($(r2) + (-2.5,0.5)$) -- ($(r2) + (-2.5,-3.5)$);
+        \node[] at ($(r1) + (-1,0)$) {$T:$};
+        \node[] at ($(r2) + (-1,0)$) {$T':$};
+    \end{tikzpicture}
+    \caption{Example tree to explain the ``swap nodes'' move.}
+    \label{fig:swap nodes}
+\end{figure}
+
+The underlying principle of the algorithm is expressed in the following lemma, which says that two nodes $x$ and $y$ are connected in $T'$ iff $f(x)$ and $f(y)$ are connected in $T$:
 
 \begin{lemma}
     \label{lem:swap_nodes_property}
@@ -169,7 +205,11 @@ We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to 
     \end{align*}
 \end{proof}
 
-\subsection{``Prune and reattach'' ancestor matrix computation}
+This lemma implies that for most nodes, this move has no effect: If neither $x$ nor $y$ are $v$ or $w$, this lemma says that their are connected in $T'$ iff they are also connected in $T'$, which one can see in figure \ref{fig:swap nodes}. $r$ and $a$ stay connected after the move, but $b$ and $a$ still are not connected. $v$ and $w$ however swap their connections: For example, $w$ and $a$ are connected in $T'$ since $f(w) = v$ and $f(a) = a$ are connected in $T$, but $v$ and $a$ are not connected in $T'$ since $f(v)=w$ and $a$ are not connected in $T$. Now, one can evaluate every possible case for $x$ and $y$, use the lemma to find the correct value and check that \textsc{AM::SwapNodes} assigns this value.
+
+\subsection{``Prune and reattach'' move}
+
+Next, we discuss the ``prune and reattach'' move, where an entire subtree is moved from one node to another:
 
 \begin{definition}[``Prune and reattach'' move, \cite{tree2016}]
     \label{def:prune_and_reattach}
@@ -177,13 +217,7 @@ We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to 
     \begin{align*}
         E' := (E \setminus \{(p_T(v), v)\}) \cup \{(t, v)\}
     \end{align*}
-    We assume these definitions for the remainder of this subsection.
 \end{definition}
-
-\begin{theorem}[Correctness of the ``Prune and Reattach'' update]
-    \label{theo:prune_reattach_correctness}
-    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Prune\-Reattach}\-$(V, A, v, t)$ (Algorithm \ref{alg:am_prune_reattach}) is the corresponding ancestor matrix of $T'$.
-\end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -205,16 +239,50 @@ We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to 
     \label{alg:am_prune_reattach}
 \end{algorithm}
 
-\begin{proof}
-    This theorem follows directly from lemmata \ref{lem:prune_reattach_unrel} and \ref{lem:prune_reattach_rel}.
-\end{proof}
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \draw[every node/.style={draw,circle}, edge from parent/.append style={-stealth}]
+            node (r1) {$r$}
+            child {
+                node {$1$} 
+                child { node {$2$} }
+                child {
+                    node {$\mathbf{v}$}
+                    child { node {$3$} }
+                    child {
+                        node {$4$} child { node {$5$} }
+                    }
+                }
+            }
+            child { node {$\mathbf{t}$} };
+        
+        \draw[every node/.style={draw,circle}, edge from parent/.append style={-stealth}]
+            node (r2) at (5,0) {$r$}
+            child {
+                node {$1$} 
+                child { node {$2$} }
+            }
+            child {
+                node {$\mathbf{t}$}
+                child {
+                    node {$\mathbf{v}$}
+                    child { node {$3$} }
+                    child {
+                        node {$4$} child { node {$5$} }
+                    }
+                }
+            };
+        
+        \draw[dashed] ($(r2) + (-2.5,0.5)$) -- ($(r2) + (-2.5,-6.5)$);
+        \node[] at ($(r1) + (-1,0)$) {$T:$};
+        \node[] at ($(r2) + (-1,0)$) {$T':$};
+    \end{tikzpicture}
+    \caption{Example tree to explain the ``prune and reattach'' move.}
+    \label{fig:prune_reattach}
+\end{figure}
 
-\begin{remark}
-    \label{rem:prune_reattach}
-    We remark that we have $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ for all $y \in V$ and that we have $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$.
-\end{remark}
-
-The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply that children of $v$ still stay connected to $v$ after the move. $E' \setminus E = \{(t,v)\}$ as well as $E \setminus E' = \{(p_T(v), v)\}$ can be computed manually.
+We present the algorithm \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach} that computes the resulting ancestor matrix of the ``prune and reattach'' move. It simply iterates over all pairs of $x$ and $y$ and evaluates whether they are connected using two lemmata, which apply to two different cases. In the following, we will explain these cases:
 
 \begin{lemma}
     \label{lem:prune_reattach_unrel}
@@ -224,13 +292,7 @@ The idea behind $v \leadsto_T y \Leftrightarrow v \leadsto_{T'} y$ is simply tha
     \end{align*}
 \end{lemma}
 
-The idea behind this lemma is that paths in the tree are unharmed if they do not go via the removed edge $(p_T(v), v)$.
-
-\begin{proof}
-    Let's first assume $x \leadsto_{T'} y$ and $x \not\leadsto_{T} y$ to prove $x \leadsto_{T'} y \Rightarrow x \leadsto_T y$ by contradiction. There is a path $p = (p_1, \dots, p_l) \subseteq E'$ with $p_1 = x$ and $p_l = y$. We have $p \not\subseteq E$ since we would otherwise have $x \leadsto_T y$. This means that there is an edge $e \in (p \setminus E) \subseteq (E' \setminus E)$. One can easily check that $(t, v)$ is the only edge in $E' \setminus E$. We therefore have $e = (t, v)$ and $\exists i \leq l: p_i = v$. This however means that $p' := (v, p_{i+1}, \dots, y)$ is a suffix of $p$. Since $e = (t,v) \notin p'$, we have $p' \subseteq E \Rightarrow v \leadsto_{T} y$, which contradicts our precondition of $v \not\leadsto_T y$.
-
-    Using an analogous argumentation with the assumption of $x \not\leadsto_{T'} y$ and $x \leadsto_T y$ leads to $v \leadsto_{T'} y$. From this and remark \ref{rem:prune_reattach}, $v \leadsto_T y$ follows. This is the same contradiction as above and proves $x \leadsto_T y \Rightarrow x \leadsto_{T'} y$.
-\end{proof}
+The idea behind this lemma is that paths in the tree are unharmed if they do not go via the removed edge $(p_T(v), v)$. This is for example the case for $r$ and $2$: Since their path in $T$ does not contain the edge $(r,v)$, it is not cut by the move. However, the nodes $2$ and $t$ are still not connected in $T'$.
 
 \begin{lemma}
     \label{lem:prune_reattach_rel}
@@ -240,29 +302,19 @@ The idea behind this lemma is that paths in the tree are unharmed if they do not
     \end{align*}
 \end{lemma}
 
-The idea of this lemma is that paths over the node $v$ exist in the new tree iff they are either entirely in the subtree below $v$ or are newly established via the edge $(t, v)$.
+The idea of this lemma is that paths over the node $v$ exist in the new tree iff they are either entirely in the subtree below $v$ and are therefore carried over to $T'$, or are newly established via the edge $(t, v)$. Positive examples for the case $v \leadsto_T x \leadsto_T y$ are $4$ and $5$, and for the case $x \leadsto_T y$ we have $r$ and $3$. The direction $\Leftarrow$ is therefore rather simple, but $\Rightarrow$ is not quite obvious. We therefore provide the following formal proof for $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$ ($p_1 = x$ and $p_l = y$). We now consider the cases $(t,v) \in p$ and $(t,v) \notin p$: If we have $(t, v) \in p$, we then also have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel} also $x \leadsto_T t$, one of the options for the right-hand side. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto_T y$ since we neither have $(v, t) \in p$ nor $(p_T(v), v) \in p$.
 
-\begin{proof}
-    We have nothing to show for $x = v$ due to remark \ref{rem:prune_reattach}. Therefore, we can assume $x \neq v$ in the following. We first show $\Leftarrow$: If we have $x \leadsto_T t$, we also have $x \leadsto_{T'} t$ with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel}. From this and $(t, v) \in E' \Rightarrow t \leadsto_{T'} v$, it follows that we have $x \leadsto_{T'} t \leadsto_{T'} v \leadsto_{T'} y \Rightarrow x \leadsto_{T'} y$.
+\subsection{``Swap unrelated subtrees'' move}
 
-    We now show $\Rightarrow$: Let $p = (p_1, \dots, p_l) \subseteq E'$ be the path from $x$ to $y$ in $T'$ ($p_1 = x$ and $p_l = y$). If $(t, v) \in p$, we then have $x \leadsto_{T'} t$, and with $v \not\leadsto_T t$ and lemma \ref{lem:prune_reattach_unrel} also $x \leadsto_T t$. If we have $(t, v) \notin p$, we also have $x \not\leadsto_{T'} v$. From this, we need to conclude $v \leadsto_{T'} x \leadsto_{T'} y$ in order to avoid a contradiction with $v \leadsto_{T'} y$. Lastly, we have $v \leadsto_T x \leadsto_T y$ with remark \ref{rem:prune_reattach} and since we neither have $(v, t) \in p$ nor $(p_T(v), v) \in p$.
-\end{proof}
-
-\subsection{``Swap unrelated subtrees'' ancestor matrix computation}
+The next move is a modification of the ``prune and reattach'' move: Instead of moving a single tree, we now move two trees in the ``swap unrelated subtrees'' move:
 
 \begin{definition}[``Swap unrelated subtrees'' move, \cite{tree2016}]
     \label{def:swap_unrelated_subtrees}
-    Let $T = (V, E, r)$ be a mutation tree, and $v, w \in V \setminus \{r\}$ with $v \neq w$. We define the mutation tree $T'$ after the ``swap unrelated subtrees'' as $T' = (V, E', r)$ with
+    Let $T = (V, E, r)$ be a mutation tree, and $v, w \in V \setminus \{r\}$ with $v \neq w$, $v \not\leadsto_T w$, and $w \not\leadsto_T v$. We define the mutation tree $T'$ after the ``swap unrelated subtrees'' as $T' = (V, E', r)$ with
     \begin{align*}
         E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (p_T(v), w)\}
     \end{align*}
-    We assume these definitions for the remainder of this subsection.
 \end{definition}
-
-\begin{theorem}[Correctness of the ``Swap unrelated Subtrees'' update]
-    \label{theo:swap_unrelated_correctness}
-    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Unrelated\-Subtrees}$(V, A, v, w)$ (Algorithm \ref{alg:am_swap_unrelated}) is the corresponding ancestor matrix of $T'$.
-\end{theorem}
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -286,24 +338,11 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
     \label{alg:am_swap_unrelated}
 \end{algorithm}
 
-\begin{proof}
-    First of all, we can remark that the ``Swap unrelated subtrees'' move is equivalent to two ``Prune and Reattach'' moves, first with parameters $v, p_T(w)$ and then with parameters $w, p_T(v)$ ($p_T(v)$ represents the parent of $v$ \textit{before} the first move). Therefore, we can prove the correctness by looking at every pair $x,y \in V$ and showing that \textsc{AM::SwapUnrelatedSubtrees} \ref{alg:am_swap_unrelated} assigns the same values as two \textsc{AM::PruneReattach} \ref{alg:am_prune_reattach} calls would. Like the algorithm, we consider the following cases:
-    \begin{itemize}
-        \item $v \leadsto_T y$ and $w \not\leadsto_T y$: The first call $A' \leftarrow \textsc{AM::PruneReattach}(V, A, v, p_T(w))$ assigns 
-        \begin{align*}
-            A'[x][y] \leftarrow A[x][p_T(w)] \vee (A[v][x] \wedge A[x][y])
-        \end{align*}
-        and the second call $A'' \leftarrow \textsc{AM::PruneReattach}(V, A', w, p_T(v))$ assigns $A''[x][y] \leftarrow A'[x][y]$. \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in this case.
-        \item $v \not\leadsto_T y$ and $w \leadsto_T y$: This case is analogous to the previous one.
-        \item $v \not\leadsto_T y$ and $w \not\leadsto_T y$: Both calls to \textsc{AM::PruneReattach} forward the previous value of $A[x][y]$, just like \textsc{AM::SwapUnrelatedSubtrees} does.
-        \item $v \leadsto_T y$ and $w \leadsto_T y$: This case is not possible since it would lead to either $v \leadsto_T w \leadsto_T y$ or $w \leadsto_T v \leadsto_T y$, which would contradict our assumption of $v \not\leadsto_T w$ and $w \not\leadsto_T v$. It is therefore safe for \textsc{AM::SwapUnrelatedSubtrees} to not catch this case.
-    \end{itemize}
-    \textsc{AM::SwapUnrelatedSubtrees} is therefore correct in all cases.
-\end{proof}
+Since we have $v \not\leadsto_T w \Rightarrow v \not\leadsto_T p_T(w)$ and $w \not\leadsto_T v \Rightarrow w \not\leadsto_T p_T(v)$, we could implement the ``swap unrelated subtrees'' move as two calls to \textsc{AM::PruneReattach}. However, using a custom algorithm makes the implementation of all moves together easier. Therefore, we present the custom algorithm \textsc{AM::SwapUnrelatedSubtrees} \ref{alg:am_swap_unrelated} that computes the resulting ancestor matrix of the entire ``swap unrelated subtrees'' move. One can simply verify this algorithm by evaluating all cases and checking that two calls to \textsc{AM::PruneReattach} and \textsc{AM::SwapUnrelatedSubtrees} assign the same values. However, we remark that the case $v \leadsto_T y$ and $w \leadsto_T y$ is impossible since it would lead to either $v \leadsto_T w \leadsto_T y$ or $w \leadsto_T v \leadsto_T y$, which would contradict our assumption of $v \not\leadsto_T w$ and $w \not\leadsto_T v$. It is therefore safe for \textsc{AM::SwapUnrelatedSubtrees} to not catch this case.
 
-\subsection{``Swap related subtrees'' ancestor matrix computation}
+\subsection{``Swap related subtrees'' move}
 
-The ``swap related subtrees'' move is defined as follows:
+The ``swap related subtrees'' move is the last and one of the most interesting ones:
 
 \begin{definition}[``Swap related subtrees'' move, \cite{tree2016}]
     \label{def:swap_related_subtrees}
@@ -312,8 +351,6 @@ The ``swap related subtrees'' move is defined as follows:
         E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (t, w)\}
     \end{align*}
 \end{definition}
-
-As for the ``swap unrelated subtrees'' move, two entire subtrees are moved within the tree. However, we now allow $v$ to be a descendant of $w$. Therefore, we can not actually swap the subtrees since it would introduce the cycle $w \leadsto_{T'} p_T(v) \leadsto_{T'} w$ to the tree. Instead, a third node $t$ is sampled from the descendants of $v$ and $w$ is attached to $t$. We introduce the algorithm \textsc{AM::SwapRelatedSubtres} (Algorithm \ref{alg:am_swap_related}) to compute the resulting ancestor matrix of the move:
 
 \begin{algorithm}
     \begin{algorithmic}[1]
@@ -436,7 +473,8 @@ As for the ``swap unrelated subtrees'' move, two entire subtrees are moved withi
     \label{fig:related_swap_classes}
 \end{figure}
 
-The algorithm partitions the nodes of the tree into three classes:
+
+As for the ``swap unrelated subtrees'' move, two entire subtrees are moved within the tree. However, we now allow $v$ to be a descendant of $w$. Therefore, we can not actually swap the subtrees since it would introduce the cycle $w \leadsto_{T'} p_T(v) \leadsto_{T'} w$ to the tree. Instead, a third node $t$ is sampled from the descendants of $v$ and $w$ is attached to $t$. We introduce the algorithm \textsc{AM::SwapRelatedSubtres} (Algorithm \ref{alg:am_swap_related}) to compute the resulting ancestor matrix of the move. The algorithm partitions the nodes of the tree into three classes:
 \begin{align*}
     A &= \{x \in V: v \not\leadsto_T x \wedge w \not\leadsto_T y\} \\
     B &= \{x \in V: v \not\leadsto_T x \wedge w \leadsto_T x\} \\
