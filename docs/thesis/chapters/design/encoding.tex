@@ -316,23 +316,19 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
     \begin{align*}
         E' := (E \setminus \{(p_T(v), v), (p_T(w), w)\}) \cup \{(p_T(w), v), (t, w)\}
     \end{align*}
-    We assume these definitions for the remainder of this subsection.
 \end{definition}
 
-\begin{theorem}[Correctness of the ``swap related subtrees'' update]
-    \label{theo:swap_related_correctness}
-    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Related\-Subtrees}$(V, A, v, w, t)$ (Algorithm \ref{alg:am_swap_related}) is the corresponding ancestor matrix of $T'$.
-\end{theorem}
+As for the ``swap unrelated subtrees'' move, two entire subtrees are moved within the tree. However, we now allow $v$ to be a descendant of $w$. Therefore, we can not actually swap the subtrees since it would introduce the cycle $w \leadsto_{T'} p_T(v) \leadsto_{T'} w$ to the tree. Instead, a third node $t$ is sampled from the descendants of $v$ and $w$ is attached to $t$. We introduce the algorithm \textsc{AM::SwapRelatedSubtres} (Algorithm \ref{alg:am_swap_related}) to compute the resulting ancestor matrix of the move:
 
 \begin{algorithm}
     \begin{algorithmic}[1]
         \Function{Classify}{$A, v, w, x$}
             \If{$A[v][x]$}
-                \State \Return 2
+                \State \Return ``C''
             \ElsIf{$A[w][x]$}
-                \State \Return 1
+                \State \Return ``B''
             \Else
-                \State \Return 0
+                \State \Return ``A''
             \EndIf
         \EndFunction
         \State
@@ -344,9 +340,9 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
             \ForAll{$y \in V$} \Comment Unroll completely
                 \State $c_y \leftarrow \textsc{Classify}(A, v, w, y)$
 
-                \If{$(c_x = c_y) \vee (c_x = 0 \wedge c_y \neq 0)$}
+                \If{$c_x = c_y \vee c_x = \text{``A''}$}
                     \State $A'[x][y] \leftarrow A[x][y]$
-                \ElsIf{$c_x = 2 \wedge c_y = 1$}
+                \ElsIf{$c_x = \text{``C''} \wedge c_y = \text{``B''}$}
                     \State $A'[x][y] \leftarrow A[x][t]$
                 \Else
                     \State $A'[x][y] \leftarrow 0$
@@ -359,16 +355,6 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
     \caption{Algorithm to perform the ``swab subtrees'' move for related subtrees on an ancestor matrix. The node $v$ is attached to $p_T(w)$ and the node $w$ is attached to $t$, assuming that we have $v \neq w$ and $w \leadsto_T v$.}
     \label{alg:am_swap_related}
 \end{algorithm}
-
-\begin{definition}
-    \label{def:related_swap_classes}
-    We partition $V$ in the following classes:
-    \begin{align*}
-      A &= \{x \in V: v \not\leadsto_T x \wedge w \not\leadsto_T y\} \\
-      B &= \{x \in V: v \not\leadsto_T x \wedge w \leadsto_T x\} \\
-      C &= \{x \in V: v \leadsto_T x\}
-    \end{align*}
-\end{definition}
 
 % Adapted from https://tex.stackexchange.com/questions/37462/placing-a-triangle-around-nodes-in-a-tree.
 \pgfmathsetmacro{\sinOffset}{sin(60)}
@@ -451,63 +437,55 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
         \node[] at ($(r1) + (-2,1)$) {$T:$};
         \node[] at ($(r2) + (-2,1)$) {$T':$};
     \end{tikzpicture}
-    \caption{Illustration of the different classes from definitions \ref{def:related_swap_classes} before and after the ``swap related subtrees'' move. Squiggly lines indicate connectivity, while straight lines indicate proper edges.}
+    \caption{Illustration of the tree and the mutation classes before and after the ``swap related subtrees'' move. Squiggly lines indicate connectivity, while straight lines indicate proper edges.}
     \label{fig:related_swap_classes}
 \end{figure}
 
 \todo[inline]{I needed to use code from stackexchange for figure \ref{fig:related_swap_classes}. How do I cite this?}
 
-\begin{remark}
-    \label{rem:related_swap_classes}
-    Let $A$, $B$, $C$ be the classes from definition \ref{def:related_swap_classes}. 
-    \begin{enumerate}
-        \item We remark that we have $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$ if $x, y \in V$ are in the same class. We also remark that we have:
-        \begin{align*}
-            v &\in C & w &\in B & p_T(w) &\in A & t &\in C
-        \end{align*}
-        \item From 1. and the definition of $E'$ (Definition \ref{def:swap_related_subtrees}), two trivial connection chains follow:
-        \begin{align*}
-            p_T(w) \leadsto_T w &\leadsto_T v \leadsto _T t \\
-            p_T(w) \leadsto_{T'} v &\leadsto_{T'} t \leadsto_{T'} w
-        \end{align*}
-    \end{enumerate}
-\end{remark}
+The algorithm partitions the nodes of the tree into three classes:
+\begin{align*}
+    A &= \{x \in V: v \not\leadsto_T x \wedge w \not\leadsto_T y\} \\
+    B &= \{x \in V: v \not\leadsto_T x \wedge w \leadsto_T x\} \\
+    C &= \{x \in V: v \leadsto_T x\}
+\end{align*}
+Figure \ref{fig:related_swap_classes} illustrates the node classes before and after the move. We can therefore prove the algorithm's correctness by evaluating all class combinations. First, we walk through different cases that can be explained as one unit and then combine them into one to argue the correctness of \textsc{SC::SwapRelatedSubtrees}.
 
 \begin{lemma}
-    \label{lem:related_swap_abc}
-    Let $x \in A$, and $y \in B \cup C$. We have $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$.
+    \label{lem:related_swap_equal}
+    Let $\{x, y\} \subseteq A$, $x, \{x, y\} \subseteq B$, or $\{x, y\} \subseteq C$. We then have $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$.
 \end{lemma}
 
 \begin{proof}
-    We will first show $\Leftarrow$. We have $y \in B \cup C \Rightarrow w \leadsto_T y$ and $x \in A \Rightarrow w \not\leadsto_T x$. Therefore, $w$ has to be included in the path between $x$ and $y$, and we have $x \leadsto_T w \leadsto_T y$. If we have $y \in B$, we have:
-    \begin{align*}
-    x \leadsto_T w &\Rightarrow x \leadsto_{T'} p_T(w) \stackrel{\ref{rem:related_swap_classes}}{\leadsto_{T'}} w \stackrel{y \in B}{\leadsto_{T'}} y
-    \end{align*}
-    If we have $y \in C$, we have:
-    \begin{align*}
-        x \leadsto_T w &\Rightarrow x \leadsto_{T'} p_T(w) \leadsto_{T'} v \stackrel{y \in C}{\leadsto_{T'}} y
-    \end{align*}
+    This is fairly easy to see in figure \ref{fig:related_swap_classes} since an existing path between $x$ and $y$ is entirely inside one of the classes and therefore unaffected by the move, and if there is no path between $x$ and $y$ before the move, then there is no possibility how one of the new edges can establish a new path.
+\end{proof}
 
-    We will now show $\Rightarrow$. If we have $y \in C$, we trivially have $p_T(w) \leadsto_{T'} v \leadsto_{T'} y$, and if we have $y \in B$, we have
-    \begin{align*}
-        p_T(w) \leadsto_{T'} v \leadsto_{T'} t \stackrel{\text{move}}{\leadsto_{T'}} w \stackrel{y \in B}{\leadsto_{T'}} y    
-    \end{align*}
-    We therefore always have $p_T(w) \leadsto_{T'} y$. Since $x \in A$, we have $p_T(w) \not\leadsto_{T'} x$ and therefore $x \leadsto_{T'} p_T(w) \leadsto_{T'} y$. If we have $y \in C$, we have:
-    \begin{align*}
-        x \leadsto_T p_T(w) \stackrel{\text{Def.}}{\leadsto_T} w \leadsto_T v \stackrel{y \in C}{\leadsto_T} y
-    \end{align*}
-    If we have $y \in B$, we have:
-    \begin{align*}
-        x \leadsto_T p_T(w) \stackrel{\text{Def.}}{\leadsto_T} w \stackrel{y \in B}{\leadsto_T} y
-    \end{align*}
+\begin{lemma}
+    \label{lem:related_swap_abc}
+    Let $x \in A$, and $y \in B \cup C$. We then have $x \leadsto_{T'} y \Leftrightarrow x \leadsto_T y$.
+\end{lemma}
+
+\begin{proof}
+    If there is a path between $x$ and $y$ in $T$, then there is also a path in $T$ from $x$ in class $A$ to the root of $y$'s class, either $B$ or $C$. This property is preserved by the move since we can either remove the part of the path through $B$ or add the part through $C$ to construct a path to from $x$ to the relevant root. From there, we can simply add the path from the subtree's root to $y$ to construct the complete path from $x$ to $y$ in $T'$. We similarly construct a path from $x$ to $y$ in $T$ if there is a path between them in $T'$ and therefore, the equivalence holds true.
 \end{proof}
 
 \begin{lemma}
     \label{lem:related_swap_bac}
-    If $x \in B$ and $y \in A \cup C$, we have $x \not\leadsto_{T'} y$.
+    Let $x \in B$ and $y \in A \cup C$. We then have $x \not\leadsto_{T'} y$.
 \end{lemma}
 
-\todo[inline]{Prove!}
+\begin{proof}
+    This is obvious to see in figure \ref{fig:related_swap_classes}: $B$ is the lowest class in $T'$ and no path leads out if it, so it is impossible to construct a path to a node in $A$ or $C$.
+\end{proof}
+
+\begin{lemma}
+    \label{lem:related_swap_ca}
+    Let $x \in C$ and $y \in A$. We then have $x \not\leadsto_{T'} y$.
+\end{lemma}
+
+\begin{proof}
+    The entire class $C$ is below class $A$, both in $T$ and $T'$. If there were a path from $x$ to $y$ in either of the trees, there would be a cycle in the tree and therefore, such a path can not exist.
+\end{proof}
 
 \begin{lemma}
     \label{lem:related_swap_cb}
@@ -515,15 +493,16 @@ The idea of this lemma is that paths over the node $v$ exist in the new tree iff
 \end{lemma}
 
 \begin{proof}
-    We have:
-    \begin{align*}
-        x \leadsto_{T'} y \wedge y \in B \wedge x \in C &\Rightarrow x \leadsto_{T'} y \wedge w \leadsto_{T'} y \wedge w \not\leadsto_{T'} x \\
-        &\Rightarrow x \leadsto_{T'} w \leadsto_{T'} y \\
-        &\Rightarrow x \leadsto_{T'} t \\
-        &\stackrel{x, t \in C}{\Rightarrow} x \leadsto_T t \\
-        x \leadsto_T t &\stackrel{x, t \in C}{\Rightarrow} x \leadsto_{T'} t \\
-        &\Rightarrow x \leadsto_{T'} t \stackrel{\text{move}}{\leadsto_{T'}} w \stackrel{y \in B}{\leadsto_{T'}} y
-    \end{align*}
+    If there is a path from $x$ to $t$ in $T$, there is also a path from $x$ to $w$ in $T'$ since $t$ is the new parent of $w$ in $T'$. Since $w$ is the root of $B$, there is also a path from $w$ to $y$ and we therefore have $x \leadsto_{T'} y$. If there is however no path from $x$ to $t$ in $T$, then it is impossible to reach any node outside of $C$ from $x$ in $T'$.
+\end{proof}
+
+\begin{theorem}[Correctness of the ``swap related subtrees'' update]
+    \label{theo:swap_related_correctness}
+    Let $A \in \{0,1\}^{|V| \times |V|}$ be the corresponding ancestor matrix of $T$. The ancestor matrix returned by \textsc{AM::Swap\-Related\-Subtrees}$(V, A, v, w, t)$ (Algorithm \ref{alg:am_swap_related}) is the corresponding ancestor matrix of $T'$.
+\end{theorem}
+
+\begin{proof}
+    The correctness of this algorithm follows directly from lemmata \ref{lem:related_swap_equal}, \ref{lem:related_swap_abc}, \ref{lem:related_swap_bac}, \ref{lem:related_swap_ca}, and \ref{lem:related_swap_cb}. One can simply evaluate every possible class combination, use the relevant lemma to find the correct value and check that \textsc{AM::SwapRelatedSubtrees} assigns this value.
 \end{proof}
 
 \subsection{Implementation}
