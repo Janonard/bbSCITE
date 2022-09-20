@@ -299,7 +299,7 @@ def performance_graph(args: argparse.Namespace):
             max_throughput = max([max_throughput] + ffscite_throughput_axis + scite_throughput_axis)
 
             speedup_axis = [scite_m[n_steps] / ffscite_m[n_steps] for n_steps in all_n_steps]
-            ax_speedup[i_n_chains].plot(all_n_steps, speedup_axis, c=color, label=f"{n_cells} x {n_genes}")
+            ax_speedup[i_n_chains].plot(all_n_steps, speedup_axis, linestyle="dashdot", c=color, label=f"{n_cells} x {n_genes}")
 
             max_speedup = max([max_speedup] + speedup_axis)
 
