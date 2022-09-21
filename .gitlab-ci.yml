@@ -15,6 +15,7 @@ build-thesis:
   stage: precheck
   only:
     - main
+    - staging
     - thesis
   image: "texlive/texlive"
   before_script: []
