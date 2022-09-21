@@ -293,4 +293,66 @@ The \ac{SCITE} algorithm simulates the \ac{SCITE} Markov chain for a user-reques
     \end{center}
 \end{example}
 
-\todo[inline]{Introduce \acp{FPGA} and how you work with them.}
+\section{FPGA fundamentals}
+
+Our thesis requires a certain level of knowledge regarding \acp{FPGA} and their characteristics. Since \acp{FPGA} are still a rather niche platform and common patterns deviate significantly from common programming practices, we will introduce some concepts of \acp{FPGA} and how they are used. An interested reader may however find more details in Intel's ``\ac{FPGA} Optimization Guide for Intel oneAPI Toolkits.'' and the book ``Parallel Programming for \acp{FPGA}'' by Kastner, Matai, and Neuendorffer \cite{2018arXiv180503648K}.
+
+\acfp{FPGA} are programmable computer chips, but not in the sense of \acp{CPU} which execute a list of instructions read from external memory. Instead, \acp{FPGA} are a lattice of small, reprogrammable blocks with reprogrammable connections. There are logic blocks, which contain a \acf{LUT} that maps every input to a certain output, and a \acf{FF}, which can store a value for one clock cycle. There are also \acf{RAM} blocks with can store multiple values over many clock cycles and \ac{DSP} blocks with purpose-built floating-point operation circuits. With these blocks, any other digital circuit can be constructed and to other computer chips, a programmed \ac{FPGA} acts just like the programmed chip design. \acp{FPGA} are therefore often used to simulate and test planned chip designs that are later implemented in silicon, or to replace chips that are unprofitable to manufacture.
+
+In a high-performance computing context, however, \acp{FPGA} fulfill a different role: Here, they are used as computation accelerators and are therefore found on PCIe extension cards inside supercomputer clusters. Another difference is that computational designs are usually written in common, high-level languages like C or C++ instead of hardware description languages like VHDL or Verilog since developers of \ac{FPGA}-accelerated applications are usually application developers and software engineers, not electrical engineers. In our case, we used Intel's oneAPI and implemented the entire design and the accompanying host application in one C++ codebase. The \texttt{dpcpp} compiler extracts the part of the code that is supposed to be executed by the \ac{FPGA} and lowers it to an equivalent hardware design. 
+
+Most of the code that can run on \acp{FPGA} can also run on \acp{CPU}, and with some exceptions also vice versa, due to this toolchain. However, one needs to change their mental model on how code is executed in order to write efficient \ac{FPGA} code. In the following, we will describe a mental model to work with \acp{FPGA}. We however want to emphasize that we are not electrical engineers and only work with \acp{FPGA} on a high abstraction level, so some details may or may not be entirely correct. Let's take algorithm \ref{alg:example absolute sum} as an example. This algorithm receives the real and imaginary parts of a sequence of complex numbers, computes their absolute value, and sums them up to return the result. A normal, single-threaded \ac{CPU} would walk through the algorithm step by step and first load $a_i$ and $b_i$ from memory, square both values, sum the result, take the square root of the result, add it to the current value of $s$ and store the result in $s$. It is a linear sequence of operations and the \ac{CPU} is always occupied with loading the instruction from memory, decoding it, executing it, and writing the results back. On \acp{FPGA}, every instruction is a piece of hardware, a small area on the chip. There will be a dedicated combination of different blocks to load $a_i$ and $b_i$, as well as for every square, sum, and square root operation. These areas are connected and can be thought of as receiving their input from the previous area and sending the result to the next; Figure \ref{fig:example absolute sum} illustrates this.
+
+\begin{algorithm}
+    \begin{algorithmic}
+        \Function{AbsoluteSum}{$n$, $(a_i)_{i \leq n}$, $(b_i)_{i \leq n}$}
+            \State $s \leftarrow 0$
+            \ForAll{$i \in \{1, 2, \dots, n\}$}
+                \State $s \leftarrow s + \sqrt{a_i^2 + b_i^2}$
+            \EndFor
+            \State \Return $s$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Example algorithm that sums up the absolute value of complex numbers, where the real parts are stored in $a$ and the imaginary parts are stored in $b$.}
+    \label{alg:example absolute sum}
+\end{algorithm}
+
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \draw[every node/.style={draw}, edge from parent/.append style={stealth-}]
+        node (register) {register for $s$} [grow=up] child {
+            node (sum) {$+$} child {
+                node {$\sqrt{x}$} child {
+                    node {$+$} [sibling distance=3cm] child {
+                        node {$x^2$} child {
+                            node {read from $b_i$}
+                        }
+                    }
+                    child {
+                        node {$x^2$} child {
+                            node {read from $a_i$}
+                        }
+                    }
+                }
+            }
+        };
+
+        \draw[-stealth] (register) -- ($(register) - (0,1)$);
+        \draw[-stealth] (register) -- ($(register) + (2,0)$) -- ($(register) + (2,1.5)$) -- (sum);
+    \end{tikzpicture}
+    \caption{Schematic of how the loop body of algorithm \ref{alg:example absolute sum} may be implemented on \acp{FPGA}.}
+    \label{fig:example absolute sum}
+\end{figure}
+
+The implications of this are that the runtime behavior is very different on \acp{FPGA} and on \acp{CPU}. For example, a normal \ac{CPU} would execute the two square operations serially, but on an \ac{FPGA} they are executed in parallel, in two separate blocks. The fact that operations can be executed independently in different areas of the chip is the source of one of the most important techniques on \acp{FPGA}: Pipelining. If we insert registers on the edges between instruction nodes, earlier stages of the pipeline can start to work on the next iteration while the following stages finish previous iterations. In our example, we can let the reading instructions read one number per cycle and pass the result down step by step. If it were implemented like this, the loop would have an \ac{II} of 1 cycle, a latency of 5 cycles, and a capacity of 5 iterations. This means that it can initiate a new iteration every cycle, that it takes five cycles until the result of one iteration has reached the end of the pipeline, and that five iterations can be ``on the fly'' at once.
+
+The goal during \ac{FPGA} design development is to find a way to implement the loops of an algorithm with a minimal \ac{II}, since this leads to a maximum amount of iterations that are ``on the fly'' and therefore throughput. One of the biggest hazards for this is feedback: Information that is computed during one iteration of the loop and required for one or more following iterations. In the worst case, early instructions need to wait for a specific number of cycles until the information they require is available. This will increase the \ac{II} of the loop and therefore the throughput. In our example, there is feedback on the variable $s$, and if we were to place additional registers between the ``$+$'' and ``register for $s$'' nodes, ``$+$'' would need to wait for one additional cycle until the resulting value is available and the \ac{II} would be 2. However, we can feed the result of ``$+$'' directly back and resolve this issue. Finding such solutions is the task of the compiler, not the developer, but the compiler often needs a special wording of the program in order to work correctly. Finding the best wording that leads to the best design is one of the more tedious tasks of \ac{FPGA} programming.
+
+Another source of performance on \acp{FPGA} is loop unrolling. With this technique, the compiler is instructed to replicate the entire loop body, so that even more iterations can be processed in parallel. However, the compiler may need to insert additional, complicated logic to combine the results of two loop body replicas, which may worsen the loop characteristics again. Loop unrolling also increases hardware usage; A developer therefore needs to do a design space exploration to find the optimal amount of unrolling for their specific loop.
+
+Memory management is also another big strength of \acp{FPGA}, but also a challenge for the developer: On a modern computer, the \ac{CPU} has multiple levels of cache: Small and fast memory blocks near the cores. A program only requests to access a certain position in the global external memory and the \ac{CPU} tries to predict which areas of the memory a program is going to access and loads them in the cache. Programs therefore need to be written in a way that is easy to predict by the \ac{CPU}. For a \ac{FPGA} however, there is no pre-built cache, only external memory. The application developer therefore needs to build their own caching structure for their program to optimize the memory access. This is of course a big strength of \acp{FPGA}, since application developers may exactly know which data their algorithm needs and can therefore design their access patterns without needing to dynamically predict the accesses. However, this becomes increasingly complicated with complex memory access patterns.
+
+Lastly, implementing an entire algorithm in one piece often brings the advantage that the compiler can analyze the entire algorithm and find shortcuts and optimizations that the developer might not expect. However, too complicated code may also ``confuse'' the compiler and let the heuristics become lazy, or it may simply not be possible to describe the desired physical design as one sequence of instructions. In this case, the algorithm can be broken up into so-called kernels. These kernels are described in separate pieces of code and one can think of them as internal chips or as different dies in a multi-die package. Kernels can also be connected using pipes. Pipes are inter-kernel connections where one kernel can write data into the pipe and a different kernel can read data from the pipe in a first in-first out fashion. This allows kernels to communicate with one another without using external memory.
+
+There is of course much more to \ac{FPGA} development, but this should be enough for this thesis.
