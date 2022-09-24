@@ -54,7 +54,7 @@ The remainder of this section is structured as follows: We first will introduce 
 
 \subsection{Reversing the ancestor matrix construction}
 
-We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to answer the query whether one node is another node's parent. It simply evaluates whether the right-hand side of the following lemma \ref{lem:am_reverse} is true and returns this value. However, it also catches the case where $v = w = r$ since we used the convention that the root is the one node that is its own parent. Since the for-loop of \textsc{IsParent} is unrolled and therefore has a runtime in $O(1)$, one can use \textsc{IsParent} in a loop to find a node's parent in $O(|V|)$.
+We introduce the algorithm \textsc{IsParent} (Algorithm \ref{alg:is_parent}) to answer the query whether one node is another node's parent. It simply evaluates whether the right-hand side of the following lemma \ref{lem:am_reverse} is true and returns the result. However, it also catches the case where $v = w = r$ since we used the convention that the root is the one node that is its own parent. Since the for-loop of \textsc{IsParent} is unrolled and therefore has a runtime in $O(1)$, one can use \textsc{IsParent} in a loop to find a node's parent in $O(|V|)$.
 
 \begin{algorithm}
     \begin{algorithmic}[1]

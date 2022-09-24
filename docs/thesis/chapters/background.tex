@@ -9,7 +9,7 @@ In this section, we describe the theoretical framework in which this thesis oper
 
 \begin{definition}[Mutation matrix]
     \label{def:mutmatrix}
-    Let $C$ be the set of cells with $|C| \in \mathbb{N}$ and $G$ be the set of genes with $|G| \in \mathbb{N}$. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{|C| \times |G|}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{|C| \times |G|}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let also $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $c \in C, g \in G$:
+    Let $C$ be the set of cells with $|C| \in \mathbb{N}$ and $G$ be the set of genes with $|G| \in \mathbb{N}$. Then, we define the random variables $E$ and $D$ with $\mathrm{im}(E) \subseteq \{0,1\}^{|C| \times |G|}$ and $\mathrm{im}(D) \subseteq \{0, 1, 2\}^{|C| \times |G|}$. $E$ is the true mutation matrix that describes the actual state of the cells, and $D$ is the observed, erroneous mutation matrix. Let $\alpha \in (0,1)$ be the probability of false positives and $\beta \in (0,1)$ be the probability of false negatives. We then assume the following for all $c \in C, g \in G$:
     \begin{align*}
         \mathbb{P}(D_{c,g} = 1 \mid E_{c,g} = 0 \wedge D_{c,g} \neq 2) &:= \alpha & \mathbb{P}(D_{0,j} = 0\mid E_{c,g} = 1 \wedge D_{c,g} \neq 2) &:= \beta \\
         \mathbb{P}(D_{c,g} = 0 \mid E_{c,g} = 0 \wedge D_{c,g} \neq 2) &:= (1-\alpha) & \mathbb{P}(D_{c,g} = 1 \mid E_{c,g} = 1 \wedge D_{c,g} \neq 2) &:= (1-\beta)
