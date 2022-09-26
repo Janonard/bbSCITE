@@ -1,0 +1,61 @@
+\section{Likelihood computation}
+\label{sec:scoring}
+
+The likelihood score of a mutation tree is used on multiple occasions, mainly to judge whether a newly proposed tree is the best and to compute the probability of accepting a proposed tree. Since every current tree has been a proposed tree at some point, it is possible to carry the likelihood score along with the tree and only compute the likelihood score of the proposed tree in the chain step. Both our and the reference implementation do this in a fundamentally similar way described in algorithm \ref{alg:likelihood}: Both implementations iterate over every cell and tree node and identify the mutations the cell would have if it were attached to this node. These mutations yield a likelihood score for the cell-node pair. As shown in lemma \ref{lem:max_attachment}, we have to choose the attachment node for every cell that yields the highest likelihood, which is then called the likelihood of the cell. These likelihoods are then multiplied together to yield the likelihood of the entire tree.
+
+Both implementations try to minimize the number of floating-point operations to save time and preserve precision. Therefore, they do not directly multiply individual likelihood factors together. Instead, they count the occurrences of true and false positives and negatives, raise the probabilities of these events to the counted numbers, and multiply these powers together. \ac{SCITE} even differentiates between a fast and an accurate computation method: In the fast method, the likelihoods of the cells are directly multiplied together after they are decided, and in the accurate method only the event counts are summed up and the final likelihood score is just computed in the end. \ac{SCITE} first runs the fast method on the newly proposed tree and if the result is close to or higher than the best-known likelihood score, the accurate method is used again. We chose to only implement and use the fast method since our performance would not gain from using both methods: We would need to allocate chip space to both methods and would probably need to run both every time to avoid diverging loops. Our quality benchmark discussed in section \ref{sec:quality test} assures us that the accuracy of our implementation is still satisfying.
+
+Running many power operations however costs a lot of time, and in the case of \acp{FPGA} also a lot of space. Therefore, both implementations work with log-likelihoods instead since power and multiply operations translate to the lightweight multiply and add operations for log-likelihoods. Additionally, log-likelihoods are required since real-world likelihoods often have a very small absolute value that can not be represented even with 64-bit floating point numbers. Using the logarithm of the likelihoods instead brings the absolute values into ranges where even 32-bit floating point numbers are precise enough. Lastly, it is also possible to work with log-likelihoods for most of the algorithm since the logarithm preserves order. Exponentiation of the log-likelihoods is therefore only required when computing the acceptance probability.
+
+There are however two big differences between our implementation and the reference: The reference implementation identifies the mutations of a cell-node pair by walking up the tree from the attachment node to the root using a parent vector (definition \ref{def:parent_vector}), just like in the construction function for ancestor matrices (algorithm \ref{alg:ancestor_matrix}). This is not feasible on \acp{FPGA}, as we have already discussed in section \ref{sec:encoding}. Instead, our implementation iterates over all genes and uses an ancestor matrix to check whether this gene is an ancestor of the attachment node and therefore mutated. The tradeoffs of iterating over all nodes/genes instead of walking up a tree are already discussed in subsection \ref{sec:encoding_implementation}; In summary, it improves the structural performance of the design but it does not scale up for smaller inputs. The next difference is in how the resulting values are reduced: The reference implementation directly reduces found values by always keeping the best-known likelihood of a cell-node pair and an accumulator for the final likelihood. We encountered feedback problems with this approach which inhibited loop pipelining. Therefore, we chose a clear map-reduce approach: We first compute and store the likelihood of every cell-node pair in a buffer, max-reduce the node axis and then sum-reduce the cell axis. Every one of these three operations is executed by separate, independent loops, which are perfectly pipelinable and unrolled by at least one dimension. Additionally, we were able to coalesce and partially unroll the two remaining dimensions of the likelihood mapping loop. However, this obviously increases the memory and chip space requirements of our design. Our resulting log-likelihood computation algorithm is listed as algorithm \ref{alg:likelihoodimpl}.
+
+\begin{algorithm}
+    \begin{algorithmic}
+        \Function{Likelihood}{$C$, $G$, $T = (V, E, r)$, $d \in \{0,1,2\}^{|C| \times |G|}, \{\alpha, \beta\} \subseteq [0,1]$}
+            \State $l_T \leftarrow 1$
+            \ForAll{$c \in C$}
+                \State $l_c \leftarrow 0$
+                \ForAll{$v \in V$}
+                    \State $l_{c,v} \leftarrow 1$
+                    \ForAll{$g \in G$}
+                        \State $l_{c,v} \leftarrow l_{c,v} \cdot \lambda(d_{c,g}, g \leadsto_T v)$
+                    \EndFor
+                    \If{$l_{c,v} \geq l_c$}
+                        \State $l_c \leftarrow l_{c,v}$
+                    \EndIf
+                \EndFor
+                \State $l_T \leftarrow l_T \cdot l_c$
+            \EndFor
+            \State \Return $l_T$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Formal algorithm to compute $\Lambda_d(T)$ (Definition \ref{def:likelihood}, Lemma \ref{lem:max_attachment}) for a given mutation tree $T$, a mutation data matrix $d$ and error probabilities $\alpha$ and $\beta$.}
+    \label{alg:likelihood}
+\end{algorithm}
+
+\begin{algorithm}
+    \begin{algorithmic}
+        \Function{LogLikelihood}{$V$, $C$, $G$, $a \in \{0,1\}^{|V| \times |V|}$, $d \in \{0, 1, 2\}^{|C| \times |G|}$, $\{\alpha, \beta\} \subseteq [0,1]$}
+            \State $l_\mathrm{pair} \leftarrow 0 \in (-\infty,0]^{|C| \times |V|}$
+            \ForAll{$(c,v) \in C \times V$} \Comment Unroll as much as possible
+                \State $\mathrm{occurrences} \leftarrow 0 \in \mathbb{N}_0^{3 \times 2}$
+                \ForAll{$g \in G$} \Comment Unroll completely
+                    \State $\mathrm{posterior} \leftarrow d[c][g]$
+                    \State $\mathrm{prior} \leftarrow a[g][v]$
+                    \State $\mathrm{occurrences}[\mathrm{posterior}][\mathrm{prior}] \leftarrow \mathrm{occurrences}[\mathrm{posterior}][\mathrm{prior}] + 1$
+                \EndFor
+                \State $l_\mathrm{pair}[c][v] \leftarrow \log(1-\alpha) \cdot \mathrm{occurrences}[0][0]$
+                \State $l_\mathrm{pair}[c][v] \leftarrow l_\mathrm{pair}[c][v] + \log(\alpha) \cdot \mathrm{occurrences}[1][0]$
+                \State $l_\mathrm{pair}[c][v] \leftarrow l_\mathrm{pair}[c][v] + \log(\beta) \cdot \mathrm{occurrences}[0][1]$
+                \State $l_\mathrm{pair}[c][v] \leftarrow l_\mathrm{pair}[c][v] + \log(1-\beta) \cdot \mathrm{occurrences}[1][1]$
+            \EndFor
+            \State $l_\mathrm{cell} \leftarrow 0 \in (-\infty,0]^{|C|}$
+            \ForAll{$c \in C$}
+                \State $l_\mathrm{cell}[c] \leftarrow \max \{l_\mathrm{pair}[c][v] : v \in V\}$ \Comment Unrolled for-loop in maximum operation
+            \EndFor
+            \State \Return $\sum_{c \in C} l_\mathrm{cell}$ \Comment Unrolled for-loop in sum
+        \EndFunction
+    \end{algorithmic}
+    \caption{Our \ac{FPGA}-optimized version of algorithm \ref{alg:likelihood} to compute $\log(\Lambda_d(T))$ for a given mutation tree $T$ encoded as an ancestor matrix $a$, a mutation data matrix $d$ and error probabilities $\alpha$ and $\beta$.}
+    \label{alg:likelihoodimpl}
+\end{algorithm}

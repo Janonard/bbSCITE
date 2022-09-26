@@ -9,3 +9,4 @@ build
 *.samples
 *.out
 *.tar.gz
+profile.json

@@ -41,10 +41,10 @@ public:
   Parameters()
       : input_path(std::nullopt), output_path_base(std::nullopt),
         n_chains(std::nullopt), chain_length(std::nullopt),
-        max_n_best_states(128), alpha_mean(6.04e-5), beta_mean(0.4309),
+        max_n_best_trees(128), alpha_mean(6.04e-5), beta_mean(0.4309),
         beta_sd(0.1), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
         prob_swap_nodes(0.4), prob_swap_subtrees(0.05),
-        beta_jump_scaling_chi(10.0), gamma(1.0), seed(std::nullopt) {}
+        beta_jump_scaling_chi(10.0), gamma(1.0) {}
 
   /**
    * @brief Verify the CLI arguments and store them in the object's fields.
@@ -219,16 +219,12 @@ public:
           error = true;
         }
       } else if (strcmp(argv[i], "-seed") == 0) {
-        if (i + 1 < argc) {
-          seed = atoi(argv[++i]);
-        } else {
-          std::cerr << "Error: Missing argument to parameter -seed."
-                    << std::endl;
-          error = true;
-        }
+        std::cerr << "Warning: The -seed parameter is not supported by "
+                     "ffSCITE (yet). Ignoring the -seed."
+                  << std::endl;
       } else if (strcmp(argv[i], "-max_treelist_size") == 0) {
         if (i + 1 < argc) {
-          max_n_best_states = atoi(argv[++i]);
+          max_n_best_trees = atoi(argv[++i]);
         } else {
           std::cerr
               << "Error: Missing argument to parameter -max_treelist_size."
@@ -330,8 +326,8 @@ public:
   /**
    * @brief Get the number of chains to execute.
    *
-   * For every chain, a new random starting state is initialized and @ref
-   * get_chain_length steps are executed from this state.
+   * For every chain, a new random starting tree is initialized and @ref
+   * get_chain_length steps are executed from this tree.
    *
    * @return uint32_t The number of chains to execute.
    */
@@ -340,8 +336,8 @@ public:
   /**
    * @brief Set the number of chains to execute.
    *
-   * For every chain, a new random starting state is initialized and @ref
-   * get_chain_length steps are executed from this state.
+   * For every chain, a new random starting tree is initialized and @ref
+   * get_chain_length steps are executed from this tree.
    *
    * @param n_chains The new number of chains to execute.
    */
@@ -351,8 +347,8 @@ public:
    * @brief Get the number of steps to execute on every chain.
    *
    * A single step involves proposing a random modification to the current
-   * state, computing its likelihood and deciding whether the new state should
-   * be the new state of the chain.
+   * tree, computing its likelihood and deciding whether the new tree should
+   * be the new tree of the chain.
    *
    * @return uint32_t The number of steps to execute on every chain.
    */
@@ -362,8 +358,8 @@ public:
    * @brief Set the number of steps to execute on every chain.
    *
    * A single step involves proposing a random modification to the current
-   * state, computing its likelihood and deciding whether the new state should
-   * be the new state of the chain.
+   * tree, computing its likelihood and deciding whether the new tree should
+   * be the new tree of the chain.
    *
    * @param chain_length The new number of steps to execute on every chain.
    */
@@ -372,37 +368,37 @@ public:
   }
 
   /**
-   * @brief Get the maximal number of optimal states to return.
+   * @brief Get the maximal number of optimal trees to return.
    *
-   * The buffer for the optimal states list has to be allocated in advance and
+   * The buffer for the optimal trees list has to be allocated in advance and
    * can not be reallocated. Therefore, an upper bound for the maximal number of
-   * optimal states is needed.
+   * optimal trees is needed.
    *
-   * @return uint32_t The maximal number of optimal states to return.
+   * @return uint32_t The maximal number of optimal trees to return.
    */
-  uint32_t get_max_n_best_states() const { return max_n_best_states; }
+  uint32_t get_max_n_best_trees() const { return max_n_best_trees; }
 
   /**
-   * @brief Set the maximal number of optimal states to return.
+   * @brief Set the maximal number of optimal trees to return.
    *
-   * The buffer for the optimal states list has to be allocated in advance and
+   * The buffer for the optimal trees list has to be allocated in advance and
    * can not be reallocated. Therefore, an upper bound for the maximal number of
-   * optimal states is needed.
+   * optimal trees is needed.
    *
-   * @param max_n_best_states The new maximal number of optimal states to
+   * @param max_n_best_trees The new maximal number of optimal trees to
    * return.
    */
-  void set_max_n_best_states(uint32_t max_n_best_states) {
-    this->max_n_best_states = max_n_best_states;
+  void set_max_n_best_trees(uint32_t max_n_best_trees) {
+    this->max_n_best_trees = max_n_best_trees;
   }
 
   /**
    * @brief Get the mean value of the probability for false positives (alpha).
    *
-   * @return double The mean value of the probability for false positives
+   * @return float The mean value of the probability for false positives
    * (alpha).
    */
-  double get_alpha_mean() const { return alpha_mean; }
+  float get_alpha_mean() const { return alpha_mean; }
 
   /**
    * @brief Set the mean value of the probability for false positives (alpha).
@@ -410,15 +406,15 @@ public:
    * @param alpha_mean The new mean value of the probability for false positives
    * (alpha).
    */
-  void set_alpha_mean(double alpha_mean) { this->alpha_mean = alpha_mean; }
+  void set_alpha_mean(float alpha_mean) { this->alpha_mean = alpha_mean; }
 
   /**
    * @brief Get the mean value for the probability for false negatives (beta).
    *
-   * @return double The mean value for the probability for false negatives
+   * @return float The mean value for the probability for false negatives
    * (beta).
    */
-  double get_beta_mean() const { return beta_mean; }
+  float get_beta_mean() const { return beta_mean; }
 
   /**
    * @brief Set the mean value for the probability for false negatives (beta).
@@ -426,16 +422,16 @@ public:
    * @param beta_mean The new mean value for the probability for false negatives
    * (beta).
    */
-  void set_beta_mean(double beta_mean) { this->beta_mean = beta_mean; }
+  void set_beta_mean(float beta_mean) { this->beta_mean = beta_mean; }
 
   /**
    * @brief Get the standard derivation for the probability for false negatives
    * (beta).
    *
-   * @return double The standard derivation for the probability for false
+   * @return float The standard derivation for the probability for false
    * negatives (beta).
    */
-  double get_beta_sd() const { return beta_sd; }
+  float get_beta_sd() const { return beta_sd; }
 
   /**
    * @brief Set the standard derivation for the probability for false negatives
@@ -444,17 +440,17 @@ public:
    * @param beta_sd The new standard derivation for the probability for false
    * negatives (beta).
    */
-  void set_beta_sd(double beta_sd) { this->beta_sd = beta_sd; }
+  void set_beta_sd(float beta_sd) { this->beta_sd = beta_sd; }
 
   /**
    * @brief Get the probability that the beta value is modified in a chain step.
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that the beta value is modified in a chain
+   * @return float The probability that the beta value is modified in a chain
    * step.
    */
-  double get_prob_beta_change() const {
+  float get_prob_beta_change() const {
     return prob_beta_change / get_sum_of_move_probs();
   }
 
@@ -467,7 +463,7 @@ public:
    * @param prob_beta_change The new probability that the beta value is modified
    * in a chain step.
    */
-  void set_prob_beta_change(double prob_beta_change) {
+  void set_prob_beta_change(float prob_beta_change) {
     if (prob_beta_change < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -480,10 +476,10 @@ public:
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that a node and its subtree is moved to
+   * @return float The probability that a node and its subtree is moved to
    * another node in a chain step.
    */
-  double get_prob_prune_n_reattach() const {
+  float get_prob_prune_n_reattach() const {
     return prob_prune_n_reattach / get_sum_of_move_probs();
   }
 
@@ -497,7 +493,7 @@ public:
    * @param prob_prune_n_reattach The new probability that a node and its
    * subtree is moved to another node in a chain step.
    */
-  void set_prob_prune_n_reattach(double prob_prune_n_reattach) {
+  void set_prob_prune_n_reattach(float prob_prune_n_reattach) {
     if (prob_prune_n_reattach < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -510,10 +506,10 @@ public:
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that two node labels are swapped in a chain
+   * @return float The probability that two node labels are swapped in a chain
    * step.
    */
-  double get_prob_swap_nodes() const {
+  float get_prob_swap_nodes() const {
     return prob_swap_nodes / get_sum_of_move_probs();
   }
 
@@ -527,7 +523,7 @@ public:
    * @param prob_swap_nodes The new probability that two node labels are swapped
    * in a chain step.
    */
-  void set_prob_swap_nodes(double prob_swap_nodes) {
+  void set_prob_swap_nodes(float prob_swap_nodes) {
     if (prob_swap_nodes < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -539,10 +535,10 @@ public:
    *
    * The returned value of this method is bound to the interval [0,1].
    *
-   * @return double The probability that two subtrees are swapped in a chain
+   * @return float The probability that two subtrees are swapped in a chain
    * step.
    */
-  double get_prob_swap_subtrees() const {
+  float get_prob_swap_subtrees() const {
     return prob_swap_subtrees / get_sum_of_move_probs();
   }
 
@@ -555,7 +551,7 @@ public:
    * @param prob_swap_subtrees The new probability that two subtrees are swapped
    * in a chain step.
    */
-  void set_prob_swap_subtrees(double prob_swap_subtrees) {
+  void set_prob_swap_subtrees(float prob_swap_subtrees) {
     if (prob_swap_subtrees < 0.0) {
       throw std::out_of_range("Move probabilities may not be negative.");
     }
@@ -565,10 +561,10 @@ public:
   /**
    * @brief Get the scaling factor to the standard derivation for beta changes.
    *
-   * @return double The scaling factor to the standard derivation for beta
+   * @return float The scaling factor to the standard derivation for beta
    * changes.
    */
-  double get_beta_jump_scaling_chi() const { return beta_jump_scaling_chi; }
+  float get_beta_jump_scaling_chi() const { return beta_jump_scaling_chi; }
 
   /**
    * @brief Set the scaling factor to the standard derivation for beta changes.
@@ -576,7 +572,7 @@ public:
    * @param beta_jump_scaling_chi The new scaling factor to the standard
    * derivation for beta changes.
    */
-  void set_beta_jump_scaling_chi(double beta_jump_scaling_chi) {
+  void set_beta_jump_scaling_chi(float beta_jump_scaling_chi) {
     this->beta_jump_scaling_chi = beta_jump_scaling_chi;
   }
 
@@ -587,9 +583,9 @@ public:
    * gamma > 1.0, the chain focuses on local exploration and for gamma < 1.0,
    * the chain focuses on global exploration.
    *
-   * @return double The gamma factor for the exploration behavior.
+   * @return float The gamma factor for the exploration behavior.
    */
-  double get_gamma() const { return gamma; }
+  float get_gamma() const { return gamma; }
 
   /**
    * @brief Set the gamma factor for the exploration behavior.
@@ -600,34 +596,10 @@ public:
    *
    * @param gamma The new gamma factor for the exploration behavior.
    */
-  void set_gamma(double gamma) { this->gamma = gamma; }
-
-  /**
-   * @brief Get the seed for the URNGs.
-   *
-   * If the seed has not been explicitly set before, it is sampled from the
-   * random device.
-   *
-   * @return uint32_t The seed for the URNGs.
-   */
-  uint32_t get_seed() const {
-    if (seed.has_value()) {
-      return seed.value();
-    } else {
-      std::random_device seeder;
-      return seeder();
-    }
-  }
-
-  /**
-   * @brief Set the seed for the URNGs.
-   *
-   * @param seed The new seed for the URNGs.
-   */
-  void set_seed(uint32_t seed) { this->seed = seed; }
+  void set_gamma(float gamma) { this->gamma = gamma; }
 
 private:
-  double get_sum_of_move_probs() const {
+  float get_sum_of_move_probs() const {
     return prob_beta_change + prob_prune_n_reattach + prob_swap_nodes +
            prob_swap_subtrees;
   }
@@ -635,14 +607,12 @@ private:
   std::optional<std::string> input_path, output_path_base;
 
   std::optional<uint32_t> n_chains, chain_length;
-  uint32_t max_n_best_states;
+  uint32_t max_n_best_trees;
 
-  double alpha_mean, beta_mean, beta_sd;
-  double prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
+  float alpha_mean, beta_mean, beta_sd;
+  float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
       prob_swap_subtrees;
-  double beta_jump_scaling_chi;
-  double gamma;
-
-  std::optional<uint32_t> seed;
+  float beta_jump_scaling_chi;
+  float gamma;
 };
 } // namespace ffSCITE

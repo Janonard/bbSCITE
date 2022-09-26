@@ -1,0 +1,28 @@
+\section{Input, Output and Feedback}
+\label{sec:io}
+
+The change proposer kernel and the internal loops of the tree scorer kernel form a macro-pipeline that processes states in independent steps: For example, the change proposer may already sample a move for a new state while the tree update loop computes the new ancestor matrix of the previous state. This macro-pipeline has to be filled at all times to utilize the entire design and achieve maximum performance. Ensuring this is the task of the IO kernel.
+
+From an application's point of view, the design is supposed to iterate $n_\mathrm{steps}$ times on the same state and then generate a new, completely random initial state to work with, up to $n_\mathrm{chains}$ times. Early on, we decided to not generate the initial states on the device since this is a rare task compared to the chain steps. We, therefore, assumed that allocating precious resources to this task would not accelerate the application. Instead, our application's host generates $n_\mathrm{chains}$ initial states and stores them in global buffers that are transferred to the \ac{FPGA}'s memory. A na\"ive approach would load a state from the global buffer, send it to the change proposer kernel and wait until the tree scorer is finished to write the result back. The disadvantages of this approach are obvious and lead to low hardware utilization and high latency due to the external memory accesses. However, we were able to exploit three properties of the problem and the hardware design to optimize the occupancy: First, the intermediate and final states of the chains are irrelevant to the algorithm. Only the current state is needed to compute the next state and only the best state needs to be saved and exported. Once a current state has been replaced, it is not needed anymore. Second, nothing in the macro-pipeline needs to know to which step of which chain the processed state belongs. It simply executes the same operations on the initial state of the first chain as it does on the 42,000th step of the 17th chain. Third, the macro-pipeline has a capacity. This means that the IO kernel can send a certain number of states to the change proposer before it needs to start to receive states from the tree scorer. From the IO kernel's point of view, these states are ``stored'' in the pipeline.
+
+Our final IO kernel (algorithm \ref{alg:io-kernel}) works as follows: First, it assumes that the pipeline has a capacity of $c$ states. Therefore, it initially sends $c$ states from the initial states buffer to the change proposer and waits for the tree scorer to finish the first step. Then, the resulting state from the tree scorer is fed back to the change proposer as often as requested by the user. Once the requested steps are completed, the final chain state is discarded and a new initial state is sent to the change proposer instead. Once all steps of all chains are completed, the kernel flushes the pipeline and halts. This design has multiple advantages over the na\"ive approach: Firstly, this design is simple. Its logic is simple and its actions are easy to predict, and there are no loop-carried dependencies. Its biggest advantage however is that it only reads from global memory and does not write back. This simplifies linking as well as routing and placing, which the current \ac{FPGA} compilers still have problems with sometimes and takes a lot of time. This has been entirely avoided here. Lastly, it might also reduce the energy consumption of the design since data only moves within the chip, but we have not analyzed this. However, this design has the disadvantage that one needs to compile the design multiple times to find the right capacity $c$, which takes additional effort and \ac{CPU}-hours for compilation.
+
+\begin{algorithm}
+    \begin{algorithmic}
+        \ForAll{$i \leq n_\mathrm{chains} \cdot n_\mathrm{steps} + c$}
+            \If{$i \geq c$}
+                \State $s_\mathrm{out} \leftarrow \text{Read state from tree scorer kernel}$
+            \EndIf
+            \If{$i < n_\mathrm{chains} \cdot n_\mathrm{steps}$}
+                \If{$i \mod (n_\mathrm{steps} \cdot c) < c$}
+                    \State $s_\mathrm{in} \leftarrow \text{Read next initial state from global memory}$
+                \Else
+                    \State $s_\mathrm{in} \leftarrow s_\mathrm{out}$
+                \EndIf
+                \State Send $s_\mathrm{in}$ to change proposer kernel
+            \EndIf
+        \EndFor
+    \end{algorithmic}
+    \caption{Behavioral code of the IO kernel, assuming that the pipeline has a capacity of $c$ states and that the user has requested to simulate $n_\mathrm{chains}$ chains with $n_\mathrm{steps}$ steps each.}
+    \label{alg:io-kernel}
+\end{algorithm}

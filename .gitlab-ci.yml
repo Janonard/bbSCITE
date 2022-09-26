@@ -4,69 +4,33 @@ variables:
 stages:
   - precheck
   - synthesis
-  - benchmark
 
 default:
   before_script:
     - "ml fpga devel intel/oneapi bittware/520n Boost/1.74.0-GCC CMake"
-    - "python3 -m venv .venv"
-    - "source .venv/bin/activate"
-    - "pip install --upgrade pip"
-    - "pip install -r requirements.txt"
     - "mkdir -p build"
     - "cd build"
   tags:
     - noctua2
 
-unit-tests:
+build-thesis:
   stage: precheck
-  script:
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "make -j16 unit_test"
-    - "./test/unit_test"
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:10:00 --mem 8G --cpus-per-task=16"
-
-synthesis:
-  stage: synthesis
   only:
     - main
+    - staging
+    - thesis
+  image: "texlive/texlive"
+  before_script: []
   script:
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "make -j64 scite"
-    - "dpcpp -fintelfpga -qactypes -Xshardware -Xsv -Xsparallel=64 ../src/main.cpp -o ffSCITE"
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis --time=2-00:00:00 --cpus-per-task=64 --mail-type=All --mail-user=joo@mail.upb.de"
+    - "cd docs/thesis"
+    - "latexmk --pdf thesis.tex"
+    - "cd ../proposal"
+    - "latexmk --pdf proposal.tex"
   artifacts:
     paths:
-      - "build/ffSCITE.prj/reports"
-      - "build/ffSCITE"
-      - "build/scite"
+      - "docs/thesis/thesis.pdf"
+      - "docs/proposal/proposal.pdf"
     expire_in: 1 month
+  tags:
+    - docker
 
-report:
-  stage: synthesis
-  when: manual
-  script:
-    - "dpcpp -fintelfpga -qactypes -fsycl-link -Xshardware -Xsv -Xsparallel=16 ../src/main.cpp -o ffSCITE"
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=00:30:00 --mem 32G --cpus-per-task=16"
-  artifacts:
-    paths:
-      - "build/ffSCITE.prj/reports"
-    expire_in: 1 month
-
-quality benchmark:
-  stage: benchmark
-  only:
-    - main
-  dependencies:
-    - synthesis
-  script:
-    - "../experiments/quality_benchmark.sh ./scite ./ffSCITE"
-    - "./tool.py test"
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal --time=12:00:00 --cpus-per-task=128 --mail-type=All --mail-user=joo@mail.upb.de"
-  artifacts:
-    paths:
-      - "build/quality_benchmark.out"

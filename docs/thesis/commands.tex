@@ -2,19 +2,15 @@
 % Some commands for setting up theorem environments as provided by package 
 % amsthm --- language sensitive
 %%%%%%%%%
-\theoremstyle{plain}
+\theoremstyle{definition}
 \newtheorem{definition}{Definition}[chapter]
-\newtheorem{lemma}[definition]{Lemma}
-\ifgerman
-	\newtheorem{theorem}[definition]{Satz}
-	\newtheorem{corollary}[definition]{Korollar}
-	\newtheorem{example}[definition]{Beispiel}
-\else
-	\newtheorem{theorem}[definition]{Theorem}
-	\newtheorem{corollary}[definition]{Corollary}
-	\newtheorem{example}[definition]{Example}
-\fi
+\newtheorem{example}[definition]{Example}
 
+\theoremstyle{plain}
+\newtheorem{remark}[definition]{Remark}
+\newtheorem{lemma}[definition]{Lemma}
+\newtheorem{theorem}[definition]{Theorem}
+\newtheorem{corollary}[definition]{Corollary}
 
 
 %%%%%%%%%
@@ -27,25 +23,36 @@
 
 \newacro{template}[UPB-CS-TT]{Paderborn University Computer Science thesis template}
 \newacro{SCITE}[SCITE]{``Single Cell Inference of Tumor Evolution''}
+\newacro{infSCITE}[$\infty$SCITE]{Infinity-SCITE}
 \newacro{MCMC}[MCMC]{Monte Carlo Markov Chain}
 \newacro{FPGA}[FPGA]{Field-Programmable Gate Array}
 \newacro{HPC}[HPC]{High-Performance Computing}
 \newacro{RNG}[RNG]{random number generator}
+\newacro{CPU}[CPU]{Central Processing Unit}
+\newacro{GPU}[GPU]{Graphics Processing Unit}
+\newacro{TOST}[TOST]{``Two One-Sided t-Tests''}
+\newacro{ffSCITE}[ffSCITE]{``fabulously fast SCITE''}
+\newacro{RAM}[RAM]{random access memory}
+\newacro{URNG}[URNG]{uniform random number generator}
+\newacro{II}[II]{initiation interval}
+\newacro{FF}[FF]{flip-flop}
+\newacro{LUT}[LUT]{look-up table}
+\newacro{MLAB}[MLAB]{memory logic array block}
+\newacro{BSP}[BSP]{board support package}
+\newacro{DSP}[DSP]{digital signal processor}
 
-\DeclareMathOperator{\testop}{top}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+%%%%%%%%%%%%%%%
+% Custom floats
+%%%%%%%%%%%%%%%
+
+\newfloat{algorithm}{thp}{lop}[chapter]
+\floatname{algorithm}{Algorithm}
 
 % Customizing GanttChart
 % Taken from https://git.cs.uni-paderborn.de/syssec/templates/exposee
-\definecolor{barblue}{RGB}{153,204,254}
-\definecolor{groupblue}{RGB}{51,102,254}
-\definecolor{linkred}{RGB}{165,0,33}
-\renewcommand\sfdefault{phv}
-\renewcommand\mddefault{mc}
-\renewcommand\bfdefault{bc}
-\setganttlinklabel{s-s}{START-TO-START}
-\setganttlinklabel{f-s}{FINISH-TO-START}
-\setganttlinklabel{f-f}{FINISH-TO-FINISH}
-\sffamily
 \ganttset
 {%
 	y unit chart=0.6cm,
@@ -53,18 +60,16 @@
 	hgrid={*1{draw=black!35, line width=.1pt}},
 	hgrid style/.style={draw=black!35,line width=.1pt},
 	vgrid={*1{draw=black!35, line width=.1pt}},
-	today rule/.style={draw=black!64,dash pattern=on 3.5pt off 4.5pt,line width=1.5pt},
-	today label font=\small\bfseries,
 	title/.style={draw=none, fill=none},
-	title label font=\bfseries\footnotesize,
+	title label font=\footnotesize,
 	title label node/.append style={below=7pt},
 	progress label text={\pgfmathprintnumber[precision=0, verbatim]{#1}\%},
 	include title in canvas=false,
-	bar label font=\mdseries\small\color{black!70},
+	bar label font=\small,
 	bar label node/.append style={left=0cm},
 	bar/.append style={draw=none, fill=black!63},
 	bar incomplete/.append style={fill=barblue},
-	bar progress label font=\mdseries\footnotesize\color{black!70},
+	bar progress label font=\footnotesize\color{black!70},
 	bar height=.8,
 	bar top shift=0.1,
 	group top shift=0.1,
@@ -74,8 +79,8 @@
 	group height=.8,
 	group peaks tip position=0,
 	group label node/.append style={left=.6cm},
-	group progress label font=\bfseries\small,
+	group progress label font=\small,
 	link/.style={-latex, line width=1.5pt, linkred},
-	link label font=\scriptsize\bfseries,
+	link label font=\scriptsize,
 	link label node/.append style={below left=-2pt and 0pt}
 }

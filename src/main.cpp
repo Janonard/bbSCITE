@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
-#include "MCMCKernel.hpp"
+#include "Application.hpp"
 #include "Parameters.hpp"
 #include <CL/sycl.hpp>
 #include <ext/intel/fpga_extensions.hpp>
@@ -23,18 +23,24 @@
 
 using namespace ffSCITE;
 
-#ifdef EMULATOR
 constexpr uint32_t max_n_cells = 64;
-constexpr uint32_t max_n_genes = 64;
-#else
-constexpr uint32_t max_n_cells = 16;
-constexpr uint32_t max_n_genes = 16;
+constexpr uint32_t max_n_genes = 63;
+constexpr uint32_t pipeline_capacity = 6;
+
+#ifdef HARDWARE
+// Assert that this design does indeed have the correct ranges set.
+// I often lower the max number of cells and genes for experiments and then
+// forgot to reset them. This should fix it.
+static_assert(max_n_cells == 64 && max_n_genes == 63);
 #endif
 
 using URNG = oneapi::dpl::minstd_rand;
 
-using MCMCKernelImpl = MCMCKernel<max_n_cells, max_n_genes, URNG>;
-using ChainStateImpl = ChainState<max_n_genes>;
+using ApplicationImpl =
+    Application<max_n_cells, max_n_genes, pipeline_capacity>;
+using MutationDataWord = ApplicationImpl::MutationDataWord;
+using MutationTreeImpl = MutationTree<max_n_genes>;
+using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
 
 int main(int argc, char **argv) {
   // Load the CLI parameters.
@@ -98,11 +104,15 @@ int main(int argc, char **argv) {
   }
 
   // Load the mutation input data.
-  cl::sycl::buffer<ac_int<2, false>, 2> data(
-      cl::sycl::range<2>(n_cells, n_genes));
+  cl::sycl::buffer<MutationDataWord, 1> data((cl::sycl::range<1>(n_cells)));
   {
     auto data_ac = data.get_access<cl::sycl::access::mode::discard_write>();
     std::ifstream input_file(parameters.get_input_path());
+
+    // Zeroing the data.
+    for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+      data_ac[cell_i] = 0;
+    }
 
     for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
       for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
@@ -110,14 +120,14 @@ int main(int argc, char **argv) {
         input_file >> entry;
         switch (entry) {
         case 0:
-          data_ac[cell_i][gene_i] = 0;
+          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(0));
           break;
         case 1:
         case 2:
-          data_ac[cell_i][gene_i] = 1;
+          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(1));
           break;
         case 3:
-          data_ac[cell_i][gene_i] = 2;
+          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(2));
           break;
         default:
           std::cerr << "Error: The input file contains the invalid entry "
@@ -140,52 +150,41 @@ int main(int argc, char **argv) {
       cl::sycl::property::queue::enable_profiling{}};
   cl::sycl::queue working_queue(device, queue_properties);
 
-  // Running the simulation and retrieving the best states.
-  auto result = MCMCKernelImpl::run_simulation(data, working_queue, parameters);
-  std::vector<ChainStateImpl> best_states = std::get<0>(result);
-  cl::sycl::event runtime_event = std::get<1>(result);
+  // Running the simulation and retrieving the best trees.
+  ApplicationImpl app(data, working_queue, parameters, n_cells, n_genes);
+  float runtime = app.run_simulation();
 
-  static constexpr double timesteps_per_millisecond = 1000000.0;
-  double start_of_event =
-      runtime_event.get_profiling_info<
-          cl::sycl::info::event_profiling::command_start>() /
-      timesteps_per_millisecond;
-  double end_of_event =
-      runtime_event
-          .get_profiling_info<cl::sycl::info::event_profiling::command_end>() /
-      timesteps_per_millisecond;
-  std::cout << "Time elapsed: " << end_of_event - start_of_event << " ms"
-            << std::endl;
+  std::cout << "Time elapsed: " << runtime << " ms" << std::endl;
 
-  for (uint32_t state_i = 0; state_i < best_states.size(); state_i++) {
-    // Output the tree as a graphviz file.
-    {
-      std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << state_i
-                  << ".gv";
+  AncestorMatrix best_am = app.get_best_am();
+  float best_beta = app.get_best_beta();
 
-      std::ofstream output_file(output_path.str());
-      output_file << best_states[state_i].mutation_tree.to_graphviz();
-    }
+  MutationTreeImpl tree(best_am, n_genes, best_beta);
 
-    // Output the tree in newick format
-    {
-      std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << state_i
-                  << ".newick";
+  // Output the tree as a graphviz file.
+  {
+    std::stringstream output_path;
+    output_path << parameters.get_output_path_base() << "_ml0.gv";
 
-      std::ofstream output_file(output_path.str());
-      output_file << best_states[state_i].mutation_tree.to_newick();
-    }
+    std::ofstream output_file(output_path.str());
+    output_file << tree.to_graphviz();
+  }
 
-    // Output the found beta value for the tree
-    {
-      std::stringstream output_path;
-      output_path << parameters.get_output_path_base() << "_ml" << state_i
-                  << "_beta.txt";
+  // Output the tree in newick format
+  {
+    std::stringstream output_path;
+    output_path << parameters.get_output_path_base() << "_ml0.newick";
 
-      std::ofstream output_file(output_path.str());
-      output_file << best_states[state_i].beta << std::endl;
-    }
+    std::ofstream output_file(output_path.str());
+    output_file << tree.to_newick();
+  }
+
+  // Output the found beta value for the tree
+  {
+    std::stringstream output_path;
+    output_path << parameters.get_output_path_base() << "_ml0_beta.txt";
+
+    std::ofstream output_file(output_path.str());
+    output_file << best_beta << std::endl;
   }
 }
