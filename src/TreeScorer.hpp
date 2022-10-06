@@ -48,6 +48,9 @@ public:
    */
   using MutationTreeImpl = MutationTree<max_n_genes>;
 
+  /**
+   * @brief Re
+   */
   using AncestryVector = typename MutationTreeImpl::AncestryVector;
 
   /**

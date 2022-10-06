@@ -25,13 +25,61 @@
 #include <vector>
 
 namespace ffSCITE {
+/**
+ * @brief Representation of a mutation tree, with relevant operations.
+ *
+ * A mutation tree is a tree which contains a dedicated root node and one node
+ * for every gene. Then, cells are attached to a node of the tree, which is
+ * equivalent to saying that this cell has a mutation at a gene iff this gene's
+ * node is on the path from the root node to the gene. ffSCITE tries different
+ * mutation trees and keeps the one that is most-likely to be true. Therefore,
+ * this class contains operations to quickly query whether there is a path in
+ * the tree from one node to another and to randomly modify the tree.
+ *
+ * Internally, the mutation tree is represented as an ancestor matrix: This is a
+ * data structure with an entry for every node pair x and y that contains a 1
+ * iff there is a path from x to y. Otherwise, it contains a 0. Technically,
+ * ancestor matrices are implemented as an array of n-bit words called ancestry
+ * vectors, where the x is the index of the word and y is the index of the bit
+ * within the word. A MutationTree instance requires a reference to such an
+ * array since oneAPI can not implement arrays inside classes as independent
+ * memory blocks, at least at the time of this writing.
+ *
+ * @tparam max_n_genes The maximal number of genes this tree supports. The
+ * maximal number of nodes in a tree is this number plus one since every
+ * mutation tree has one node per gene and one additional root node.
+ */
 template <uint32_t max_n_genes> class MutationTree {
 public:
+  /**
+   * @brief The maximal number of nodes in a mutation tree supported by the
+   * class.
+   *
+   * This is always the maximal number of genes of the mutation tree plus one.
+   */
   static constexpr uint32_t max_n_nodes = max_n_genes + 1;
 
+  /**
+   * @brief Type of the ancestor matrix rows.
+   */
   using AncestryVector = ac_int<max_n_nodes, false>;
+
+  /**
+   * @brief Type of the internal ancestor matrix representation.
+   */
   using AncestorMatrix = std::array<AncestryVector, max_n_nodes>;
 
+  /**
+   * @brief Parameter bundle for a tree modification.
+   *
+   * The move type enumeration describes the exact modification to execute. v,
+   * w, descendant_of_v and nondescendant_of_v are all randomly sampled, where v
+   * is sampled uniformly from all nodes, w is sampled uniformly from all nodes
+   * except v, descendant_of_v is sampled uniformly from all descendants of v,
+   * and nondescendant_of_v is sampled uniformly from all nondescendants of v.
+   * new_beta contains a new, possibly modified beta value (probability of false
+   * negatives).
+   */
   struct ModificationParameters {
     MoveType move_type;
     uint32_t v, w, parent_of_v, parent_of_w, descendant_of_v,
@@ -39,9 +87,36 @@ public:
     float new_beta;
   };
 
+  /**
+   * @brief Construct a new Mutation Tree without initializing the ancestor
+   * matrix.
+   *
+   * This constructor assumes that the ancestor matrix has been properly
+   * initialized and simply assumes it as the new internal state.
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @param ancestor A reference to an ancestor matrix.
+   * @param n_genes The number of genes represented by the mutation tree.
+   * @param beta The probability for false negatives.
+   */
   MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, float beta)
       : ancestor(ancestor), n_nodes(n_genes + 1), beta(beta) {}
 
+  /**
+   * @brief Construct a new Mutation Tree by computing a modified version of an
+   * old mutation tree.
+   *
+   * This constructor applies the changes parametrized by the parameters struct
+   * and stores the resulting mutation tree in it's internal state.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @param am A reference to an ancestor matrix that is used as the internal
+   * container of this tree.
+   * @param old_tree The old tree to base the new tree of.
+   * @param parameters The parameters of the modification.
+   */
   MutationTree(AncestorMatrix &am, MutationTree<max_n_genes> const &old_tree,
                ModificationParameters parameters)
       : ancestor(am), n_nodes(old_tree.n_nodes), beta(old_tree.beta) {
@@ -178,6 +253,19 @@ public:
   MutationTree<max_n_genes> &
   operator=(MutationTree<max_n_genes> const &other) = default;
 
+  /**
+   * @brief Compute the ancestor matrix of the tree described by the given
+   * parent vector.
+   *
+   * A parent vector is an array of indices which contains the parent of the
+   * node i at the position i.
+   *
+   * This method is designed for CPUs and is not usable on FPGAs.
+   *
+   * @param parent_vector The parent vector to compute the ancestor matrix from.
+   * @return AncestorMatrix The ancestor matrix of the tree described by the
+   * parent vector.
+   */
   static AncestorMatrix
   parent_vector_to_ancestor_matrix(std::vector<uint32_t> const &parent_vector) {
     AncestorMatrix ancestor;
@@ -209,6 +297,22 @@ public:
     return ancestor;
   }
 
+  /**
+   * @brief Compute the parent vector of the tree described by the given Prüfer
+   * code.
+   *
+   * A Prüfer code is a sequence of indices that describe a tree. Prüfer codes
+   * are used to randomly generate trees since any sequence of integers with n
+   * elements and entries <= (n+2) encode a tree with (n+2) nodes.
+   *
+   * A parent vector is an array of indices which contains the parent of the
+   * node i at the position i.
+   *
+   * This method is designed for CPUs and is not usable on FPGAs.
+   *
+   * @param pruefer_code The Prüfer code of the tree.
+   * @return std::vector<uint32_t> The parent vector of the tree.
+   */
   static std::vector<uint32_t>
   pruefer_code_to_parent_vector(std::vector<uint32_t> const &pruefer_code) {
     // Algorithm adapted from
@@ -261,16 +365,18 @@ public:
   }
 
   /**
-   * @brief Generate a random, uniformly distributed tree.
+   * @brief Generate a random, uniformly distributed tree, encoded as a Prüfer
+   * code.
    *
-   * This is done by generating a random Prüfer Code and using
-   * `from_pruefer_code` to construct the tree.
+   * A Prüfer code is a sequence of indices that describe a tree. Prüfer codes
+   * are used to randomly generate trees since any sequence of integers with n
+   * elements and entries <= (n+2) encode a tree with (n+2) nodes.
    *
    * @tparam The type of URNG to use.
    * @param rng The URNG instance to use.
    * @param n_nodes The number of nodes in the resulting tree, must be lower
    * than or equal to `max_n_nodes`.
-   * @return A random, uniformly distributed tree.
+   * @return A random, uniformly distributed tree, encoded as a Prüfer code.
    */
   template <typename RNG>
   static std::vector<uint32_t> sample_random_pruefer_code(RNG &rng,
@@ -292,12 +398,42 @@ public:
     return pruefer_code;
   }
 
+  /**
+   * @brief Get the current beta value (Probability of false negatives).
+   *
+   * @return float The beta value (Probability of false negatives).
+   */
   float get_beta() const { return beta; }
 
+  /**
+   * @brief Set the current beta value (Probability of false negatives).
+   *
+   * @param new_beta The new beta value (Probability of false negatives).
+   */
   void set_beta(float new_beta) { beta = new_beta; }
 
+  /**
+   * @brief Get the index of the root node.
+   *
+   * @return uint32_t The index of the root node.
+   */
   uint32_t get_root() const { return n_nodes - 1; }
 
+  /**
+   * @brief Check whether one node is the parent of the other node in this tree.
+   *
+   * This is equivalent to asking whether there is an edge from `parent` to
+   * `child` in the tree. However, the root is its own parent per convention,
+   * which means that this edge only exists if `parent` is the parent of `child`
+   * and `child` is not the root of the tree.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @param parent The index of the possible parent node.
+   * @param child  The index of the possible child node.
+   * @return true `parent` is the parent of `child`.
+   * @return false `parent``is not the parent of `child`.
+   */
   bool is_parent(uint32_t parent, uint32_t child) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(parent < n_nodes && child < n_nodes);
@@ -322,6 +458,14 @@ public:
     return true;
   }
 
+  /**
+   * @brief Get the parent of a node in the tree.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @param node_i The node who's parent is searched.
+   * @return uint32_t The parent of the node.
+   */
   uint32_t get_parent(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
@@ -340,6 +484,8 @@ public:
   /**
    * @brief Query whether node a is an ancestor of node b.
    *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
    * @param node_a_i The index of the potential ancestor.
    * @param node_b_i The index of the potential descendant.
    * @return true iff node a is an ancestor of node b.
@@ -354,6 +500,8 @@ public:
   /**
    * @brief Query whether node a is a descendant of node b.
    *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
    * @param node_a_i The index of the potential descendant.
    * @param node_b_i The index of the potential ancestor.
    * @return true iff node a is an ancestor of node b.
@@ -366,12 +514,14 @@ public:
   }
 
   /**
-   * @brief Return a boolean array describing a node's descendants.
+   * @brief Return an ancestry vector describing a node's descendants.
    *
    * For example, if this method was invoked for node a, one can query whether
    * node b is a descendant of node a by checking whether the bit with index b
-   * in the array is true. This form of an array of boolean values can be used
-   * to iterate over the descendants of a node.
+   * in the array is true. This representation can be used to iterate over the
+   * descendants of a node.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
    * @param node_i The index of the node who's descendants are queried.
    * @return The descendants bit array.
@@ -384,7 +534,9 @@ public:
   }
 
   /**
-   * @brief Get the total number of a node's descendants.
+   * @brief Get the total number of descendants of a node.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
    * @param node_i The index of the node who's number of descendants is queried.
    * @return The number of descendants.
@@ -408,8 +560,10 @@ public:
    *
    * For example, if this method was invoked for node a, one can query whether
    * node b is an ancestor of node a by checking whether the bit with index b
-   * in the array is true. This form of an array of boolean values can be used
-   * to iterate over the ancestors of a node.
+   * in the array is true. This representation can be used to iterate over the
+   * ancestors of a node.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
    * @param node_i The index of the node who's ancestors are queried.
    * @return The ancestors bit array.
@@ -429,7 +583,9 @@ public:
   }
 
   /**
-   * @brief Get the total number of a node's ancestors.
+   * @brief Get the total number of ancestors of a node.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
    * @param node_i The index of the node who's number of ancestors is queried.
    * @return The number of ancestors.
@@ -449,10 +605,12 @@ public:
   }
 
   /**
-   * @brief Compare two parent vectors for equality.
+   * @brief Compare two trees for equality.
    *
-   * Two trees are equal iff their number of nodes is equal and every node has
-   * the same parent.
+   * Two trees are equal iff their number of nodes is equal, they contain the
+   * same edges, and contain the same beta value.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
    * @param other The other tree to compare too.
    * @return true The two trees are equal.
@@ -477,8 +635,10 @@ public:
   /**
    * @brief Compare two parent vectors for inequality.
    *
-   * Two trees are equal iff their number of nodes is equal and every nodes has
-   * the same parent.
+   * Two trees are equal iff their number of nodes is equal, they contain the
+   * same edges, and contain the same beta value.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
    * @param other The other tree to compare too.
    * @return true The two trees are not equal.
@@ -488,6 +648,26 @@ public:
     return !operator==(other);
   }
 
+  /**
+   * @brief Sample one of the random move types, with customized move
+   * probabilities.
+   *
+   * The probabilities for the beta change, the "prune and reattach" move, and
+   * the "swap nodes" move are parameters of this method, and it is assumed that
+   * all of these probabilities are non-negative and that their sum is less than
+   * or equal to one. The probability of the "swap subtrees" move is the
+   * remaining probability given the other probabilities.
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @param prob_beta_change The probability of a beta-changing move.
+   * @param prob_prune_n_reattach The probability of a "prune and reattach"
+   * move.
+   * @param prob_swap_nodes The probability of a "swap nodes" move.
+   * @return MoveType The sampled move type.
+   */
   template <typename RNG>
   MoveType sample_move(RNG &rng, float prob_beta_change,
                        float prob_prune_n_reattach,
@@ -506,10 +686,39 @@ public:
     }
   }
 
+  /**
+   * @brief Sample one of the random move types, with default probabilities.
+   *
+   * The default probabilities for the different move types are:
+   *
+   * * beta change: 0
+   * * "prune and reattach": 0.5
+   * * "swap nodes": 0.45
+   * * "swap subtrees": 0.05
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @return MoveType The sampled move type.
+   */
   template <typename RNG> MoveType sample_move(RNG &rng) const {
     return sample_move(rng, 0.0, 0.5, 0.45);
   }
 
+  /**
+   * @brief Sample two distinct nodes uniformly from the tree.
+   *
+   * The first node v is sampled uniformly from the entire tree and the second
+   * node w is sampled from all nodes except v. v and w are either unrelated or
+   * w is an ancestor of v.
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @return std::array<uint32_t, 2> Two distinct nodes from the tree.
+   */
   template <typename RNG>
   std::array<uint32_t, 2> sample_nonroot_nodepair(RNG &rng) const {
     // excluding n_nodes - 1, the root.
@@ -526,6 +735,137 @@ public:
     return {v, w};
   }
 
+  /**
+   * @brief Sample uniformly from all descendants of a node.
+   *
+   * Note that the sampled node may be `node_i` too.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @param node_i The pivot node who's descendants are considered.
+   * @return uint32_t A descendant of `node_i`.
+   */
+  template <typename RNG>
+  uint32_t sample_descendant(RNG &rng, uint32_t node_i) const {
+    return sample_descendant_or_nondescendant(rng, node_i, true);
+  }
+
+  /**
+   * @brief Sample uniformly from all non-descendants of a node.
+   *
+   * Note that the sampled node may be the root of the tree too if `node_i` is
+   * not the root.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @param node_i The pivot node who's non-descendants are considered.
+   * @return uint32_t A non-descendant of `node_i`.
+   */
+  template <typename RNG>
+  uint32_t sample_nondescendant(RNG &rng, uint32_t node_i) const {
+    return sample_descendant_or_nondescendant(rng, node_i, false);
+  }
+
+  /**
+   * @brief Sample a new beta value (Probability of false negatives).
+   *
+   * This is done by adding a normally distributed value to the current beta
+   * value and bounding it to [0,1].
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @param beta_jump_sd The standard derivation of the added value.
+   * @return float The newly sampled beta value.
+   */
+  template <typename RNG>
+  float sample_new_beta(RNG &rng, float beta_jump_sd) const {
+    float new_beta =
+        beta + oneapi::dpl::normal_distribution<float>(0, beta_jump_sd)(rng);
+    if (new_beta < 0) {
+      new_beta = std::abs(new_beta);
+    }
+    if (new_beta > 1) {
+      new_beta = new_beta - 2 * (new_beta - 1);
+    }
+    return new_beta;
+  }
+
+  /**
+   * @brief Generate a graphviz file that plots the tree.
+   *
+   * This method is designed for CPUs and is not usable on FPGAs.
+   *
+   * @return std::string A graphviz file that plots the tree.
+   */
+  std::string to_graphviz() const {
+    std::stringstream stream;
+    stream << "digraph G {" << std::endl;
+    stream << "node [color=deeppink4, style=filled, fontcolor=white];"
+           << std::endl;
+    for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
+      stream << get_parent(node_i) << " -> " << node_i << ";" << std::endl;
+    }
+    stream << "}" << std::endl;
+    return stream.str();
+  }
+
+  /**
+   * @brief Generate the Newick code of the tree.
+   *
+   * This method is designed for CPUs and is not usable on FPGAs.
+   *
+   * @return std::string The Newick code of the tree.
+   */
+  std::string to_newick() const {
+    std::vector<std::vector<uint32_t>> children;
+
+    // Initialize children list
+    children.reserve(n_nodes);
+    for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
+      children.push_back(std::vector<uint32_t>());
+    }
+
+    // Populate children list (not including the root to avoid infinite
+    // recursion).
+    for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
+      children[get_parent(node_i)].push_back(node_i);
+    }
+
+    std::stringstream stream;
+    add_node_to_newick_code(children, stream, get_root());
+    stream << std::endl;
+    return stream.str();
+  }
+
+private:
+  /**
+   * @brief Sample uniformly from either all descendants or non-descendants of a
+   * node.
+   *
+   * Depending on the `sample_descendant` flag, this method either samples a
+   * node uniformly from all descendants of `node_i` or all non-descendants of
+   * `node_i`.
+   *
+   * When sampling from all descendants, the sampled node may also be `node_i`
+   * itself, and when sampling from all non-descendants, the sampled node may
+   * also be the root of the tree if `node_i` is not the root.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @tparam The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @param node_i The pivot node who's descendants or non-descendants are
+   * considered.
+   * @param sample_descendant Set to true iff the sampled node should be sampled
+   * from all descendants of `node_i`. Otherwise, set to false.
+   * @return uint32_t A (non-)descendant of `node_i`.
+   */
   template <typename RNG>
   uint32_t sample_descendant_or_nondescendant(RNG &rng, uint32_t node_i,
                                               bool sample_descendant) const {
@@ -572,63 +912,6 @@ public:
     return sampled_node_i;
   }
 
-  template <typename RNG>
-  uint32_t sample_descendant(RNG &rng, uint32_t node_i) const {
-    return sample_descendant_or_nondescendant(rng, node_i, true);
-  }
-
-  template <typename RNG>
-  uint32_t sample_nondescendant(RNG &rng, uint32_t node_i) const {
-    return sample_descendant_or_nondescendant(rng, node_i, false);
-  }
-
-  template <typename RNG>
-  float sample_new_beta(RNG &rng, float beta_jump_sd) const {
-    float new_beta =
-        beta + oneapi::dpl::normal_distribution<float>(0, beta_jump_sd)(rng);
-    if (new_beta < 0) {
-      new_beta = std::abs(new_beta);
-    }
-    if (new_beta > 1) {
-      new_beta = new_beta - 2 * (new_beta - 1);
-    }
-    return new_beta;
-  }
-
-  std::string to_graphviz() const {
-    std::stringstream stream;
-    stream << "digraph G {" << std::endl;
-    stream << "node [color=deeppink4, style=filled, fontcolor=white];"
-           << std::endl;
-    for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
-      stream << get_parent(node_i) << " -> " << node_i << ";" << std::endl;
-    }
-    stream << "}" << std::endl;
-    return stream.str();
-  }
-
-  std::string to_newick() const {
-    std::vector<std::vector<uint32_t>> children;
-
-    // Initialize children list
-    children.reserve(n_nodes);
-    for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
-      children.push_back(std::vector<uint32_t>());
-    }
-
-    // Populate children list (not including the root to avoid infinite
-    // recursion).
-    for (uint32_t node_i = 0; node_i < n_nodes - 1; node_i++) {
-      children[get_parent(node_i)].push_back(node_i);
-    }
-
-    std::stringstream stream;
-    add_node_to_newick_code(children, stream, get_root());
-    stream << std::endl;
-    return stream.str();
-  }
-
-private:
   void
   add_node_to_newick_code(std::vector<std::vector<uint32_t>> const &children,
                           std::stringstream &stream, uint32_t node_i) const {
