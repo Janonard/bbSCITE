@@ -1,10 +1,12 @@
 # ffSCITE
 
-Welcome to ffSCITE. ffSCITE (short for "fabulously fast SCITE") is an implementation of the [SCITE](https://github.com/cbg-ethz/SCITE) software package for FPGAs to analyze the output of single-cell genome sequencers and to reconstruct the mutation history of a group of cells. It has been primarily developed as part of the Bachelor's Thesis "Accelerating Single-Cell Inference of Tumor Evolution with FPGAs" by Jan-Oliver Opdenhövel, with the goal of providing an implementation of the same algorithm with a higher throughput, while maintaining the solution quality.
+Welcome to ffSCITE. ffSCITE (short for "fabulously fast SCITE") is an FPGA-accelerated implementation of the [SCITE](https://github.com/cbg-ethz/SCITE) software package to compute mutation histories of somatic cells. Given noisy mutation profiles of single cells, ffSCITE performs a stochastic search to find the Maximum Likelihood (ML) tree. Tree reconstruction can be combined with an estimation of the error rates in the mutation profiles.
 
-## About SCITE and ffSCITE
+The SCITE algorithm is particularly designed for reconstructing mutation histories of tumors based on mutation profiles obtained from single-cell exome sequencing experiments, but is in principle applicable to any type of (noisy) mutation profiles for which the infinite sites assumption can be made.
+ 
+This implementation in particular has been developed as part of the Bachelor's Thesis "Accelerating Single-Cell Inference of Tumor Evolution with FPGAs" by Jan-Oliver Opdenhövel, with the goal of providing an implementation of the same algorithm with a higher throughput, while maintaining the solution quality. The LaTeX code of the thesis is found in [`docs/thesis/thesis.tex`](docs/thesis/thesis.tex) and it can be built using a full [TeX-Live](https://tug.org/texlive/) installation.
 
-TBA: Little introduction of the problem and what makes ffSCITE "special."
+ffSCITE is open source software and available under the GPL3 license.
 
 ## Building
 
@@ -83,4 +85,31 @@ ffSCITE will then load the the given input and execute the requested number of c
 
 ## Performance and Quality benchmarks
 
-TBA: Describe how to run the benchmarks, how to evaluate them with the "tool."
+The following section describes the execution of the performance and quality benchmarks referenced in the thesis. First of all, all scripts assume that a valid ffSCITE binary found under the path `build/ffSCITE` and that a valid SCITE binary is found under the path `build/scite`. The scripts are also specifically tailored to the environment of the Noctua 2 supercomputer, the targeted Bittware 520N cards, and one specific user accounts. Running the benchmarks on other systems, for other cards, or other other user accounts may require changes.
+
+The performance benchmark is prepared and submitted as follows:
+``` bash
+./scripts/performance_benchmark/generate_inputs.sh
+sbatch scripts/performance_benchmark/ffscite.sh
+sbatch scripts/performance_benchmark/scite.sh
+```
+This creates the output directory `performance_benchmark.out` with different inputs and submits the execution jobs to the workload manager: One for the FPGA-based ffSCITE and one for the single-threaded SCITE. After these jobs are finished, the outputs can be analyzed with the verification tool:
+``` bash
+module load fpga intel/oneapi # Load oneAPI, which contains a Python distribution with all required libraries installed.
+./tool.py quickperf # Print some quick information of the performance data
+./tool.py perftable # Print a markdown table with performance data
+./tool.py perfgraph # Visualize the performance data with Matplotlib
+```
+These subcommands have multiple options which can be found by executing them with the `-h` option.
+
+The quality benchmark works similarly. Preparation and submission is done with the following commands:
+``` bash
+./scripts/quality_benchmark/generate_inputs.sh
+sbatch scripts/quality_benchmark/ffscite.sh
+sbatch scripts/quality_benchmark/scite.sh
+```
+Once these jobs are completed, the results can be retrieved with the following command:
+``` bash
+module load fpga intel/oneapi # Load oneAPI, which contains a Python distribution with all required libraries installed.
+./tool.py tost # Execute the "Two One-Sided t-Tests" procedure on the sampled quality data.
+```
