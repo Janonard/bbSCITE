@@ -22,6 +22,25 @@
 #include <random>
 
 namespace ffSCITE {
+/**
+ * @brief The raw source of which the move parameters are calculated.
+ *
+ * `raw_v`, `raw_w` are two distinct nodes sampled uniformly from all non-root
+ * nodes. Since their relationship in the tree is not known, raw_v may be an
+ * ancestor of raw_w, which would be illegal for the final parameters.
+ *
+ * `raw_descendant_of_v` and `raw_nondescendant_of_v` are uniformly sampled
+ * floating point numbers in [0,1). Multiplying this number with the number of
+ * (non)descendants and flooring it yields the index of the (non)descendant in
+ * the sorted list of (non)descendants.
+ *
+ * `beta_jump` is a normally distributed floating point number. The new beta
+ * value is computed by adding the old beta value to the jump and wrapping the
+ * resulting sum to [0,1].
+ *
+ * `acceptance_level` is the level at which the proposed change is accepted as
+ * the new current state.
+ */
 struct RawMoveSample {
   MoveType move_type;
   uint32_t raw_v, raw_w;
@@ -30,8 +49,17 @@ struct RawMoveSample {
   float acceptance_level;
 } __attribute__((aligned(32)));
 
+/**
+ * @brief A distribution-like class that generates raw moves.
+ */
 class RawMoveDistribution {
 public:
+  /**
+   * @brief Construct a new distribution object.
+   *
+   * @param n_nodes The number of nodes in the tree.
+   * @param parameters The CLI parameters of ffSCITE.
+   */
   RawMoveDistribution(uint32_t n_nodes, Parameters const &parameters)
       : prob_beta_change(parameters.get_prob_beta_change()),
         prob_prune_n_reattach(parameters.get_prob_prune_n_reattach()),
@@ -40,6 +68,32 @@ public:
         unit_distribution(0, 1),
         normal_distribution(0, parameters.get_beta_jump_sd()) {}
 
+  /**
+   * @brief Construct a new distribution object.
+   *
+   * @param n_nodes The number of nodes in the tree.
+   * @param prob_beta_change The probability of a beta change move.
+   * @param prob_prune_n_reattach The probability of a "prune and reattach"
+   * move.
+   * @param prob_swap_nodes The probability of a "swap nodes" move.
+   * @param beat_jump_sd The standard derivation of the beta jump summand.
+   */
+  RawMoveDistribution(uint32_t n_nodes, float prob_beta_change,
+                      float prob_prune_n_reattach, float prob_swap_nodes,
+                      float beat_jump_sd)
+      : prob_beta_change(prob_beta_change),
+        prob_prune_n_reattach(prob_prune_n_reattach),
+        prob_swap_nodes(prob_swap_nodes), v_distribution(0, n_nodes - 2),
+        w_distribution(0, n_nodes - 3), unit_distribution(0, 1),
+        normal_distribution(0, beat_jump_sd) {}
+
+  /**
+   * @brief Sample a random raw move.
+   * 
+   * @tparam RNG The type of URNG to use.
+   * @param rng The URNG instance to use.
+   * @return RawMoveSample The sampled move.
+   */
   template <typename RNG> RawMoveSample operator()(RNG &rng) {
     MoveType move_type = sample_move(rng);
     std::array<uint32_t, 2> v_and_w = sample_nonroot_nodepair(rng);

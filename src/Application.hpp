@@ -185,7 +185,7 @@ public:
 
     std::vector<event> events;
     events.push_back(enqueue_io());
-    events.push_back(enqueue_tree_scorer());
+    events.push_back(enqueue_work_kernel());
 
     std::vector<uint64_t> starts, ends;
 
@@ -321,13 +321,13 @@ private:
   }
 
   /**
-   * @brief Enqueue the tree scorer kernel, which computes the resulting state
-   * of a move, computes its likelihood and decides whether it is the new
-   * current state of the chain.
+   * @brief Enqueue the work kernel, which loads and realizes the move
+   * parameters, computes the resulting state of a move, computes its likelihood
+   * and decides whether it is the new current state of the chain.
    *
    * @return cl::sycl::event The event object of the kernel invocation.
    */
-  cl::sycl::event enqueue_tree_scorer() {
+  cl::sycl::event enqueue_work_kernel() {
     using namespace cl::sycl;
 
     return working_queue.submit([&](handler &cgh) {
@@ -353,7 +353,7 @@ private:
       uint32_t n_steps = parameters.get_chain_length();
       uint32_t n_chains = parameters.get_n_chains();
 
-      cgh.single_task<class TreeScorerKernel>([=]() {
+      cgh.single_task<class WorkKernel>([=]() {
         MutationDataMatrix data;
         TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
                                    n_genes, data_ac, data);
@@ -398,8 +398,7 @@ private:
           float acceptance_probability =
               neighborhood_correction *
               std::exp((proposed_score - current_score) * gamma);
-          bool accept_move =
-              acceptance_probability > raw_move.acceptance_level;
+          bool accept_move = acceptance_probability > raw_move.acceptance_level;
 
           ChainMeta output_meta{
               .beta = accept_move ? proposed_beta : current_beta,
