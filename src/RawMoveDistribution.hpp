@@ -28,15 +28,15 @@ struct RawMoveSample {
   float raw_descendant_of_v, raw_nondescendant_of_v;
   float beta_jump;
   float acceptance_level;
-};
+} __attribute__((aligned(32)));
 
 class RawMoveDistribution {
 public:
-  RawMoveDistribution(uint32_t n_nodes, Parameters parameters)
+  RawMoveDistribution(uint32_t n_nodes, Parameters const &parameters)
       : prob_beta_change(parameters.get_prob_beta_change()),
         prob_prune_n_reattach(parameters.get_prob_prune_n_reattach()),
         prob_swap_nodes(parameters.get_prob_swap_nodes()),
-        v_distribution(n_nodes - 2), w_distribution(n_nodes - 3),
+        v_distribution(0, n_nodes - 2), w_distribution(0, n_nodes - 3),
         unit_distribution(0, 1),
         normal_distribution(0, parameters.get_beta_jump_sd()) {}
 

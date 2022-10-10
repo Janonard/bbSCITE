@@ -94,7 +94,8 @@ public:
   Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
               uint32_t n_cells, uint32_t n_genes)
-      : current_am_buffer(cl::sycl::range<1>(1)),
+      : raw_moves(cl::sycl::range<1>(1)),
+        current_am_buffer(cl::sycl::range<1>(1)),
         current_beta_buffer(cl::sycl::range<1>(1)),
         current_score_buffer(cl::sycl::range<1>(1)),
         best_am_buffer(cl::sycl::range<1>(1)),
@@ -155,6 +156,19 @@ public:
                             current_beta_ac[rep_i]);
       current_score_ac[rep_i] = host_scorer.logscore_tree(tree);
     }
+
+    /*
+     * Generate the raw move samples.
+     */
+    raw_moves = cl::sycl::range<1>(this->parameters.get_n_chains() *
+                                   this->parameters.get_chain_length());
+    auto raw_moves_ac =
+        raw_moves.template get_access<cl::sycl::access::mode::discard_write>();
+
+    RawMoveDistribution distribution(n_genes + 1, this->parameters);
+    for (uint32_t i = 0; i < raw_moves.get_range()[0]; i++) {
+      raw_moves_ac[i] = distribution(rng);
+    }
   }
 
   /**
@@ -171,7 +185,6 @@ public:
 
     std::vector<event> events;
     events.push_back(enqueue_io());
-    events.push_back(enqueue_change_proposer());
     events.push_back(enqueue_tree_scorer());
 
     std::vector<uint64_t> starts, ends;
@@ -232,23 +245,6 @@ private:
   using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
   using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
   using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
-
-  /**
-   * @brief The scalar meta-information of a proposed change.
-   */
-  struct ProposedChangeMeta {
-    float current_beta;
-    float current_score;
-    MoveType move_type;
-    uint32_t v, w, descendant_of_v, nondescendant_of_v;
-    float new_beta;
-    float acceptance_level;
-  };
-
-  using ProposedChangeMetaPipe =
-      cl::sycl::pipe<class ChangedStateMetaPipeID, ProposedChangeMeta>;
-  using ProposedChangeTreePipe =
-      cl::sycl::pipe<class ChangedStateTreePipeID, AncestryVector>;
 
   /**
    * @brief Enqueue the IO kernel which controls the introduction of initial
@@ -325,88 +321,6 @@ private:
   }
 
   /**
-   * @brief Enqueue the change proposer kernel which proposes changes to a chain
-   * state.
-   *
-   * @return cl::sycl::event The event object of the kernel invocation.
-   */
-  cl::sycl::event enqueue_change_proposer() {
-    using namespace cl::sycl;
-
-    std::random_device seeder;
-    std::array<uint64_t, 4> seed;
-    seed[0] = seeder();
-    seed[1] = seeder();
-    seed[2] = seeder();
-    seed[3] = seeder();
-
-    return working_queue.submit([&](handler &cgh) {
-      float prob_beta_change = parameters.get_prob_beta_change();
-      float prob_prune_n_reattach = parameters.get_prob_prune_n_reattach();
-      float prob_swap_nodes = parameters.get_prob_swap_nodes();
-      float beta_jump_sd =
-          parameters.get_beta_sd() / parameters.get_beta_jump_scaling_chi();
-      uint32_t n_steps = parameters.get_chain_length();
-      uint32_t n_chains = parameters.get_n_chains();
-      uint32_t n_genes = this->n_genes;
-
-      cgh.single_task<class ChangeProposerKernel>([=]() {
-        oneapi::dpl::minstd_rand nodepair_rng, descendant_rng, move_rng,
-            beta_rng;
-        nodepair_rng.seed(seed[0]);
-        descendant_rng.seed(seed[1]);
-        move_rng.seed(seed[2]);
-        beta_rng.seed(seed[3]);
-
-        for (uint32_t i = 0; i < n_chains * n_steps; i++) {
-          ChainMeta input_meta = InputMetaPipe::read();
-          AncestorMatrix current_am;
-          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            current_am[word_i] = InputTreePipe::read();
-          }
-
-          MutationTreeImpl current_tree(current_am, n_genes, input_meta.beta);
-
-          std::array<uint32_t, 2> v_and_w =
-              current_tree.sample_nonroot_nodepair(nodepair_rng);
-          uint32_t v = v_and_w[0];
-          uint32_t w = v_and_w[1];
-
-          uint32_t descendant_of_v =
-              current_tree.sample_descendant(descendant_rng, v);
-          uint32_t nondescendant_of_v =
-              current_tree.sample_nondescendant(descendant_rng, v);
-
-          MoveType move_type =
-              current_tree.sample_move(move_rng, prob_beta_change,
-                                       prob_prune_n_reattach, prob_swap_nodes);
-
-          float new_beta = current_tree.sample_new_beta(beta_rng, beta_jump_sd);
-
-          float acceptance_level =
-              oneapi::dpl::uniform_real_distribution(0.0, 1.0)(move_rng);
-
-          ProposedChangeMeta proposed_change_meta{
-              .current_beta = input_meta.beta,
-              .current_score = input_meta.score,
-              .move_type = move_type,
-              .v = v,
-              .w = w,
-              .descendant_of_v = descendant_of_v,
-              .nondescendant_of_v = nondescendant_of_v,
-              .new_beta = new_beta,
-              .acceptance_level = acceptance_level};
-          ProposedChangeMetaPipe::write(proposed_change_meta);
-
-          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            ProposedChangeTreePipe::write(current_am[word_i]);
-          }
-        }
-      });
-    });
-  }
-
-  /**
    * @brief Enqueue the tree scorer kernel, which computes the resulting state
    * of a move, computes its likelihood and decides whether it is the new
    * current state of the chain.
@@ -418,6 +332,8 @@ private:
 
     return working_queue.submit([&](handler &cgh) {
       auto data_ac = data_buffer.template get_access<access::mode::read>(cgh);
+      auto raw_moves_ac =
+          raw_moves.template get_access<access::mode::read>(cgh);
 
       auto best_am_ac =
           best_am_buffer.template get_access<access::mode::discard_write>(cgh);
@@ -447,44 +363,23 @@ private:
         float best_score = -std::numeric_limits<float>::infinity();
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
-          ProposedChangeMeta proposed_change_meta =
-              ProposedChangeMetaPipe::read();
+          ChainMeta tree_meta = InputMetaPipe::read();
 
           AncestorMatrix current_am;
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            current_am[word_i] = ProposedChangeTreePipe::read();
+            current_am[word_i] = InputTreePipe::read();
           }
 
-          float current_beta = proposed_change_meta.current_beta;
-          float current_score = proposed_change_meta.current_score;
+          float current_beta = tree_meta.beta;
+          float current_score = tree_meta.score;
           MutationTreeImpl current_tree(current_am, n_genes, current_beta);
 
-          uint32_t v = proposed_change_meta.v;
-          uint32_t w = proposed_change_meta.w;
+          RawMoveSample raw_move = raw_moves_ac[i];
+          typename MutationTreeImpl::ModificationParameters mod_params =
+              current_tree.realize_raw_move_sample(raw_move);
 
-          uint32_t parent_of_v, parent_of_w;
-          for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-            if (node_i >= current_tree.get_n_nodes()) {
-              continue;
-            }
-            if (current_tree.is_parent(node_i, v)) {
-              parent_of_v = node_i;
-            }
-            if (current_tree.is_parent(node_i, w)) {
-              parent_of_w = node_i;
-            }
-          }
-
-          typename MutationTreeImpl::ModificationParameters mod_params{
-              .move_type = proposed_change_meta.move_type,
-              .v = proposed_change_meta.v,
-              .w = proposed_change_meta.w,
-              .parent_of_v = parent_of_v,
-              .parent_of_w = parent_of_w,
-              .descendant_of_v = proposed_change_meta.descendant_of_v,
-              .nondescendant_of_v = proposed_change_meta.nondescendant_of_v,
-              .new_beta = proposed_change_meta.new_beta,
-          };
+          uint32_t v = mod_params.v;
+          uint32_t w = mod_params.w;
 
           AncestorMatrix proposed_am;
           MutationTreeImpl proposed_tree(proposed_am, current_tree, mod_params);
@@ -492,7 +387,7 @@ private:
           float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
           float neighborhood_correction;
-          if (proposed_change_meta.move_type == MoveType::SwapSubtrees &&
+          if (raw_move.move_type == MoveType::SwapSubtrees &&
               current_tree.is_ancestor(w, v)) {
             neighborhood_correction = float(current_tree.get_n_descendants(v)) /
                                       float(current_tree.get_n_descendants(w));
@@ -504,7 +399,7 @@ private:
               neighborhood_correction *
               std::exp((proposed_score - current_score) * gamma);
           bool accept_move =
-              acceptance_probability > proposed_change_meta.acceptance_level;
+              acceptance_probability > raw_move.acceptance_level;
 
           ChainMeta output_meta{
               .beta = accept_move ? proposed_beta : current_beta,
@@ -536,6 +431,8 @@ private:
       });
     });
   }
+
+  cl::sycl::buffer<RawMoveSample, 1> raw_moves;
 
   cl::sycl::buffer<AncestorMatrix, 1> current_am_buffer;
   cl::sycl::buffer<float, 1> current_beta_buffer;

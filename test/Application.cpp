@@ -22,10 +22,10 @@ using namespace ffSCITE;
 
 constexpr uint32_t n_cells = 15;
 constexpr uint32_t n_genes = 4;
-constexpr uint32_t pipeline_capacity = 2;
+constexpr uint32_t pipeline_capacity = 1;
 
 constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
-constexpr unsigned long n_chains = pipeline_capacity;
+constexpr unsigned long n_chains = 3;
 constexpr unsigned long chain_length = 50000;
 
 using ApplicationImpl = Application<32, 31, pipeline_capacity>;
