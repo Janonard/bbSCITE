@@ -702,6 +702,181 @@ TEST_CASE("MutationTree::sample_descendant_or_nondescendant",
   REQUIRE(t < quantile(chi_squared_dist, 1 - hypothesis_test_alpha));
 }
 
+TEST_CASE("MutationTree::get_descendant_or_nondescendant", "[MutationTree]") {
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
+
+  REQUIRE(tree.get_descendant(2, 0) == 0);
+  REQUIRE(tree.get_descendant(2, 1) == 1);
+  REQUIRE(tree.get_descendant(2, 2) == 2);
+  REQUIRE(tree.get_descendant(6, 0) == 4);
+  REQUIRE(tree.get_descendant(6, 1) == 6);
+
+  REQUIRE(tree.get_nondescendant(2, 0) == 3);
+  REQUIRE(tree.get_nondescendant(2, 1) == 4);
+  REQUIRE(tree.get_nondescendant(2, 2) == 5);
+  REQUIRE(tree.get_nondescendant(2, 3) == 6);
+  REQUIRE(tree.get_nondescendant(2, 4) == 7);
+}
+
+TEST_CASE("MutationTree::realize_raw_move_sample", "[MutationTree]") {
+  /*
+   * Original tree:
+   *
+   *   ┌-7-┐
+   *  ┌5┐ ┌6
+   * ┌2┐3 4
+   * 0 1
+   */
+  AncestorMatrix am =
+      Tree::parent_vector_to_ancestor_matrix({2, 2, 5, 5, 6, 7, 7, 7});
+  Tree tree(am, 7, 0.42);
+  ModificationParameters params;
+
+  // =====================
+  // Test forwarded fields
+  // =====================
+
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 2,
+      .raw_w = 6,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0.25,
+  });
+  REQUIRE(params.move_type == ffSCITE::MoveType::ChangeBeta);
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::PruneReattach,
+      .raw_v = 2,
+      .raw_w = 6,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0.75,
+  });
+  REQUIRE(params.move_type == ffSCITE::MoveType::PruneReattach);
+
+  // =================================
+  // Test the correct order of v and w
+  // =================================
+
+  // Unrelated:
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 2,
+      .raw_w = 6,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.v == 2);
+  REQUIRE(params.w == 6);
+
+  // Related, but correct order:
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 2,
+      .raw_w = 7,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.v == 2);
+  REQUIRE(params.w == 7);
+
+  // Related, but in reversed order:
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 7,
+      .raw_w = 2,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.v == 2);
+  REQUIRE(params.w == 7);
+
+  // ====================
+  // Test parent retrival
+  // ====================
+
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 2,
+      .raw_w = 6,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.parent_of_v == 5);
+  REQUIRE(params.parent_of_w == 7);
+
+  // ===========================================
+  // Test descendant and nondescendant retrieval
+  // ===========================================
+
+  // First (non)descendant
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 2,
+      .raw_w = 6,
+      .raw_descendant_of_v = 0,
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.descendant_of_v == 0);
+  REQUIRE(params.nondescendant_of_v == 3);
+
+  // Second (non)descendant
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 2,
+      .raw_w = 6,
+      // Get the first of three descendants, and hit the middle to account for
+      // rounding errors.
+      .raw_descendant_of_v = 0.5, // = (1/3) + (1/6)
+      // Similar to above, with five nondescendants in total
+      .raw_nondescendant_of_v = 0.3, // = (1/5) + (1/10)
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.descendant_of_v == 1);
+  REQUIRE(params.nondescendant_of_v == 4);
+
+  // Hitting exact bounds
+  // Node 6 has two descendants, 4 and 6. If we hit the exact bound of the
+  // decision area, the method should choose the higher option.
+  params = tree.realize_raw_move_sample(ffSCITE::RawMoveSample{
+      .move_type = ffSCITE::MoveType::ChangeBeta,
+      .raw_v = 6,
+      .raw_w = 2,
+      .raw_descendant_of_v = 0.5, // = (1/2)
+      .raw_nondescendant_of_v = 0,
+      .beta_jump = 0,
+      .acceptance_level = 0,
+  });
+  REQUIRE(params.descendant_of_v == 6);
+
+  // Not testing the beta value since we know that it does not stay within
+  // [0,1].
+}
+
 TEST_CASE("MutationTree::sample_new_beta", "[MutationTree]") {
   std::mt19937 rng;
   rng.seed(std::random_device()());

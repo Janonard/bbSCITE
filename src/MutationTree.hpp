@@ -15,7 +15,8 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "MoveType.hpp"
+#include "RawMoveDistribution.hpp"
+
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -252,6 +253,58 @@ public:
   MutationTree(MutationTree const &other) = default;
   MutationTree<max_n_genes> &
   operator=(MutationTree<max_n_genes> const &other) = default;
+
+  ModificationParameters
+  realize_raw_move_sample(RawMoveSample raw_move_sample) const {
+    uint32_t v = raw_move_sample.raw_v;
+    uint32_t w = raw_move_sample.raw_w;
+    if (is_ancestor(v, w)) {
+      std::swap(v, w);
+    }
+
+    uint32_t parent_of_v, parent_of_w;
+    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
+      if (node_i >= get_n_nodes()) {
+        continue;
+      }
+      if (is_parent(node_i, v)) {
+        parent_of_v = node_i;
+      }
+      if (is_parent(node_i, w)) {
+        parent_of_w = node_i;
+      }
+    }
+
+    uint32_t n_descendants = get_n_descendants(v);
+    uint32_t n_nondescendants = n_nodes - n_descendants;
+
+    uint32_t i_descendant =
+        std::floor(raw_move_sample.raw_descendant_of_v * n_descendants);
+    uint32_t i_nondescendant =
+        std::floor(raw_move_sample.raw_nondescendant_of_v * n_nondescendants);
+
+    uint32_t descendant_of_v = get_descendant(v, i_descendant);
+    uint32_t nondescendant_of_v = get_nondescendant(v, i_nondescendant);
+
+    float new_beta = beta + raw_move_sample.beta_jump;
+    if (new_beta < 0) {
+      new_beta = std::abs(new_beta);
+    }
+    if (new_beta > 1) {
+      new_beta = new_beta - 2 * (new_beta - 1);
+    }
+
+    return ModificationParameters{
+        .move_type = raw_move_sample.move_type,
+        .v = v,
+        .w = w,
+        .parent_of_v = parent_of_v,
+        .parent_of_w = parent_of_w,
+        .descendant_of_v = descendant_of_v,
+        .nondescendant_of_v = nondescendant_of_v,
+        .new_beta = new_beta,
+    };
+  }
 
   /**
    * @brief Compute the ancestor matrix of the tree described by the given
@@ -555,6 +608,14 @@ public:
     return n_descendants;
   }
 
+  uint32_t get_descendant(uint32_t node_i, uint32_t i_descendant) const {
+    return get_descendant_or_nondescendant(node_i, i_descendant, true);
+  }
+
+  uint32_t get_nondescendant(uint32_t node_i, uint32_t i_nondescendant) const {
+    return get_descendant_or_nondescendant(node_i, i_nondescendant, false);
+  }
+
   /**
    * @brief Return a boolean array describing a node's ancestors.
    *
@@ -844,6 +905,46 @@ public:
   }
 
 private:
+  uint32_t get_descendant_or_nondescendant(uint32_t node_i,
+                                           uint32_t i_descendant,
+                                           bool get_descendant) const {
+    AncestryVector descendant = get_descendants(node_i);
+
+    // If we have to sample a nondescendant, we invert the bitvector and
+    // continue as if we were to sample a descendant.
+    if (!get_descendant) {
+#pragma unroll
+      for (uint32_t i = 0; i < max_n_nodes; i++) {
+        descendant[i] = !descendant[i];
+      }
+    }
+
+    // Count the (non)descendants.
+    uint32_t n_descendants = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      if (i < get_n_nodes() && descendant[i]) {
+        n_descendants++;
+      }
+    }
+
+    // Walk through the (non)descendant bitvector and pick the correct node
+    // index.
+    uint32_t descendant_i = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      if (i < get_n_nodes() && descendant[i]) {
+        if (i_descendant == 0) {
+          descendant_i = i;
+          break;
+        } else {
+          i_descendant--;
+        }
+      }
+    }
+    return descendant_i;
+  }
+
   /**
    * @brief Sample uniformly from either all descendants or non-descendants of a
    * node.
