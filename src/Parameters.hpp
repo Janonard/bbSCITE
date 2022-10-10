@@ -27,16 +27,15 @@ namespace ffSCITE {
 /**
  * @brief Container with all experiment parameters and a method to load them
  * from CLI arguments.
- *
  */
 class Parameters {
 public:
   /**
    * @brief Initialize the parameters class with default values.
    *
-   * Not that for some fields like @ref get_input_path, the internal default
+   * Note that for some fields like @ref get_input_path, the internal default
    * value is std::nullopt. Therefore, calling the respective getter without
-   * setting it before will through an exception.
+   * setting it before will throw an exception.
    */
   Parameters()
       : input_path(std::nullopt), output_path_base(std::nullopt),

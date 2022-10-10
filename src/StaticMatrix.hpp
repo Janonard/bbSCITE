@@ -32,6 +32,14 @@ public:
   StaticMatrix() : internal() {}
   ~StaticMatrix() {}
 
+  /**
+   * @brief Construct a new Static Matrix and initialize it with the given
+   * value.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   *
+   * @param value The initial value of all entries.
+   */
   StaticMatrix(T value) : internal() {
 #pragma unroll
     for (uint32_t c = 0; c < width; c++) {
@@ -46,14 +54,44 @@ public:
   StaticMatrix &
   operator=(StaticMatrix<T, width, height> const &other) = default;
 
+  /**
+   * @brief Access an element in the matrix.
+   *
+   * It is assumed that the index is within the bounds of this matrix.
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @param idx The two-dimensional index of the query.
+   * @return T const& A reference to the queried element.
+   */
   T const &operator[](std::tuple<uint32_t, uint32_t> idx) const {
     return internal[std::get<0>(idx)][std::get<1>(idx)];
   }
 
+  /**
+   * @brief Access an element in the matrix.
+   *
+   * It is assumed that the index is within the bounds of this matrix.
+   *
+   * This method works equally well on CPUs and on FPGAs.
+   *
+   * @param idx The two-dimensional index of the query.
+   * @return T & A reference to the queried element.
+   */
   T &operator[](std::tuple<uint32_t, uint32_t> idx) {
     return internal[std::get<0>(idx)][std::get<1>(idx)];
   }
 
+  /**
+   * @brief Vector-add another matrix to this matrix.
+   * 
+   * It is assumed that the add-assign operation for entries exists and is well-defined.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   * 
+   * @param rhs The other matrix to add.
+   * @return StaticMatrix<T, width, height>& A reference to this, resulting matrix.
+   */
   StaticMatrix<T, width, height> &
   operator+=(StaticMatrix<T, width, height> rhs) {
 #pragma unroll
@@ -66,6 +104,16 @@ public:
     return *this;
   }
 
+  /**
+   * @brief Multiply the given value to the entries of this matrix.
+   * 
+   * It is assumed that the multiply-assign operation for entries exists and is well-defined.
+   *
+   * This method is designed and optimized for FPGAs, but works on CPUs too.
+   * 
+   * @param scalar The scalar to multiply with all entries.
+   * @return StaticMatrix<T, width, height>& A reference to this, resulting matrix.
+   */
   StaticMatrix<T, width, height> &operator*=(T scalar) {
 #pragma unroll
     for (uint32_t c = 0; c < width; c++) {

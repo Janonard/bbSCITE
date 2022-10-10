@@ -21,9 +21,23 @@ namespace ffSCITE {
  * @brief The different move types that the proposer may propose.
  */
 enum class MoveType {
+  /**
+   * @brief Add a normally distributed value to the current beta value.
+   */
   ChangeBeta,
+  /**
+   * @brief Sample one node, remove the edge from it's old parent and attach it
+   * to another node.
+   */
   PruneReattach,
+  /**
+   * @brief Sample two nodes and swap their labels.
+   */
   SwapNodes,
+  /**
+   * @brief Sample two nodes, remove the edges to their old parents and attach
+   * them to the opposite, previous parents.
+   */
   SwapSubtrees,
 };
 } // namespace ffSCITE

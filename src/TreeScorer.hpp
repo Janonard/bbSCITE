@@ -26,12 +26,12 @@ namespace ffSCITE {
  * mutation data.
  *
  * An object of this class takes mutation data from single cell sequencing and
- * computes how likely it is that a given chain tree (combination of error rate
- * and mutation tree) is correct. Logically, this is done by finding the most
- * likely attachment node for every cell and multiplying the likelihoods for
- * every cell. However, in order to eliminate expensive power operations, the
- * algorithms internally work on a logarithmic level where values can be added
- * instead of multiplied and multiplied instead of powered.
+ * computes how likely it is that a given mutation tree is correct. Logically,
+ * this is done by finding the most likely attachment node for every cell and
+ * multiplying the likelihoods for every cell. However, in order to eliminate
+ * expensive power operations, the algorithms internally work on a logarithmic
+ * level where values can be added instead of multiplied and multiplied instead
+ * of powered.
  *
  * @tparam max_n_cells The maximum number of cells processable.
  * @tparam max_n_genes The maximum number of genes processable.
@@ -49,18 +49,30 @@ public:
   using MutationTreeImpl = MutationTree<max_n_genes>;
 
   /**
-   * @brief Re
+   * @brief Type of the ancestor matrix rows.
    */
   using AncestryVector = typename MutationTreeImpl::AncestryVector;
 
   /**
-   * @brief Data type of the entries in the mutation data matrix.
+   * @brief Data type of the mutation data matrix rows.
    *
-   * 0b00 stands for "no mutation found", 0b01 stands for "mutation found", 0b10
-   * stands for "no data", and 0b11 is currently unused.
+   * It is implemented as a bitvector to fully utilize the space. There are two
+   * bits per gene. 0b00 stands for "no mutation found", 0b01 stands for
+   * "mutation found", 0b10 stands for "no data", and 0b11 is currently unused.
+   * These bits need to be extracted from the vector, so the (2*i)th bit and
+   * (2*i+1)th bit together denote whether the cell has a mutation at the i-th
+   * gene or not.
    */
   using MutationDataWord = ac_int<2 * max_n_genes, false>;
 
+  /**
+   * @brief Internal representation of the input mutation data.
+   *
+   * It is implemented as an array of bitvectors to fully utilize the space. In
+   * order to find out whether the ith cell has a mutation at the jth gene, one
+   * needs to load the ith word from the array and extract the (2*j)th and
+   * (2*j+1)th bit from the word.
+   */
   using MutationDataMatrix = std::array<MutationDataWord, max_n_cells>;
 
   /**
@@ -70,7 +82,6 @@ public:
 
   /**
    * @brief Shorthand for the mutation data input accessor.
-   *
    */
   using MutationDataAccessor =
       cl::sycl::accessor<MutationDataWord, 1, cl::sycl::access::mode::read,
@@ -80,15 +91,16 @@ public:
    * @brief Initialize a new tree scorer
    *
    * This new tree scorer uses the initial assumptions over the alpha and beta
-   * error rates and also load the mutation data.
+   * error rates and also loads the mutation data.
    *
    * @param alpha_mean The initial assumption of the alpha error rate (false
    * positive)
    * @param beta_mean The initial assumption of the beta error rate
    * (false negative)
    * @param prior_sd The assumed standard derivation of the beta error rate
-   * @param data An accessor to the mutation input data. The number of cells and
-   * genes is inferred from the accessor range.
+   * @param data_ac An accessor to the mutation input data. The number of cells
+   * and genes is inferred from the accessor range.
+   * @param data A reference to the local mutation data memory block to use.
    */
   TreeScorer(float alpha_mean, float beta_mean, float beta_sd, uint32_t n_cells,
              uint32_t n_genes, MutationDataAccessor data_ac,
@@ -114,12 +126,18 @@ public:
     }
   }
 
+  /**
+   * @brief Compute the log-likelihood of the given beta probability.
+   */
   float logscore_beta(float beta) const {
     return std::log(std::tgamma(bpriora + bpriorb)) +
            (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
   }
 
+  /**
+   * @brief Compute the log-likelihood of the given mutation tree.
+   */
   float logscore_tree(MutationTreeImpl const &tree) {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(tree.get_n_nodes() == n_genes + 1);
@@ -127,6 +145,19 @@ public:
 
     log_error_probabilities[0][1] = std::log(tree.get_beta());
     log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
+
+    /*
+     * First, we compute the likelihood for every cell-node combination, in
+     * other words the likelihood that cell i is attached to node j, and store
+     * those likelihoods in `individual_scores`. Then, we execute a maximum
+     * reduction to find the most-likelihood attachment node for every cell and
+     * store this cell maximum in `cell_scores.` Lastly, we sum all those local
+     * likelihoods up to obtain the likelihood of the entire tree.
+     *
+     * This may look unnecessarily complicated compared to the CPU version, but
+     * this structure is easier to implement on FPGAs and achieves higher
+     * throughput.
+     */
 
     float individual_scores[max_n_cells][max_n_genes + 1];
 
@@ -183,8 +214,7 @@ public:
   }
 
   /**
-   * @brief Compute the logarithm of the likelihood score for the given
-   * occurrences.
+   * @brief Compute the log-likelihood for the given occurrences.
    *
    * @param occurrences The occurrences to compute the likelihood of.
    * @return The log-likelihood for the given occurrences.

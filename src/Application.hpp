@@ -20,22 +20,77 @@
 #include <CL/sycl.hpp>
 
 namespace ffSCITE {
+/**
+ * @brief Controller class for the SCITE algorithm.
+ *
+ * @tparam max_n_cells The maximum number of cells processable by the design.
+ * @tparam max_n_genes The maximum number of genes processable by the design.
+ * @tparam pipeline_capacity The (assumed) capacity of the computation pipeline.
+ * The feedback system assumes that this number is correct, but it has to be
+ * manually verified using design space exploration.
+ */
 template <uint32_t max_n_cells, uint32_t max_n_genes,
           uint32_t pipeline_capacity>
 class Application {
 public:
+  /**
+   * @brief The mutation tree class used by the design.
+   */
   using MutationTreeImpl = MutationTree<max_n_genes>;
+
+  /**
+   * @brief The ancestor matrix class used by the design.
+   */
   using AncestorMatrix = typename MutationTreeImpl::AncestorMatrix;
+
+  /**
+   * @brief The type of the ancestor matrix rows.
+   */
   using AncestryVector = typename MutationTreeImpl::AncestryVector;
+
+  /**
+   * @brief The tree scorer class used by the design on the FPGA.
+   */
   using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
+
+  /**
+   * @brief The tree scorer class used to compute the scores of the initial
+   * states on the host.
+   */
   using HostTreeScorerImpl = TreeScorer<max_n_cells, max_n_genes,
                                         cl::sycl::access::target::host_buffer>;
+
+  /**
+   * @brief Type of the mutation data matrix rows.
+   */
   using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
+
+  /**
+   * @brief Type of the locally stored mutation data matrix.
+   */
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
+
+  /**
+   * @brief Type of the matrix used to count error occurrences.
+   */
   using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
 
+  /**
+   * @brief The maximum number of tree nodes supported by the design.
+   */
   static constexpr uint32_t max_n_nodes = MutationTreeImpl::max_n_nodes;
 
+  /**
+   * @brief Create a new application object.
+   *
+   * @param data_buffer A buffer with mutation data, used to judge the
+   * likelihood of a mutation tree.
+   * @param working_queue A SYCL queue, configured with the correct FPGA or FPGA
+   * emulator device.
+   * @param parameters The CLI parameters of the application.
+   * @param n_cells The total number of cells in the input data.
+   * @param n_genes The total number of genes in the input data.
+   */
   Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
               uint32_t n_cells, uint32_t n_genes)
@@ -47,17 +102,11 @@ public:
         best_score_buffer(cl::sycl::range<1>(1)), data_buffer(data_buffer),
         working_queue(working_queue), parameters(parameters), n_cells(n_cells),
         n_genes(n_genes) {
-    initialize_state();
-  }
-
-  void initialize_state() {
     using namespace cl::sycl;
 
-    oneapi::dpl::minstd_rand rng;
-    rng.seed(std::random_device()());
-
-    if (parameters.get_n_chains() % pipeline_capacity != 0) {
-      uint32_t old_n_chains = parameters.get_n_chains();
+    // Check that the required number of chains is correct.
+    if (this->parameters.get_n_chains() % pipeline_capacity != 0) {
+      uint32_t old_n_chains = this->parameters.get_n_chains();
       uint32_t new_n_chains =
           old_n_chains +
           (pipeline_capacity - (old_n_chains % pipeline_capacity));
@@ -66,12 +115,15 @@ public:
       std::cerr << "This is the next multiple of the pipeline capacity and "
                    "doing so improves the performance."
                 << std::endl;
-      parameters.set_n_chains(new_n_chains);
+      this->parameters.set_n_chains(new_n_chains);
     }
 
-    current_am_buffer = range<1>(parameters.get_n_chains());
-    current_beta_buffer = range<1>(parameters.get_n_chains());
-    current_score_buffer = range<1>(parameters.get_n_chains());
+    /*
+     * Generate the initial chain states.
+     */
+    current_am_buffer = range<1>(this->parameters.get_n_chains());
+    current_beta_buffer = range<1>(this->parameters.get_n_chains());
+    current_score_buffer = range<1>(this->parameters.get_n_chains());
 
     auto current_am_ac =
         current_am_buffer.template get_access<access::mode::discard_write>();
@@ -83,10 +135,13 @@ public:
     MutationDataMatrix data;
 
     HostTreeScorerImpl host_scorer(
-        parameters.get_alpha_mean(), parameters.get_beta_mean(),
-        parameters.get_beta_sd(), n_cells, n_genes, data_ac, data);
+        this->parameters.get_alpha_mean(), this->parameters.get_beta_mean(),
+        this->parameters.get_beta_sd(), n_cells, n_genes, data_ac, data);
 
-    for (uint32_t rep_i = 0; rep_i < parameters.get_n_chains(); rep_i++) {
+    oneapi::dpl::minstd_rand rng;
+    rng.seed(std::random_device()());
+
+    for (uint32_t rep_i = 0; rep_i < this->parameters.get_n_chains(); rep_i++) {
       std::vector<uint32_t> pruefer_code =
           MutationTreeImpl::sample_random_pruefer_code(rng, n_genes);
       std::vector<uint32_t> parent_vector =
@@ -94,7 +149,7 @@ public:
       current_am_ac[rep_i] =
           MutationTreeImpl::parent_vector_to_ancestor_matrix(parent_vector);
 
-      current_beta_ac[rep_i] = parameters.get_beta_mean();
+      current_beta_ac[rep_i] = this->parameters.get_beta_mean();
 
       MutationTreeImpl tree(current_am_ac[rep_i], n_genes,
                             current_beta_ac[rep_i]);
@@ -102,30 +157,15 @@ public:
     }
   }
 
-  struct ChainMeta {
-    float beta;
-    float score;
-  };
-
-  using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
-  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
-  using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
-  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
-
-  struct ProposedChangeMeta {
-    float current_beta;
-    float current_score;
-    MoveType move_type;
-    uint32_t v, w, descendant_of_v, nondescendant_of_v;
-    float new_beta;
-    float acceptance_level;
-  };
-
-  using ProposedChangeMetaPipe =
-      cl::sycl::pipe<class ChangedStateMetaPipeID, ProposedChangeMeta>;
-  using ProposedChangeTreePipe =
-      cl::sycl::pipe<class ChangedStateTreePipeID, AncestryVector>;
-
+  /**
+   * @brief Execute the requested number of chains and chain steps on the
+   * configured input, and store the most-likely solution.
+   *
+   * This method blocks on the FPGA execution and overrides the previous
+   * best-known solution.
+   *
+   * @return float The makespan of the design, in seconds.
+   */
   float run_simulation() {
     using namespace cl::sycl;
 
@@ -151,18 +191,28 @@ public:
     return (execution_end - execution_start) / 1000000.0;
   }
 
+  /**
+   * @brief Get the ancestor matrix of the most-likely chain state.
+   */
   AncestorMatrix get_best_am() {
     auto best_am_ac =
         best_am_buffer.template get_access<cl::sycl::access::mode::read>();
     return best_am_ac[0];
   }
 
+  /**
+   * @brief Get the beta value (probability of false negatives) of the
+   * most-likely chain state.
+   */
   float get_best_beta() {
     auto best_beta_ac =
         best_beta_buffer.template get_access<cl::sycl::access::mode::read>();
     return best_beta_ac[0];
   }
 
+  /**
+   * @brief Get the log-likelihood of the most-likely chain state.
+   */
   float get_best_score() {
     auto best_score_ac =
         best_score_buffer.template get_access<cl::sycl::access::mode::read>();
@@ -170,6 +220,42 @@ public:
   }
 
 private:
+  /**
+   * @brief The scalar meta-information of a chain step.
+   */
+  struct ChainMeta {
+    float beta;
+    float score;
+  };
+
+  using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
+  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
+  using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
+  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
+
+  /**
+   * @brief The scalar meta-information of a proposed change.
+   */
+  struct ProposedChangeMeta {
+    float current_beta;
+    float current_score;
+    MoveType move_type;
+    uint32_t v, w, descendant_of_v, nondescendant_of_v;
+    float new_beta;
+    float acceptance_level;
+  };
+
+  using ProposedChangeMetaPipe =
+      cl::sycl::pipe<class ChangedStateMetaPipeID, ProposedChangeMeta>;
+  using ProposedChangeTreePipe =
+      cl::sycl::pipe<class ChangedStateTreePipeID, AncestryVector>;
+
+  /**
+   * @brief Enqueue the IO kernel which controls the introduction of initial
+   * states and the pipeline feedback.
+   *
+   * @return cl::sycl::event The event object of the kernel invocation.
+   */
   cl::sycl::event enqueue_io() {
     using namespace cl::sycl;
 
@@ -238,6 +324,12 @@ private:
     });
   }
 
+  /**
+   * @brief Enqueue the change proposer kernel which proposes changes to a chain
+   * state.
+   *
+   * @return cl::sycl::event The event object of the kernel invocation.
+   */
   cl::sycl::event enqueue_change_proposer() {
     using namespace cl::sycl;
 
@@ -314,6 +406,13 @@ private:
     });
   }
 
+  /**
+   * @brief Enqueue the tree scorer kernel, which computes the resulting state
+   * of a move, computes its likelihood and decides whether it is the new
+   * current state of the chain.
+   *
+   * @return cl::sycl::event The event object of the kernel invocation.
+   */
   cl::sycl::event enqueue_tree_scorer() {
     using namespace cl::sycl;
 

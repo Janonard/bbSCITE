@@ -17,6 +17,7 @@
 	"extensions": [
 		"ms-vscode.cpptools-extension-pack",
 		"streetsidesoftware.code-spell-checker",
+		"ms-vscode.cpptools-themes",
 		"ms-vscode.cmake-tools",
 		"ms-python.python"
 	],
