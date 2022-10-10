@@ -669,9 +669,9 @@ public:
    * @return MoveType The sampled move type.
    */
   template <typename RNG>
-  MoveType sample_move(RNG &rng, float prob_beta_change,
+  static MoveType sample_move(RNG &rng, float prob_beta_change,
                        float prob_prune_n_reattach,
-                       float prob_swap_nodes) const {
+                       float prob_swap_nodes) {
     float change_type_draw =
         oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
     if (change_type_draw <= prob_beta_change) {
@@ -841,6 +841,35 @@ public:
     add_node_to_newick_code(children, stream, get_root());
     stream << std::endl;
     return stream.str();
+  }
+
+  uint32_t get_descendant_or_nondescendant(uint32_t relative_node_i, uint32_t i_descendant, bool get_descendant) const {
+    AncestryVector descendant = get_descendants(relative_node_i);
+
+    // If we have to sample a nondescendant, we invert the bitvector and
+    // continue as if we were to sample a descendant.
+    if (!get_descendant) {
+#pragma unroll
+      for (uint32_t i = 0; i < max_n_nodes; i++) {
+        descendant[i] = !descendant[i];
+      }
+    }
+
+    // Walk through the (non)descendant bitvector and pick the correct node
+    // index.
+    uint32_t sampled_node_i = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < max_n_nodes; i++) {
+      if (i < get_n_nodes() && descendant[i]) {
+        if (i_descendant == 0) {
+          sampled_node_i = i;
+          break;
+        } else {
+          i_descendant--;
+        }
+      }
+    }
+    return sampled_node_i;
   }
 
 private:
