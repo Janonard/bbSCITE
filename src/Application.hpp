@@ -94,8 +94,7 @@ public:
   Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
               uint32_t n_cells, uint32_t n_genes)
-      : raw_samples_buffer(cl::sycl::range<1>(1)),
-        current_am_buffer(cl::sycl::range<1>(1)),
+      : current_am_buffer(cl::sycl::range<1>(1)),
         current_beta_buffer(cl::sycl::range<1>(1)),
         current_score_buffer(cl::sycl::range<1>(1)),
         best_am_buffer(cl::sycl::range<1>(1)),
@@ -155,49 +154,6 @@ public:
       MutationTreeImpl tree(current_am_ac[rep_i], n_genes,
                             current_beta_ac[rep_i]);
       current_score_ac[rep_i] = host_scorer.logscore_tree(tree);
-    }
-
-    /*
-     * Generate raw random samples.
-     */
-    raw_samples_buffer = range<1>(this->parameters.get_n_chains() *
-                                  this->parameters.get_chain_length());
-    uint32_t n_nodes = n_genes + 1;
-    float beta_jump_sd = this->parameters.get_beta_sd() /
-                         this->parameters.get_beta_jump_scaling_chi();
-
-    auto samples_ac =
-        raw_samples_buffer.template get_access<access::mode::discard_write>();
-    for (uint32_t i = 0; i < samples_ac.get_range()[0]; i++) {
-      MoveType move_type = MutationTreeImpl::sample_move(
-          rng, this->parameters.get_prob_beta_change(),
-          this->parameters.get_prob_prune_n_reattach(),
-          this->parameters.get_prob_swap_nodes());
-
-      uint32_t v =
-          oneapi::dpl::uniform_int_distribution<uint32_t>(0, n_nodes - 2)(rng);
-      uint32_t w =
-          oneapi::dpl::uniform_int_distribution<uint32_t>(0, n_nodes - 3)(rng);
-      if (w >= v) {
-        w++;
-      }
-
-      samples_ac[i] = RawRandomSamples{
-          .move_type = MutationTreeImpl::sample_move(
-              rng, this->parameters.get_prob_beta_change(),
-              this->parameters.get_prob_prune_n_reattach(),
-              this->parameters.get_prob_swap_nodes()),
-          .v = v,
-          .w = w,
-          .raw_descendant_of_v =
-              oneapi::dpl::uniform_real_distribution<float>(0, 1)(rng),
-          .raw_nondescendant_of_v =
-              oneapi::dpl::uniform_real_distribution<float>(0, 1)(rng),
-          .raw_beta =
-              oneapi::dpl::normal_distribution<float>(0, beta_jump_sd)(rng),
-          .acceptance_level =
-              oneapi::dpl::uniform_real_distribution<float>(0, 1)(rng),
-      };
     }
   }
 
@@ -276,14 +232,6 @@ private:
   using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
   using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
   using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
-
-  struct RawRandomSamples {
-    MoveType move_type;
-    uint32_t v, w;
-    float raw_descendant_of_v, raw_nondescendant_of_v;
-    float raw_beta;
-    float acceptance_level;
-  } __attribute__((aligned(32)));
 
   /**
    * @brief The scalar meta-information of a proposed change.
@@ -385,10 +333,14 @@ private:
   cl::sycl::event enqueue_change_proposer() {
     using namespace cl::sycl;
 
-    return working_queue.submit([&](handler &cgh) {
-      auto raw_samples_ac =
-          raw_samples_buffer.template get_access<access::mode::read>(cgh);
+    std::random_device seeder;
+    std::array<uint64_t, 4> seed;
+    seed[0] = seeder();
+    seed[1] = seeder();
+    seed[2] = seeder();
+    seed[3] = seeder();
 
+    return working_queue.submit([&](handler &cgh) {
       float prob_beta_change = parameters.get_prob_beta_change();
       float prob_prune_n_reattach = parameters.get_prob_prune_n_reattach();
       float prob_swap_nodes = parameters.get_prob_swap_nodes();
@@ -399,6 +351,13 @@ private:
       uint32_t n_genes = this->n_genes;
 
       cgh.single_task<class ChangeProposerKernel>([=]() {
+        oneapi::dpl::minstd_rand nodepair_rng, descendant_rng, move_rng,
+            beta_rng;
+        nodepair_rng.seed(seed[0]);
+        descendant_rng.seed(seed[1]);
+        move_rng.seed(seed[2]);
+        beta_rng.seed(seed[3]);
+
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
           ChainMeta input_meta = InputMetaPipe::read();
           AncestorMatrix current_am;
@@ -408,42 +367,24 @@ private:
 
           MutationTreeImpl current_tree(current_am, n_genes, input_meta.beta);
 
-          RawRandomSamples raw_samples = raw_samples_ac[i];
-
-          uint32_t v = raw_samples.v;
-          uint32_t w = raw_samples.w;
-
-          if (current_tree.is_ancestor(v, w)) {
-            std::swap(v, w);
-          }
-
-          uint32_t n_descendants = current_tree.get_descendants(v);
-          uint32_t n_nondescendants =
-              current_tree.get_n_nodes() - n_descendants;
-
-          uint32_t i_descendant =
-              std::floor(raw_samples.raw_descendant_of_v * n_descendants);
-          uint32_t i_nondescendant =
-              std::floor(raw_samples.raw_nondescendant_of_v * n_nondescendants);
+          std::array<uint32_t, 2> v_and_w =
+              current_tree.sample_nonroot_nodepair(nodepair_rng);
+          uint32_t v = v_and_w[0];
+          uint32_t w = v_and_w[1];
 
           uint32_t descendant_of_v =
-              current_tree.get_descendant_or_nondescendant(v, i_descendant,
-                                                           true);
+              current_tree.sample_descendant(descendant_rng, v);
           uint32_t nondescendant_of_v =
-              current_tree.get_descendant_or_nondescendant(v, i_nondescendant,
-                                                           false);
+              current_tree.sample_nondescendant(descendant_rng, v);
 
-          MoveType move_type = raw_samples.move_type;
+          MoveType move_type =
+              current_tree.sample_move(move_rng, prob_beta_change,
+                                       prob_prune_n_reattach, prob_swap_nodes);
 
-          float new_beta = current_tree.get_beta() + raw_samples.raw_beta;
-          if (new_beta < 0) {
-            new_beta = std::abs(new_beta);
-          }
-          if (new_beta > 1) {
-            new_beta = new_beta - 2 * (new_beta - 1);
-          }
+          float new_beta = current_tree.sample_new_beta(beta_rng, beta_jump_sd);
 
-          float acceptance_level = raw_samples.acceptance_level;
+          float acceptance_level =
+              oneapi::dpl::uniform_real_distribution(0.0, 1.0)(move_rng);
 
           ProposedChangeMeta proposed_change_meta{
               .current_beta = input_meta.beta,
@@ -596,8 +537,6 @@ private:
     });
   }
 
-  cl::sycl::buffer<RawRandomSamples, 1> raw_samples_buffer;
-
   cl::sycl::buffer<AncestorMatrix, 1> current_am_buffer;
   cl::sycl::buffer<float, 1> current_beta_buffer;
   cl::sycl::buffer<float, 1> current_score_buffer;
@@ -607,7 +546,6 @@ private:
   cl::sycl::buffer<float, 1> best_score_buffer;
 
   cl::sycl::buffer<MutationDataWord, 1> data_buffer;
-
   cl::sycl::queue working_queue;
   Parameters parameters;
   uint32_t n_cells, n_genes;

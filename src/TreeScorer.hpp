@@ -161,10 +161,11 @@ public:
 
     float individual_scores[max_n_cells][max_n_genes + 1];
 
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+    [[intel::loop_coalesce(2)]] for (uint32_t cell_i = 0; cell_i < max_n_cells;
+                                     cell_i++) {
       MutationDataWord observed_mutations = data[cell_i];
 
-#pragma unroll
+#pragma unroll 8
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
         AncestryVector true_mutations = tree.get_ancestors(node_i);
 
