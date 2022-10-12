@@ -149,14 +149,14 @@ public:
      * throughput.
      */
 
-    float individual_scores[max_n_cells][max_n_genes + 1];
+    float cell_scores[max_n_cells];
 
-    [[intel::loop_coalesce(2)]] for (uint32_t cell_i = 0; cell_i < max_n_cells;
-                                     cell_i++) {
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
       AncestryVector is_mutated = this->is_mutated[cell_i];
       AncestryVector is_known = this->is_known[cell_i];
+      float cell_score = -std::numeric_limits<float>::infinity();
 
-#pragma unroll 8
+#pragma unroll
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
         AncestryVector is_ancestor = tree.get_ancestors(node_i);
         float individual_score = 0.0;
@@ -169,7 +169,7 @@ public:
                 is_known &
                 (i_posterior == 1 ? is_mutated : is_mutated.bit_complement()) &
                 (i_prior == 1 ? is_ancestor : is_ancestor.bit_complement());
-            ac_int<std::bit_ceil(max_n_genes), false> n_occurrences = 0;
+            ac_int<std::bit_width(max_n_genes), false> n_occurrences = 0;
 
 #pragma unroll
             for (uint32_t gene_i = 0; gene_i < max_n_genes + 1; gene_i++) {
@@ -181,22 +181,12 @@ public:
           }
         }
 
-        individual_scores[cell_i][node_i] = individual_score;
-      }
-    }
-
-    float cell_scores[max_n_cells];
-
-    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      float best_cell_score = individual_scores[cell_i][0];
-#pragma unroll
-      for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-        if (node_i < n_genes + 1 &&
-            individual_scores[cell_i][node_i] > best_cell_score) {
-          best_cell_score = individual_scores[cell_i][node_i];
+        if (individual_score > cell_score) {
+          cell_score = individual_score;
         }
       }
-      cell_scores[cell_i] = best_cell_score;
+
+      cell_scores[cell_i] = cell_score;
     }
 
     float tree_score = 0.0;
