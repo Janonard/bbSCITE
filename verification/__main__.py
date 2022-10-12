@@ -11,6 +11,7 @@ from matplotlib import pyplot
 from matplotlib.ticker import MultipleLocator
 import re
 from itertools import groupby
+from math import exp
 
 
 def generate(args: argparse.Namespace):
