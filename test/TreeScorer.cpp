@@ -24,16 +24,13 @@ constexpr uint32_t n_genes = 4;
 using ScorerImpl =
     ffSCITE::TreeScorer<32, 31, cl::sycl::access::target::host_buffer>;
 using MutationTreeImpl = ScorerImpl::MutationTreeImpl;
+using AncestryVector = MutationTreeImpl::AncestryVector;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
-using MutationDataWord = ScorerImpl::MutationDataWord;
 using MutationDataMatrix = ScorerImpl::MutationDataMatrix;
-using OccurrenceMatrix = ScorerImpl::OccurrenceMatrix;
 
 constexpr float alpha = 0.01, beta = 0.5, prior_sd = 0.1;
 
-void run_with_scorer(
-    std::function<void(MutationTreeImpl, ScorerImpl, OccurrenceMatrix)>
-        function) {
+TEST_CASE("TreeScorer::logscore_tree", "[TreeScorer]") {
   // Mutation tree:
   //
   //  ┌4┐
@@ -43,96 +40,52 @@ void run_with_scorer(
       MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
   MutationTreeImpl tree(am, 4, beta);
 
-  OccurrenceMatrix occurrences(0);
-
-  cl::sycl::buffer<MutationDataWord, 1> data_buffer(
+  cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer(
+      (cl::sycl::range<1>(n_cells)));
+  cl::sycl::buffer<AncestryVector, 1> is_known_buffer(
       (cl::sycl::range<1>(n_cells)));
   {
-    auto data = data_buffer.get_access<cl::sycl::access::mode::discard_write>();
+    auto is_mutated =
+        is_mutated_buffer.get_access<cl::sycl::access::mode::discard_write>();
+    auto is_known =
+        is_known_buffer.get_access<cl::sycl::access::mode::discard_write>();
 
     // cell 0, attached to node 4 (root)
-    data[0] = 0b00000000;
-    occurrences[{0, 0}] += 4;
+    is_mutated[0] = 0b00000;
+    is_known[0] = 0b01111;
 
     // cell 1, attached to node 1
-    data[1] = 0b00010100;
-    occurrences[{0, 0}] += 2;
-    occurrences[{1, 1}] += 2;
+    is_mutated[1] = 0b00110;
+    is_known[1] = 0b01111;
 
     // cell 2, attached to node 1, with missing data
-    data[2] = 0b10100100;
-    occurrences[{0, 0}] += 1;
-    occurrences[{1, 1}] += 1;
-    occurrences[{2, 1}] += 1;
-    occurrences[{2, 0}] += 1;
+    is_mutated[2] = 0b00110;
+    is_known[2] = 0b00011;
 
     // cell 3, attached to node 4, with missing data
-    data[3] = 0b00001010;
-    occurrences[{2, 0}] += 2;
-    occurrences[{0, 0}] += 2;
+    is_mutated[3] = 0b00000;
+    is_known[3] = 0b01100;
 
-    // cell 4, attached to node 0, with false negatives
-    data[4] = 0b00000001;
-    occurrences[{1, 1}] += 1;
-    occurrences[{0, 0}] += 2;
-    occurrences[{0, 1}] += 1;
+    // cell 4, attached to node 0, with false negative for gene 2
+    is_mutated[4] = 0b00001;
+    is_known[4] = 0b01111;
 
-    // cell 5, attached to node 3, with false positive
-    data[5] = 0b01000001;
-    occurrences[{1, 0}] += 1;
-    occurrences[{0, 0}] += 2;
-    occurrences[{1, 1}] += 1;
+    // cell 5, attached to node 3, with false positive for gene 1
+    is_mutated[5] = 0b01001;
+    is_known[5] = 0b01111;
   }
 
-  auto data_ac = data_buffer.get_access<cl::sycl::access::mode::read>();
-  MutationDataMatrix data;
-  ScorerImpl scorer(alpha, beta, prior_sd, n_cells, n_genes, data_ac, data);
+  auto is_mutated_ac =
+      is_mutated_buffer.get_access<cl::sycl::access::mode::read>();
+  auto is_known_ac = is_known_buffer.get_access<cl::sycl::access::mode::read>();
+  MutationDataMatrix is_mutated, is_known;
+  ScorerImpl scorer(alpha, beta, prior_sd, n_cells, n_genes, is_mutated_ac,
+                    is_known_ac, is_mutated, is_known);
 
-  function(tree, scorer, occurrences);
-}
+  float score = scorer.logscore_tree(tree);
+  float beta_score = scorer.logscore_beta(tree.get_beta());
 
-TEST_CASE("TreeScorer::get_logscore_of_occurrences", "[TreeScorer]") {
-  run_with_scorer([](MutationTreeImpl tree, ScorerImpl scorer,
-                     OccurrenceMatrix true_occurrences) {
-    OccurrenceMatrix occurrences(0);
-
-    occurrences[{0, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            Approx(2 * std::log(1.0 - alpha)));
-
-    occurrences[{0, 0}] = 0;
-    occurrences[{1, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            Approx(2 * std::log(alpha)));
-
-    occurrences[{1, 0}] = 0;
-    occurrences[{2, 0}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 0.0);
-
-    occurrences[{2, 0}] = 0;
-    occurrences[{0, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            Approx(2 * std::log(beta)));
-
-    occurrences[{0, 1}] = 0;
-    occurrences[{1, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) ==
-            Approx(2 * std::log(1 - beta)));
-
-    occurrences[{1, 1}] = 0;
-    occurrences[{2, 1}] = 2;
-    REQUIRE(scorer.get_logscore_of_occurrences(occurrences) == 0.0);
-  });
-}
-
-TEST_CASE("TreeScorer::logscore_tree", "[TreeScorer]") {
-  run_with_scorer([](MutationTreeImpl tree, ScorerImpl scorer,
-                     OccurrenceMatrix true_occurrences) {
-    float score = scorer.logscore_tree(tree);
-    float beta_score = scorer.logscore_beta(tree.get_beta());
-
-    float true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
-                       std::log(beta) + std::log(alpha);
-    REQUIRE(score - beta_score == Approx(true_score));
-  });
+  float true_score = 13 * std::log(1 - alpha) + 5 * std::log(1 - beta) +
+                     std::log(beta) + std::log(alpha);
+  REQUIRE(score - beta_score == Approx(true_score));
 }

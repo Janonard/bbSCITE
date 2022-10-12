@@ -61,11 +61,6 @@ public:
                                         cl::sycl::access::target::host_buffer>;
 
   /**
-   * @brief Type of the mutation data matrix rows.
-   */
-  using MutationDataWord = typename TreeScorerImpl::MutationDataWord;
-
-  /**
    * @brief Type of the locally stored mutation data matrix.
    */
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
@@ -83,15 +78,18 @@ public:
   /**
    * @brief Create a new application object.
    *
-   * @param data_buffer A buffer with mutation data, used to judge the
-   * likelihood of a mutation tree.
+   * @param is_mutated_buffer A buffer with bit vectors that encode whether a
+   * cell has a mutation at a certain gene.
+   * @param is_known_buffer A buffer with bit vectors that encode whether the
+   * mutation status of a cell is known for a certain gene.
    * @param working_queue A SYCL queue, configured with the correct FPGA or FPGA
    * emulator device.
    * @param parameters The CLI parameters of the application.
    * @param n_cells The total number of cells in the input data.
    * @param n_genes The total number of genes in the input data.
    */
-  Application(cl::sycl::buffer<MutationDataWord, 1> data_buffer,
+  Application(cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer,
+              cl::sycl::buffer<AncestryVector, 1> is_known_buffer,
               cl::sycl::queue working_queue, Parameters const &parameters,
               uint32_t n_cells, uint32_t n_genes)
       : current_am_buffer(cl::sycl::range<1>(1)),
@@ -99,7 +97,8 @@ public:
         current_score_buffer(cl::sycl::range<1>(1)),
         best_am_buffer(cl::sycl::range<1>(1)),
         best_beta_buffer(cl::sycl::range<1>(1)),
-        best_score_buffer(cl::sycl::range<1>(1)), data_buffer(data_buffer),
+        best_score_buffer(cl::sycl::range<1>(1)),
+        is_mutated_buffer(is_mutated_buffer), is_known_buffer(is_known_buffer),
         working_queue(working_queue), parameters(parameters), n_cells(n_cells),
         n_genes(n_genes) {
     using namespace cl::sycl;
@@ -131,12 +130,16 @@ public:
         current_beta_buffer.template get_access<access::mode::discard_write>();
     auto current_score_ac =
         current_score_buffer.template get_access<access::mode::discard_write>();
-    auto data_ac = data_buffer.template get_access<access::mode::read>();
-    MutationDataMatrix data;
+    auto is_mutated_ac =
+        is_mutated_buffer.template get_access<access::mode::read>();
+    auto is_known_ac =
+        is_known_buffer.template get_access<access::mode::read>();
+    MutationDataMatrix is_mutated, is_known;
 
     HostTreeScorerImpl host_scorer(
         this->parameters.get_alpha_mean(), this->parameters.get_beta_mean(),
-        this->parameters.get_beta_sd(), n_cells, n_genes, data_ac, data);
+        this->parameters.get_beta_sd(), n_cells, n_genes, is_mutated_ac,
+        is_known_ac, is_mutated, is_known);
 
     oneapi::dpl::minstd_rand rng;
     rng.seed(std::random_device()());
@@ -417,7 +420,10 @@ private:
     using namespace cl::sycl;
 
     return working_queue.submit([&](handler &cgh) {
-      auto data_ac = data_buffer.template get_access<access::mode::read>(cgh);
+      auto is_mutated_ac =
+          is_mutated_buffer.template get_access<access::mode::read>(cgh);
+      auto is_known_ac =
+          is_known_buffer.template get_access<access::mode::read>(cgh);
 
       auto best_am_ac =
           best_am_buffer.template get_access<access::mode::discard_write>(cgh);
@@ -438,9 +444,10 @@ private:
       uint32_t n_chains = parameters.get_n_chains();
 
       cgh.single_task<class TreeScorerKernel>([=]() {
-        MutationDataMatrix data;
+        MutationDataMatrix is_mutated, is_known;
         TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
-                                   n_genes, data_ac, data);
+                                   n_genes, is_mutated_ac, is_known_ac,
+                                   is_mutated, is_known);
 
         AncestorMatrix best_am;
         float best_beta = 1.0;
@@ -545,7 +552,7 @@ private:
   cl::sycl::buffer<float, 1> best_beta_buffer;
   cl::sycl::buffer<float, 1> best_score_buffer;
 
-  cl::sycl::buffer<MutationDataWord, 1> data_buffer;
+  cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer, is_known_buffer;
   cl::sycl::queue working_queue;
   Parameters parameters;
   uint32_t n_cells, n_genes;
