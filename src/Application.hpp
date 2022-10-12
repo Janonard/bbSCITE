@@ -17,7 +17,9 @@
 #pragma once
 #include "Parameters.hpp"
 #include "TreeScorer.hpp"
+
 #include <CL/sycl.hpp>
+#include <chrono>
 
 namespace ffSCITE {
 /**
@@ -146,11 +148,18 @@ public:
                                    this->parameters.get_chain_length());
     auto raw_moves_ac =
         raw_moves.template get_access<cl::sycl::access::mode::discard_write>();
-
     RawMoveDistribution distribution(n_genes + 1, this->parameters);
+
+    std::chrono::time_point start = std::chrono::high_resolution_clock::now();
     for (uint32_t i = 0; i < raw_moves.get_range()[0]; i++) {
       raw_moves_ac[i] = distribution(rng);
     }
+    std::chrono::time_point end = std::chrono::high_resolution_clock::now();
+
+    std::chrono::duration<double, std::ratio<1>> generation_makespan = end - start;
+    std::cout << "Move generation makespan: ";
+    std::cout << generation_makespan.count();
+    std::cout << " s" << std::endl;
   }
 
   /**
