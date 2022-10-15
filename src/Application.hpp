@@ -269,26 +269,29 @@ private:
           ac_int<1, false> input_source =
               (i % (n_steps * pipeline_capacity) < pipeline_capacity) ? 1 : 0;
 
-          ChainMeta initial_meta;
-          AncestorMatrix initial_am;
+          ChainMeta initial_meta, output_meta;
           if (input_source == 1) {
             initial_meta = ChainMeta{
                 .beta = current_beta_ac[i_initial_state],
                 .score = current_score_ac[i_initial_state],
             };
-            initial_am = current_am_ac[i_initial_state];
-            i_initial_state++;
           }
-
-          ChainMeta output_meta;
-          AncestorMatrix output_am;
           if (read_output) {
             output_meta = OutputMetaPipe::read();
           }
+
+          AncestorMatrix initial_am, output_am;
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+            if (input_source == 1) {
+              initial_am[word_i] = current_am_ac[i_initial_state][word_i];
+            }
             if (read_output) {
               output_am[word_i] = OutputTreePipe::read();
             }
+          }
+
+          if (input_source == 1) {
+            i_initial_state++;
           }
 
           if (write_input) {
