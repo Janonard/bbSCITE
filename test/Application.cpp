@@ -29,9 +29,9 @@ constexpr unsigned long n_chains = 3;
 constexpr unsigned long chain_length = 50000;
 
 using ApplicationImpl = Application<32, 31>;
+using AncestryVector = ApplicationImpl::AncestryVector;
 using AncestorMatrix = ApplicationImpl::AncestorMatrix;
 using MutationTreeImpl = ApplicationImpl::MutationTreeImpl;
-using MutationDataWord = ApplicationImpl::MutationDataWord;
 using MutationDataMatrix = ApplicationImpl::MutationDataMatrix;
 using HostTreeScorerImpl = ApplicationImpl::HostTreeScorerImpl;
 
@@ -53,35 +53,55 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
       MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
   MutationTreeImpl correct_tree(am, 4, beta);
 
-  cl::sycl::buffer<MutationDataWord, 1> data_buffer(
-      (cl::sycl::range<1>(n_cells)));
+  cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer =
+      cl::sycl::range<1>(n_cells);
+  cl::sycl::buffer<AncestryVector, 1> is_known_buffer =
+      cl::sycl::range<1>(n_cells);
   {
-    auto data = data_buffer.get_access<cl::sycl::access::mode::discard_write>();
+    auto is_mutated =
+        is_mutated_buffer.get_access<cl::sycl::access::mode::discard_write>();
+    auto is_known =
+        is_known_buffer.get_access<cl::sycl::access::mode::discard_write>();
 
     // node 0
-    data[0] = 0b00010001;
-    data[1] = 0b00010001;
-    data[2] = 0b00000001; // error
+    is_mutated[0] = 0b0101;
+    is_mutated[1] = 0b0101;
+    is_mutated[2] = 0b0001; // error
+    is_known[0] = 0b1111;
+    is_known[1] = 0b1111;
+    is_known[2] = 0b1111;
 
     // node 1
-    data[3] = 0b00010100;
-    data[4] = 0b00000100; // error
-    data[5] = 0b00010100;
+    is_mutated[3] = 0b0110;
+    is_mutated[4] = 0b0010; // error
+    is_mutated[5] = 0b0110;
+    is_known[3] = 0b1111;
+    is_known[4] = 0b1111;
+    is_known[5] = 0b1111;
 
     // node 2
-    data[6] = 0b00010000;
-    data[7] = 0b00010000;
-    data[8] = 0b00010000;
+    is_mutated[6] = 0b0100;
+    is_mutated[7] = 0b0100;
+    is_mutated[8] = 0b0100;
+    is_known[6] = 0b1111;
+    is_known[7] = 0b1111;
+    is_known[8] = 0b1111;
 
     // node 3
-    data[9] = 0b01000000;
-    data[10] = 0b01000000;
-    data[11] = 0b01000000;
+    is_mutated[9] = 0b1000;
+    is_mutated[10] = 0b1000;
+    is_mutated[11] = 0b1000;
+    is_known[9] = 0b1111;
+    is_known[10] = 0b1111;
+    is_known[11] = 0b1111;
 
     // node 4
-    data[12] = 0b00000000;
-    data[13] = 0b00000000;
-    data[14] = 0b00000000;
+    is_mutated[12] = 0b0000;
+    is_mutated[13] = 0b0000;
+    is_mutated[14] = 0b0000;
+    is_known[12] = 0b1111;
+    is_known[13] = 0b1111;
+    is_known[14] = 0b1111;
   }
 
   cl::sycl::device device =
@@ -98,7 +118,8 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
   parameters.set_chain_length(chain_length);
   parameters.set_pipeline_capacity(pipeline_capacity);
 
-  ApplicationImpl app(data_buffer, working_queue, parameters, n_cells, n_genes);
+  ApplicationImpl app(is_mutated_buffer, is_known_buffer, working_queue,
+                      parameters, n_cells, n_genes);
   app.run_simulation();
 
   AncestorMatrix best_am = app.get_best_am();
@@ -106,10 +127,12 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
   float best_score = app.get_best_score();
   MutationTreeImpl best_tree(best_am, n_genes, best_beta);
 
-  MutationDataMatrix data;
+  MutationDataMatrix is_mutated, is_known;
   HostTreeScorerImpl host_scorer(
       alpha, beta, beta_sd, n_cells, n_genes,
-      data_buffer.get_access<cl::sycl::access::mode::read>(), data);
+      is_mutated_buffer.get_access<cl::sycl::access::mode::read>(),
+      is_known_buffer.get_access<cl::sycl::access::mode::read>(), is_mutated,
+      is_known);
   float correct_score = host_scorer.logscore_tree(correct_tree);
   float found_score = host_scorer.logscore_tree(best_tree);
 

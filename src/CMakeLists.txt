@@ -7,6 +7,7 @@ add_executable(ffSCITE ${FFSCITE_SOURCES})
 # Common options
 set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE APPEND PROPERTY COMPILE_OPTIONS -fintelfpga)
 set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE APPEND PROPERTY LINK_OPTIONS -fintelfpga -Xsv)
+set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE PROPERTY CXX_STANDARD 20)
 
 # Specific options
 set_property(TARGET ffSCITE_emu APPEND PROPERTY LINK_OPTIONS)

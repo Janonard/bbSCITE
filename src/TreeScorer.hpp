@@ -19,6 +19,7 @@
 #include "StaticMatrix.hpp"
 
 #include <CL/sycl.hpp>
+#include <bit>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
 
 namespace ffSCITE {
@@ -55,26 +56,9 @@ public:
   using AncestryVector = typename MutationTreeImpl::AncestryVector;
 
   /**
-   * @brief Data type of the mutation data matrix rows.
-   *
-   * It is implemented as a bitvector to fully utilize the space. There are two
-   * bits per gene. 0b00 stands for "no mutation found", 0b01 stands for
-   * "mutation found", 0b10 stands for "no data", and 0b11 is currently unused.
-   * These bits need to be extracted from the vector, so the (2*i)th bit and
-   * (2*i+1)th bit together denote whether the cell has a mutation at the i-th
-   * gene or not.
-   */
-  using MutationDataWord = ac_int<2 * max_n_genes, false>;
-
-  /**
    * @brief Internal representation of the input mutation data.
-   *
-   * It is implemented as an array of bitvectors to fully utilize the space. In
-   * order to find out whether the ith cell has a mutation at the jth gene, one
-   * needs to load the ith word from the array and extract the (2*j)th and
-   * (2*j+1)th bit from the word.
    */
-  using MutationDataMatrix = std::array<MutationDataWord, max_n_cells>;
+  using MutationDataMatrix = std::array<AncestryVector, max_n_cells>;
 
   /**
    * @brief Shorthand for the occurrence matrix type.
@@ -85,7 +69,7 @@ public:
    * @brief Shorthand for the mutation data input accessor.
    */
   using MutationDataAccessor =
-      cl::sycl::accessor<MutationDataWord, 1, cl::sycl::access::mode::read,
+      cl::sycl::accessor<AncestryVector, 1, cl::sycl::access::mode::read,
                          access_target>;
 
   /**
@@ -99,15 +83,20 @@ public:
    * @param beta_mean The initial assumption of the beta error rate
    * (false negative)
    * @param prior_sd The assumed standard derivation of the beta error rate
-   * @param data_ac An accessor to the mutation input data. The number of cells
-   * and genes is inferred from the accessor range.
-   * @param data A reference to the local mutation data memory block to use.
+   * @param is_mutated_ac An accessor to the mutation status bit vectors.
+   * @param is_known_ac An accessor to the mutation knowledge bit vectors.
+   * @param is_mutated A reference to the local data memory block to use for the
+   * mutation status bit vectors.
+   * @param is_known A reference to the local data memory block to use for the
+   * mutation knowledge bit vectors.
    */
   TreeScorer(float alpha_mean, float beta_mean, float beta_sd, uint32_t n_cells,
-             uint32_t n_genes, MutationDataAccessor data_ac,
-             MutationDataMatrix &data)
-      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0), data(data),
-        n_cells(n_cells), n_genes(n_genes) {
+             uint32_t n_genes, MutationDataAccessor is_mutated_ac,
+             MutationDataAccessor is_known_ac, MutationDataMatrix &is_mutated,
+             MutationDataMatrix &is_known)
+      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0),
+        is_mutated(is_mutated), is_known(is_known), n_cells(n_cells),
+        n_genes(n_genes) {
     // mutation not observed, not present
     log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
     // mutation observed, not present
@@ -123,7 +112,8 @@ public:
     bpriorb = bpriora * ((1 / beta_mean) - 1);
 
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      data[cell_i] = data_ac[cell_i];
+      is_mutated[cell_i] = is_mutated_ac[cell_i];
+      is_known[cell_i] = is_known_ac[cell_i];
     }
   }
 
@@ -160,44 +150,44 @@ public:
      * throughput.
      */
 
-    float individual_scores[max_n_cells][max_n_genes + 1];
-
-    [[intel::loop_coalesce(2)]] for (uint32_t cell_i = 0; cell_i < max_n_cells;
-                                     cell_i++) {
-      MutationDataWord observed_mutations = data[cell_i];
-
-#pragma unroll 16
-      for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-        AncestryVector true_mutations = tree.get_ancestors(node_i);
-
-        OccurrenceMatrix occurrences(0);
-#pragma unroll
-        for (uint32_t gene_i = 0; gene_i < max_n_genes; gene_i++) {
-          if (gene_i < n_genes) {
-            ac_int<2, false> posterior =
-                observed_mutations.template slc<2>(gene_i << 1);
-            ac_int<1, false> prior = true_mutations[gene_i];
-            occurrences[{posterior, prior}]++;
-          }
-        }
-
-        individual_scores[cell_i][node_i] =
-            get_logscore_of_occurrences(occurrences);
-      }
-    }
-
     float cell_scores[max_n_cells];
 
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      float best_cell_score = individual_scores[cell_i][0];
+      AncestryVector is_mutated = this->is_mutated[cell_i];
+      AncestryVector is_known = this->is_known[cell_i];
+      float cell_score = -std::numeric_limits<float>::infinity();
+
 #pragma unroll
       for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
-        if (node_i < n_genes + 1 &&
-            individual_scores[cell_i][node_i] > best_cell_score) {
-          best_cell_score = individual_scores[cell_i][node_i];
+        AncestryVector is_ancestor = tree.get_ancestors(node_i);
+        float individual_score = 0.0;
+
+#pragma unroll
+        for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
+#pragma unroll
+          for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
+            AncestryVector occurrence_vector =
+                is_known &
+                (i_posterior == 1 ? is_mutated : is_mutated.bit_complement()) &
+                (i_prior == 1 ? is_ancestor : is_ancestor.bit_complement());
+            ac_int<std::bit_width(max_n_genes), false> n_occurrences = 0;
+
+#pragma unroll
+            for (uint32_t gene_i = 0; gene_i < max_n_genes + 1; gene_i++) {
+              n_occurrences += occurrence_vector[gene_i];
+            }
+
+            individual_score += float(n_occurrences) *
+                                log_error_probabilities[i_posterior][i_prior];
+          }
+        }
+
+        if (individual_score > cell_score) {
+          cell_score = individual_score;
         }
       }
-      cell_scores[cell_i] = best_cell_score;
+
+      cell_scores[cell_i] = cell_score;
     }
 
     float tree_score = 0.0;
@@ -214,29 +204,11 @@ public:
     return tree_score + beta_score;
   }
 
-  /**
-   * @brief Compute the log-likelihood for the given occurrences.
-   *
-   * @param occurrences The occurrences to compute the likelihood of.
-   * @return The log-likelihood for the given occurrences.
-   */
-  float get_logscore_of_occurrences(OccurrenceMatrix occurrences) {
-    float logscore = 0.0;
-#pragma unroll
-    for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
-#pragma unroll
-      for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
-        logscore += occurrences[{i_posterior, i_prior}] *
-                    log_error_probabilities[i_posterior][i_prior];
-      }
-    }
-    return logscore;
-  }
-
 private:
   float log_error_probabilities[2][2];
   float bpriora, bpriorb;
-  MutationDataMatrix &data;
+  MutationDataMatrix &is_mutated;
+  MutationDataMatrix &is_known;
   uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE

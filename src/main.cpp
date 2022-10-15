@@ -36,9 +36,9 @@ static_assert(max_n_cells == 64 && max_n_genes == 63);
 using URNG = oneapi::dpl::minstd_rand;
 
 using ApplicationImpl = Application<max_n_cells, max_n_genes>;
-using MutationDataWord = ApplicationImpl::MutationDataWord;
 using MutationTreeImpl = MutationTree<max_n_genes>;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
+using AncestryVector = MutationTreeImpl::AncestryVector;
 
 int main(int argc, char **argv) {
   // Load the CLI parameters.
@@ -102,14 +102,20 @@ int main(int argc, char **argv) {
   }
 
   // Load the mutation input data.
-  cl::sycl::buffer<MutationDataWord, 1> data((cl::sycl::range<1>(n_cells)));
+  cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer =
+      cl::sycl::range<1>(n_cells);
+  cl::sycl::buffer<AncestryVector, 1> is_known_buffer =
+      cl::sycl::range<1>(n_cells);
   {
-    auto data_ac = data.get_access<cl::sycl::access::mode::discard_write>();
+    auto is_mutated =
+        is_mutated_buffer.get_access<cl::sycl::access::mode::discard_write>();
+    auto is_known =
+        is_known_buffer.get_access<cl::sycl::access::mode::discard_write>();
     std::ifstream input_file(parameters.get_input_path());
 
     // Zeroing the data.
     for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-      data_ac[cell_i] = 0;
+      is_mutated[cell_i] = is_known[cell_i] = 0;
     }
 
     for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
@@ -118,14 +124,16 @@ int main(int argc, char **argv) {
         input_file >> entry;
         switch (entry) {
         case 0:
-          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(0));
+          is_mutated[cell_i][gene_i] = 0;
+          is_known[cell_i][gene_i] = 1;
           break;
         case 1:
         case 2:
-          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(1));
+          is_mutated[cell_i][gene_i] = 1;
+          is_known[cell_i][gene_i] = 1;
           break;
         case 3:
-          data_ac[cell_i].set_slc<2>(gene_i << 1, ac_int<2, false>(2));
+          is_known[cell_i][gene_i] = 0;
           break;
         default:
           std::cerr << "Error: The input file contains the invalid entry "
@@ -149,7 +157,8 @@ int main(int argc, char **argv) {
   cl::sycl::queue working_queue(device, queue_properties);
 
   // Running the simulation and retrieving the best trees.
-  ApplicationImpl app(data, working_queue, parameters, n_cells, n_genes);
+  ApplicationImpl app(is_mutated_buffer, is_known_buffer, working_queue,
+                      parameters, n_cells, n_genes);
   float runtime = app.run_simulation();
 
   std::cout << "Time elapsed: " << runtime << " ms" << std::endl;
