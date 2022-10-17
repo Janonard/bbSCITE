@@ -27,8 +27,12 @@ namespace ffSCITE {
  *
  * @tparam max_n_cells The maximum number of cells processable by the design.
  * @tparam max_n_genes The maximum number of genes processable by the design.
+ * @tparam pipeline_capacity The (assumed) capacity of the computation pipeline.
+ * The feedback system assumes that this number is correct, but it has to be
+ * manually verified using design space exploration.
  */
-template <uint32_t max_n_cells, uint32_t max_n_genes>
+template <uint32_t max_n_cells, uint32_t max_n_genes,
+          uint32_t pipeline_capacity>
 class Application {
 public:
   /**
@@ -101,6 +105,20 @@ public:
         working_queue(working_queue), parameters(parameters), n_cells(n_cells),
         n_genes(n_genes) {
     using namespace cl::sycl;
+
+    // Check that the required number of chains is correct.
+    if (this->parameters.get_n_chains() % pipeline_capacity != 0) {
+      uint32_t old_n_chains = this->parameters.get_n_chains();
+      uint32_t new_n_chains =
+          old_n_chains +
+          (pipeline_capacity - (old_n_chains % pipeline_capacity));
+      std::cerr << "Warning: Increasing the number of chains to "
+                << new_n_chains << "." << std::endl;
+      std::cerr << "This is the next multiple of the pipeline capacity and "
+                   "doing so improves the performance."
+                << std::endl;
+      this->parameters.set_n_chains(new_n_chains);
+    }
 
     /*
      * Generate the initial chain states.
@@ -249,7 +267,7 @@ private:
   cl::sycl::event enqueue_io() {
     using namespace cl::sycl;
 
-    assert(parameters.get_n_chains() % parameters.get_pipeline_capacity() == 0);
+    assert(parameters.get_n_chains() % pipeline_capacity == 0);
 
     return working_queue.submit([&](handler &cgh) {
       auto current_am_ac =
@@ -261,7 +279,6 @@ private:
 
       uint32_t n_steps = parameters.get_chain_length();
       uint32_t n_chains = parameters.get_n_chains();
-      uint32_t pipeline_capacity = parameters.get_pipeline_capacity();
 
       cgh.single_task<class IOKernel>([=]() {
         uint32_t i_initial_state = 0;

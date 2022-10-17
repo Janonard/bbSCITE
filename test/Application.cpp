@@ -28,7 +28,7 @@ constexpr float alpha = 6.04e-5, beta = 0.25, beta_sd = 0.1;
 constexpr unsigned long n_chains = 3;
 constexpr unsigned long chain_length = 50000;
 
-using ApplicationImpl = Application<32, 31>;
+using ApplicationImpl = Application<32, 31, pipeline_capacity>;
 using AncestryVector = ApplicationImpl::AncestryVector;
 using AncestorMatrix = ApplicationImpl::AncestorMatrix;
 using MutationTreeImpl = ApplicationImpl::MutationTreeImpl;
@@ -116,7 +116,6 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
   parameters.set_beta_sd(beta_sd);
   parameters.set_n_chains(n_chains);
   parameters.set_chain_length(chain_length);
-  parameters.set_pipeline_capacity(pipeline_capacity);
 
   ApplicationImpl app(is_mutated_buffer, is_known_buffer, working_queue,
                       parameters, n_cells, n_genes);

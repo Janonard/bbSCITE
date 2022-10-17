@@ -40,10 +40,10 @@ public:
   Parameters()
       : input_path(std::nullopt), output_path_base(std::nullopt),
         n_chains(std::nullopt), chain_length(std::nullopt),
-        max_n_best_trees(128), pipeline_capacity(6), alpha_mean(6.04e-5),
-        beta_mean(0.4309), beta_sd(0.1), prob_beta_change(0.0),
-        prob_prune_n_reattach(0.55), prob_swap_nodes(0.4),
-        prob_swap_subtrees(0.05), beta_jump_scaling_chi(10.0), gamma(1.0) {}
+        max_n_best_trees(128), alpha_mean(6.04e-5), beta_mean(0.4309),
+        beta_sd(0.1), prob_beta_change(0.0), prob_prune_n_reattach(0.55),
+        prob_swap_nodes(0.4), prob_swap_subtrees(0.05),
+        beta_jump_scaling_chi(10.0), gamma(1.0) {}
 
   /**
    * @brief Verify the CLI arguments and store them in the object's fields.
@@ -104,13 +104,6 @@ public:
           chain_length = atoi(argv[++i]);
         } else {
           std::cerr << "Error: Missing argument to parameter -l." << std::endl;
-          error = true;
-        }
-      } else if (strcmp(argv[i], "-c") == 0) {
-        if (i + 1 < argc) {
-          pipeline_capacity = atoi(argv[++i]);
-        } else {
-          std::cerr << "Error: Missing argument to parameter -c." << std::endl;
           error = true;
         }
       } else if (strcmp(argv[i], "-g") == 0) {
@@ -285,17 +278,6 @@ public:
       error = true;
     }
 
-    // Checking that the number of chains and the pipeline capacity match.
-    if (*n_chains % pipeline_capacity != 0) {
-      n_chains =
-          *n_chains + (pipeline_capacity - (*n_chains % pipeline_capacity));
-      std::cerr << "Warning: Increasing the number of chains to " << *n_chains
-                << "." << std::endl;
-      std::cerr << "This is the next multiple of the pipeline capacity and "
-                   "doing so improves the performance."
-                << std::endl;
-    }
-
     return !error;
   }
 
@@ -407,12 +389,6 @@ public:
    */
   void set_max_n_best_trees(uint32_t max_n_best_trees) {
     this->max_n_best_trees = max_n_best_trees;
-  }
-
-  uint32_t get_pipeline_capacity() const { return pipeline_capacity; }
-
-  void set_pipeline_capacity(uint32_t pipeline_capacity) {
-    this->pipeline_capacity = pipeline_capacity;
   }
 
   /**
@@ -640,7 +616,6 @@ private:
 
   std::optional<uint32_t> n_chains, chain_length;
   uint32_t max_n_best_trees;
-  uint32_t pipeline_capacity;
 
   float alpha_mean, beta_mean, beta_sd;
   float prob_beta_change, prob_prune_n_reattach, prob_swap_nodes,
