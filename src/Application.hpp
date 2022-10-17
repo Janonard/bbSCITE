@@ -300,7 +300,7 @@ private:
             output_meta = OutputMetaPipe::read();
           }
 
-          AncestorMatrix initial_am, output_am;
+          [[intel::fpga_memory]] AncestorMatrix initial_am, output_am;
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
             if (input_source == 1) {
               initial_am[word_i] = current_am_ac[i_initial_state][word_i];
@@ -378,14 +378,14 @@ private:
                                    n_genes, is_mutated_ac, is_known_ac,
                                    is_mutated, is_known);
 
-        AncestorMatrix best_am;
+        [[intel::fpga_memory]] AncestorMatrix best_am;
         float best_beta = 1.0;
         float best_score = -std::numeric_limits<float>::infinity();
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
           ChainMeta tree_meta = InputMetaPipe::read();
 
-          AncestorMatrix current_am;
+          [[intel::fpga_memory]] AncestorMatrix current_am;
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
             current_am[word_i] = InputTreePipe::read();
           }
@@ -401,7 +401,7 @@ private:
           uint32_t v = mod_params.v;
           uint32_t w = mod_params.w;
 
-          AncestorMatrix proposed_am;
+          [[intel::fpga_memory]] AncestorMatrix proposed_am;
           MutationTreeImpl proposed_tree(proposed_am, current_tree, mod_params);
           float proposed_beta = proposed_tree.get_beta();
           float proposed_score = tree_scorer.logscore_tree(proposed_tree);
@@ -419,6 +419,7 @@ private:
               neighborhood_correction *
               std::exp((proposed_score - current_score) * gamma);
           bool accept_move = acceptance_probability > raw_move.acceptance_level;
+          bool new_maximum = i == 0 || proposed_score > best_score;
 
           ChainMeta output_meta{
               .beta = accept_move ? proposed_beta : current_beta,
@@ -435,16 +436,21 @@ private:
               output_vector = current_am[word_i];
             }
             OutputTreePipe::write(output_vector);
+
+            if (new_maximum) {
+              best_am[word_i] = proposed_am[word_i];
+            }
           }
 
-          if (i == 0 || proposed_score > best_score) {
-            best_am = proposed_am;
+          if (new_maximum) {
             best_beta = proposed_beta;
             best_score = proposed_score;
           }
         }
 
-        best_am_ac[0] = best_am;
+        for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+          best_am_ac[0][word_i] = best_am[word_i];
+        }
         best_beta_ac[0] = best_beta;
         best_score_ac[0] = best_score;
       });

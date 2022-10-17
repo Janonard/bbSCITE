@@ -128,8 +128,8 @@ public:
     uint32_t v = parameters.v;
     uint32_t w = parameters.w;
 
-    AncestryVector v_descendant = old_tree.ancestor[v];
-    AncestryVector w_descendant = old_tree.ancestor[w];
+    AncestryVector v_descendant = old_tree.get_descendants(v);
+    AncestryVector w_descendant = old_tree.get_descendants(w);
 
     uint32_t v_target, w_target;
     switch (parameters.move_type) {
@@ -150,7 +150,7 @@ public:
 
     for (uint32_t x = 0; x < max_n_nodes; x++) {
       // Compute the new ancestry vector.
-      AncestryVector old_vector = old_tree.ancestor[x];
+      AncestryVector old_vector = old_tree.get_descendants(x);
       AncestryVector new_vector = 0;
 
       // Declaring the swap variable for the "Swap Nodes" move here since you
@@ -262,18 +262,8 @@ public:
       std::swap(v, w);
     }
 
-    uint32_t parent_of_v, parent_of_w;
-    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
-      if (node_i >= get_n_nodes()) {
-        continue;
-      }
-      if (is_parent(node_i, v)) {
-        parent_of_v = node_i;
-      }
-      if (is_parent(node_i, w)) {
-        parent_of_w = node_i;
-      }
-    }
+    uint32_t parent_of_v = get_parent(v);
+    uint32_t parent_of_w = get_parent(w);
 
     uint32_t n_descendants = get_n_descendants(v);
     uint32_t n_nondescendants = n_nodes - n_descendants;
@@ -491,7 +481,7 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(parent < n_nodes && child < n_nodes);
 #endif
-    if (!ancestor[parent][child]) {
+    if (!is_ancestor(parent, child)) {
       return false;
     }
 
@@ -504,7 +494,7 @@ public:
       if (node_i >= n_nodes || node_i == child) {
         continue;
       }
-      if (ancestor[node_i][parent] != ancestor[node_i][child]) {
+      if (is_ancestor(node_i, parent) != is_ancestor(node_i, child)) {
         return false;
       }
     }
@@ -523,13 +513,13 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
-    for (uint32_t parent = 0; parent < max_n_nodes; parent++) {
-      if (parent < n_nodes && is_parent(parent, node_i)) {
-        return parent;
+    uint32_t parent = 0;
+    for (uint32_t node_j = 0; node_j < max_n_nodes; node_j++) {
+      if (node_j < n_nodes && is_parent(node_j, node_i)) {
+        parent = node_j;
       }
     }
-    assert(false);
-    return 0; // Illegal option, will not occur if the tree is correct.
+    return parent;
   }
 
   uint32_t get_n_nodes() const { return n_nodes; }
