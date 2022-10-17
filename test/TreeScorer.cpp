@@ -36,9 +36,11 @@ TEST_CASE("TreeScorer::logscore_tree", "[TreeScorer]") {
   //  ┌4┐
   // ┌2┐3
   // 0 1
-  AncestorMatrix am =
-      MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
-  MutationTreeImpl tree(am, 4, beta);
+  auto matrix_tuple =
+      MutationTreeImpl::parent_vector_to_matrix({2, 2, 4, 4, 4});
+  AncestorMatrix am = std::get<0>(matrix_tuple);
+  AncestorMatrix dm = std::get<1>(matrix_tuple);
+  MutationTreeImpl tree(am, dm, 4, beta);
 
   cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer(
       (cl::sycl::range<1>(n_cells)));

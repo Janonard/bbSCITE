@@ -101,8 +101,10 @@ public:
    * @param n_genes The number of genes represented by the mutation tree.
    * @param beta The probability for false negatives.
    */
-  MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, float beta)
-      : ancestor(ancestor), n_nodes(n_genes + 1), beta(beta) {}
+  MutationTree(AncestorMatrix &ancestor, AncestorMatrix &descendant,
+               uint32_t n_genes, float beta)
+      : ancestor(ancestor), descendant(descendant), n_nodes(n_genes + 1),
+        beta(beta) {}
 
   /**
    * @brief Construct a new Mutation Tree by computing a modified version of an
@@ -118,9 +120,11 @@ public:
    * @param old_tree The old tree to base the new tree of.
    * @param parameters The parameters of the modification.
    */
-  MutationTree(AncestorMatrix &am, MutationTree<max_n_genes> const &old_tree,
+  MutationTree(AncestorMatrix &am, AncestorMatrix &dm,
+               MutationTree<max_n_genes> const &old_tree,
                ModificationParameters parameters)
-      : ancestor(am), n_nodes(old_tree.n_nodes), beta(old_tree.beta) {
+      : ancestor(am), descendant(dm), n_nodes(old_tree.n_nodes),
+        beta(old_tree.beta) {
     if (parameters.move_type == MoveType::ChangeBeta) {
       beta = parameters.new_beta;
     }
@@ -247,6 +251,10 @@ public:
       }
 
       ancestor[x] = new_vector;
+#pragma unroll
+      for (uint32_t y = 0; y < max_n_nodes; y++) {
+        descendant[y][x] = new_vector[y];
+      }
     }
   }
 
@@ -309,15 +317,16 @@ public:
    * @return AncestorMatrix The ancestor matrix of the tree described by the
    * parent vector.
    */
-  static AncestorMatrix
-  parent_vector_to_ancestor_matrix(std::vector<uint32_t> const &parent_vector) {
-    AncestorMatrix ancestor;
+  static std::tuple<AncestorMatrix, AncestorMatrix>
+  parent_vector_to_matrix(std::vector<uint32_t> const &parent_vector) {
+    AncestorMatrix ancestor, descendant;
     uint32_t n_nodes = parent_vector.size();
     uint32_t root = n_nodes - 1;
 
     for (uint32_t j = 0; j < max_n_nodes; j++) {
       // Zero all vectors. This is equivalent to setting everything to false.
       ancestor[j] = 0;
+      descendant[j] = 0;
     }
 
     for (uint32_t i = 0; i < max_n_nodes; i++) {
@@ -327,6 +336,7 @@ public:
         uint32_t anc = i;
         while (anc != root) {
           ancestor[anc][i] = true;
+          descendant[i][anc] = true;
           anc = parent_vector[anc];
           // Otherwise, there is a circle in the graph!
           assert(anc != i && anc < n_nodes);
@@ -334,10 +344,11 @@ public:
       }
 
       // Lastly, also mark the root as our ancestor.
-      ancestor[i][i] = ancestor[root][i] = true;
+      ancestor[i][i] = descendant[i][i] = ancestor[root][i] =
+          descendant[i][root] = true;
     }
 
-    return ancestor;
+    return {ancestor, descendant};
   }
 
   /**
@@ -481,7 +492,11 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(parent < n_nodes && child < n_nodes);
 #endif
-    if (!is_ancestor(parent, child)) {
+    AncestryVector parent_ancestor = get_ancestors(parent);
+    AncestryVector child_ancestor = get_ancestors(child);
+
+    // If the parent is not an ancestor of the child, return false.
+    if (!child_ancestor[parent]) {
       return false;
     }
 
@@ -494,7 +509,7 @@ public:
       if (node_i >= n_nodes || node_i == child) {
         continue;
       }
-      if (is_ancestor(node_i, parent) != is_ancestor(node_i, child)) {
+      if (parent_ancestor[node_i] != child_ancestor[node_i]) {
         return false;
       }
     }
@@ -553,7 +568,7 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < max_n_nodes && node_b_i < max_n_nodes);
 #endif
-    return ancestor[node_b_i][node_a_i];
+    return descendant[node_a_i][node_b_i];
   }
 
   /**
@@ -588,10 +603,11 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
+    AncestryVector descendant = get_descendants(node_i);
     uint32_t n_descendants = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes && is_ancestor(node_i, i)) {
+      if (i < n_nodes && descendant[i]) {
         n_descendants++;
       }
     }
@@ -623,14 +639,7 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
-    AncestryVector ancestors = 0;
-#pragma unroll
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes) {
-        ancestors[i] = is_ancestor(i, node_i);
-      }
-    }
-    return ancestors;
+    return descendant[node_i];
   }
 
   /**
@@ -645,10 +654,11 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
+    AncestryVector ancestor = get_ancestors(node_i);
     uint32_t n_ancestors = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes && is_ancestor(i, node_i)) {
+      if (i < n_nodes && ancestor[i]) {
         n_ancestors++;
       }
     }
@@ -803,7 +813,7 @@ private:
     stream << node_i;
   }
 
-  std::array<AncestryVector, max_n_nodes> &ancestor;
+  std::array<AncestryVector, max_n_nodes> &ancestor, &descendant;
   uint32_t n_nodes;
   float beta;
 };

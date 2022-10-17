@@ -16,7 +16,6 @@
  */
 #pragma once
 #include "MutationTree.hpp"
-#include "StaticMatrix.hpp"
 
 #include <CL/sycl.hpp>
 #include <bit>
@@ -59,11 +58,6 @@ public:
    * @brief Internal representation of the input mutation data.
    */
   using MutationDataMatrix = std::array<AncestryVector, max_n_cells>;
-
-  /**
-   * @brief Shorthand for the occurrence matrix type.
-   */
-  using OccurrenceMatrix = StaticMatrix<uint32_t, 3, 2>;
 
   /**
    * @brief Shorthand for the mutation data input accessor.

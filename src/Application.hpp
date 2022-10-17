@@ -68,11 +68,6 @@ public:
   using MutationDataMatrix = typename TreeScorerImpl::MutationDataMatrix;
 
   /**
-   * @brief Type of the matrix used to count error occurrences.
-   */
-  using OccurrenceMatrix = typename TreeScorerImpl::OccurrenceMatrix;
-
-  /**
    * @brief The maximum number of tree nodes supported by the design.
    */
   static constexpr uint32_t max_n_nodes = MutationTreeImpl::max_n_nodes;
@@ -96,9 +91,11 @@ public:
               uint32_t n_cells, uint32_t n_genes)
       : raw_moves(cl::sycl::range<1>(1)),
         current_am_buffer(cl::sycl::range<1>(1)),
+        current_dm_buffer(cl::sycl::range<1>(1)),
         current_beta_buffer(cl::sycl::range<1>(1)),
         current_score_buffer(cl::sycl::range<1>(1)),
         best_am_buffer(cl::sycl::range<1>(1)),
+        best_dm_buffer(cl::sycl::range<1>(1)),
         best_beta_buffer(cl::sycl::range<1>(1)),
         best_score_buffer(cl::sycl::range<1>(1)),
         is_mutated_buffer(is_mutated_buffer), is_known_buffer(is_known_buffer),
@@ -124,11 +121,14 @@ public:
      * Generate the initial chain states.
      */
     current_am_buffer = range<1>(this->parameters.get_n_chains());
+    current_dm_buffer = range<1>(this->parameters.get_n_chains());
     current_beta_buffer = range<1>(this->parameters.get_n_chains());
     current_score_buffer = range<1>(this->parameters.get_n_chains());
 
     auto current_am_ac =
         current_am_buffer.template get_access<access::mode::discard_write>();
+    auto current_dm_ac =
+        current_dm_buffer.template get_access<access::mode::discard_write>();
     auto current_beta_ac =
         current_beta_buffer.template get_access<access::mode::discard_write>();
     auto current_score_ac =
@@ -152,12 +152,14 @@ public:
           MutationTreeImpl::sample_random_pruefer_code(rng, n_genes);
       std::vector<uint32_t> parent_vector =
           MutationTreeImpl::pruefer_code_to_parent_vector(pruefer_code);
-      current_am_ac[rep_i] =
-          MutationTreeImpl::parent_vector_to_ancestor_matrix(parent_vector);
+      auto matrix_tuple =
+          MutationTreeImpl::parent_vector_to_matrix(parent_vector);
+      current_am_ac[rep_i] = std::get<0>(matrix_tuple);
+      current_dm_ac[rep_i] = std::get<1>(matrix_tuple);
 
       current_beta_ac[rep_i] = this->parameters.get_beta_mean();
 
-      MutationTreeImpl tree(current_am_ac[rep_i], n_genes,
+      MutationTreeImpl tree(current_am_ac[rep_i], current_dm_ac[rep_i], n_genes,
                             current_beta_ac[rep_i]);
       current_score_ac[rep_i] = host_scorer.logscore_tree(tree);
     }
@@ -177,7 +179,8 @@ public:
     }
     std::chrono::time_point end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double, std::ratio<1>> generation_makespan = end - start;
+    std::chrono::duration<double, std::ratio<1>> generation_makespan =
+        end - start;
     std::cout << "Move generation makespan: ";
     std::cout << generation_makespan.count();
     std::cout << " s" << std::endl;
@@ -226,6 +229,15 @@ public:
   }
 
   /**
+   * @brief Get the descendant matrix of the most-likely chain state.
+   */
+  AncestorMatrix get_best_dm() {
+    auto best_dm_ac =
+        best_dm_buffer.template get_access<cl::sycl::access::mode::read>();
+    return best_dm_ac[0];
+  }
+
+  /**
    * @brief Get the beta value (probability of false negatives) of the
    * most-likely chain state.
    */
@@ -254,9 +266,15 @@ private:
   };
 
   using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
-  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
+  using InputAncestorPipe =
+      cl::sycl::pipe<class InputAncestorPipeID, AncestryVector>;
+  using InputDescendantPipe =
+      cl::sycl::pipe<class InputDescendantPipeID, AncestryVector>;
   using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
-  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
+  using OutputAncestorPipe =
+      cl::sycl::pipe<class OutputAncestorPipeID, AncestryVector>;
+  using OutputDescendantPipe =
+      cl::sycl::pipe<class OutputDescendantPipeID, AncestryVector>;
 
   /**
    * @brief Enqueue the IO kernel which controls the introduction of initial
@@ -272,6 +290,8 @@ private:
     return working_queue.submit([&](handler &cgh) {
       auto current_am_ac =
           current_am_buffer.template get_access<access::mode::read>(cgh);
+      auto current_dm_ac =
+          current_dm_buffer.template get_access<access::mode::read>(cgh);
       auto current_beta_ac =
           current_beta_buffer.template get_access<access::mode::read>(cgh);
       auto current_score_ac =
@@ -300,13 +320,16 @@ private:
             output_meta = OutputMetaPipe::read();
           }
 
-          [[intel::fpga_memory]] AncestorMatrix initial_am, output_am;
+          [[intel::fpga_memory]] AncestorMatrix initial_am, initial_dm,
+              output_am, output_dm;
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
             if (input_source == 1) {
               initial_am[word_i] = current_am_ac[i_initial_state][word_i];
+              initial_dm[word_i] = current_dm_ac[i_initial_state][word_i];
             }
             if (read_output) {
-              output_am[word_i] = OutputTreePipe::read();
+              output_am[word_i] = OutputAncestorPipe::read();
+              output_dm[word_i] = OutputDescendantPipe::read();
             }
           }
 
@@ -321,13 +344,16 @@ private:
           }
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
             if (write_input) {
-              AncestryVector input_vector;
+              AncestryVector input_ancestor_vector, input_descendant_vector;
               if (input_source == 1) {
-                input_vector = initial_am[word_i];
+                input_ancestor_vector = initial_am[word_i];
+                input_descendant_vector = initial_dm[word_i];
               } else {
-                input_vector = output_am[word_i];
+                input_ancestor_vector = output_am[word_i];
+                input_descendant_vector = output_dm[word_i];
               }
-              InputTreePipe::write(input_vector);
+              InputAncestorPipe::write(input_ancestor_vector);
+              InputDescendantPipe::write(input_descendant_vector);
             }
           }
         }
@@ -348,7 +374,7 @@ private:
     return working_queue.submit([&](handler &cgh) {
       auto raw_moves_ac =
           raw_moves.template get_access<access::mode::read>(cgh);
-          
+
       auto is_mutated_ac =
           is_mutated_buffer.template get_access<access::mode::read>(cgh);
       auto is_known_ac =
@@ -356,6 +382,8 @@ private:
 
       auto best_am_ac =
           best_am_buffer.template get_access<access::mode::discard_write>(cgh);
+      auto best_dm_ac =
+          best_dm_buffer.template get_access<access::mode::discard_write>(cgh);
       auto best_beta_ac =
           best_beta_buffer.template get_access<access::mode::discard_write>(
               cgh);
@@ -378,21 +406,23 @@ private:
                                    n_genes, is_mutated_ac, is_known_ac,
                                    is_mutated, is_known);
 
-        [[intel::fpga_memory]] AncestorMatrix best_am;
+        [[intel::fpga_memory]] AncestorMatrix best_am, best_dm;
         float best_beta = 1.0;
         float best_score = -std::numeric_limits<float>::infinity();
 
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
           ChainMeta tree_meta = InputMetaPipe::read();
 
-          [[intel::fpga_memory]] AncestorMatrix current_am;
+          [[intel::fpga_memory]] AncestorMatrix current_am, current_dm;
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            current_am[word_i] = InputTreePipe::read();
+            current_am[word_i] = InputAncestorPipe::read();
+            current_dm[word_i] = InputDescendantPipe::read();
           }
 
           float current_beta = tree_meta.beta;
           float current_score = tree_meta.score;
-          MutationTreeImpl current_tree(current_am, n_genes, current_beta);
+          MutationTreeImpl current_tree(current_am, current_dm, n_genes,
+                                        current_beta);
 
           RawMoveSample raw_move = raw_moves_ac[i];
           typename MutationTreeImpl::ModificationParameters mod_params =
@@ -401,8 +431,9 @@ private:
           uint32_t v = mod_params.v;
           uint32_t w = mod_params.w;
 
-          [[intel::fpga_memory]] AncestorMatrix proposed_am;
-          MutationTreeImpl proposed_tree(proposed_am, current_tree, mod_params);
+          [[intel::fpga_memory]] AncestorMatrix proposed_am, proposed_dm;
+          MutationTreeImpl proposed_tree(proposed_am, proposed_dm, current_tree,
+                                         mod_params);
           float proposed_beta = proposed_tree.get_beta();
           float proposed_score = tree_scorer.logscore_tree(proposed_tree);
 
@@ -429,16 +460,20 @@ private:
           OutputMetaPipe::write(output_meta);
 
           for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            AncestryVector output_vector;
+            AncestryVector output_ancestor_vector, output_descendant_vector;
             if (accept_move) {
-              output_vector = proposed_am[word_i];
+              output_ancestor_vector = proposed_am[word_i];
+              output_descendant_vector = proposed_dm[word_i];
             } else {
-              output_vector = current_am[word_i];
+              output_ancestor_vector = current_am[word_i];
+              output_descendant_vector = proposed_dm[word_i];
             }
-            OutputTreePipe::write(output_vector);
+            OutputAncestorPipe::write(output_ancestor_vector);
+            OutputDescendantPipe::write(output_descendant_vector);
 
             if (new_maximum) {
               best_am[word_i] = proposed_am[word_i];
+              best_dm[word_i] = proposed_dm[word_i];
             }
           }
 
@@ -450,6 +485,7 @@ private:
 
         for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
           best_am_ac[0][word_i] = best_am[word_i];
+          best_dm_ac[0][word_i] = best_dm[word_i];
         }
         best_beta_ac[0] = best_beta;
         best_score_ac[0] = best_score;
@@ -460,10 +496,12 @@ private:
   cl::sycl::buffer<RawMoveSample, 1> raw_moves;
 
   cl::sycl::buffer<AncestorMatrix, 1> current_am_buffer;
+  cl::sycl::buffer<AncestorMatrix, 1> current_dm_buffer;
   cl::sycl::buffer<float, 1> current_beta_buffer;
   cl::sycl::buffer<float, 1> current_score_buffer;
 
   cl::sycl::buffer<AncestorMatrix, 1> best_am_buffer;
+  cl::sycl::buffer<AncestorMatrix, 1> best_dm_buffer;
   cl::sycl::buffer<float, 1> best_beta_buffer;
   cl::sycl::buffer<float, 1> best_score_buffer;
 

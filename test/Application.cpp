@@ -49,9 +49,11 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
    * There are three cells attached to every node and there are some errors in
    * the data to make it interesting.
    */
-  AncestorMatrix am =
-      MutationTreeImpl::parent_vector_to_ancestor_matrix({2, 2, 4, 4, 4});
-  MutationTreeImpl correct_tree(am, 4, beta);
+  auto matrix_tuple =
+      MutationTreeImpl::parent_vector_to_matrix({2, 2, 4, 4, 4});
+  AncestorMatrix am = std::get<0>(matrix_tuple);
+  AncestorMatrix dm = std::get<1>(matrix_tuple);
+  MutationTreeImpl correct_tree(am, dm, 4, beta);
 
   cl::sycl::buffer<AncestryVector, 1> is_mutated_buffer =
       cl::sycl::range<1>(n_cells);
@@ -122,9 +124,10 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
   app.run_simulation();
 
   AncestorMatrix best_am = app.get_best_am();
+  AncestorMatrix best_dm = app.get_best_dm();
   float best_beta = app.get_best_beta();
   float best_score = app.get_best_score();
-  MutationTreeImpl best_tree(best_am, n_genes, best_beta);
+  MutationTreeImpl best_tree(best_am, best_dm, n_genes, best_beta);
 
   MutationDataMatrix is_mutated, is_known;
   HostTreeScorerImpl host_scorer(
