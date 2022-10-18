@@ -172,11 +172,12 @@ public:
     for (uint32_t y = 0; y < max_n_nodes; y++) {
       AncestryVector y_ancestor = old_tree.get_ancestors(y);
 
-      #pragma unroll
+#pragma unroll
       for (uint32_t x = 0; x < max_n_nodes; x++) {
         descendant[y][x] = are_connected_after_update2(
             parameters.move_type, x, y, v, w, v_target, w_target, v_descendant,
-            w_descendant, v_ancestor, w_ancestor, v_target_ancestor, w_target_ancestor, y_ancestor);
+            w_descendant, v_ancestor, w_ancestor, v_target_ancestor,
+            w_target_ancestor, y_ancestor);
       }
     }
   }
@@ -782,16 +783,12 @@ private:
     }
   }
 
-  static bool are_connected_after_update2(MoveType move_type, uint32_t x,
-                                         uint32_t y, uint32_t v, uint32_t w,
-                                         uint32_t v_target, uint32_t w_target,
-                                         AncestryVector v_descendant,
-                                         AncestryVector w_descendant,
-                                         AncestryVector v_ancestor,
-                                         AncestryVector w_ancestor,
-                                         AncestryVector v_target_ancestor,
-                                         AncestryVector w_target_ancestor,
-                                         AncestryVector y_ancestor) {
+  static bool are_connected_after_update2(
+      MoveType move_type, uint32_t x, uint32_t y, uint32_t v, uint32_t w,
+      uint32_t v_target, uint32_t w_target, AncestryVector v_descendant,
+      AncestryVector w_descendant, AncestryVector v_ancestor,
+      AncestryVector w_ancestor, AncestryVector v_target_ancestor,
+      AncestryVector w_target_ancestor, AncestryVector y_ancestor) {
     switch (move_type) {
     case MoveType::SwapNodes:
       if (x == v) {
