@@ -134,6 +134,8 @@ public:
 
     AncestryVector v_descendant = old_tree.get_descendants(v);
     AncestryVector w_descendant = old_tree.get_descendants(w);
+    AncestryVector v_ancestor = old_tree.get_ancestors(v);
+    AncestryVector w_ancestor = old_tree.get_ancestors(w);
 
     uint32_t v_target, w_target;
     switch (parameters.move_type) {
@@ -152,108 +154,29 @@ public:
       v_target = w_target = 0; // No targets necessary.
     }
 
+    AncestryVector v_target_ancestor = old_tree.get_ancestors(v_target);
+    AncestryVector w_target_ancestor = old_tree.get_ancestors(w_target);
+
     for (uint32_t x = 0; x < max_n_nodes; x++) {
       // Compute the new ancestry vector.
-      AncestryVector old_vector = old_tree.get_descendants(x);
-      AncestryVector new_vector = 0;
+      AncestryVector x_descendant = old_tree.get_descendants(x);
 
-      // Declaring the swap variable for the "Swap Nodes" move here since you
-      // can't declare it inside the switch statement.
-      bool swap = true;
-
-      switch (parameters.move_type) {
-      case MoveType::ChangeBeta:
-        new_vector = old_vector;
-        break;
-
-      case MoveType::SwapNodes:
-        if (x == v) {
-          new_vector = w_descendant;
-        } else if (x == w) {
-          new_vector = v_descendant;
-        } else {
-          new_vector = old_vector;
-        }
-
-        swap = new_vector[v];
-        new_vector[v] = new_vector[w];
-        new_vector[w] = swap;
-        break;
-
-      case MoveType::PruneReattach:
-#pragma unroll
-        for (uint32_t y = 0; y < max_n_nodes; y++) {
-          if (v_descendant[y]) {
-            // if (v -> y),
-            // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-            new_vector[y] =
-                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
-          } else {
-            // otherwise, we have (v !-> y).
-            // Since this node is unaffected, everything remains the same.
-            new_vector[y] = old_vector[y];
-          }
-        }
-        break;
-
-      case MoveType::SwapSubtrees:
-#pragma unroll
-        for (uint32_t y = 0; y < max_n_nodes; y++) {
-          if (w_descendant[v]) {
-            ac_int<2, false> class_x;
-            if (v_descendant[x]) {
-              class_x = 2;
-            } else if (w_descendant[x]) {
-              class_x = 1;
-            } else {
-              class_x = 0;
-            }
-
-            ac_int<2, false> class_y;
-            if (v_descendant[y]) {
-              class_y = 2;
-            } else if (w_descendant[y]) {
-              class_y = 1;
-            } else {
-              class_y = 0;
-            }
-
-            if ((class_x == class_y) ||
-                (class_x == 0 && (class_y == 1 || class_y == 2))) {
-              new_vector[y] = old_vector[y];
-            } else if (class_x == 2 && class_y == 1) {
-              new_vector[y] = old_vector[w_target];
-            } else {
-              new_vector[y] = false;
-            }
-          } else {
-            if (v_descendant[y] && !w_descendant[y]) {
-              // if (v -> y && w !-> y),
-              // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-              new_vector[y] =
-                  old_vector[v_target] || (v_descendant[x] && old_vector[y]);
-            } else if (!v_descendant[y] && w_descendant[y]) {
-              // if (v !-> y && w -> y),
-              // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
-              new_vector[y] =
-                  old_vector[w_target] || (w_descendant[x] && old_vector[y]);
-            } else {
-              // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
-              // In this case, everything remains the same.
-              new_vector[y] = old_vector[y];
-            }
-          }
-        }
-        break;
-
-      default:
-        break;
-      }
-
-      ancestor[x] = new_vector;
 #pragma unroll
       for (uint32_t y = 0; y < max_n_nodes; y++) {
-        descendant[y][x] = new_vector[y];
+        ancestor[x][y] = are_connected_after_update(
+            parameters.move_type, x, y, v, w, v_target, w_target, v_descendant,
+            w_descendant, x_descendant);
+      }
+    }
+
+    for (uint32_t y = 0; y < max_n_nodes; y++) {
+      AncestryVector y_ancestor = old_tree.get_ancestors(y);
+
+      #pragma unroll
+      for (uint32_t x = 0; x < max_n_nodes; x++) {
+        descendant[y][x] = are_connected_after_update2(
+            parameters.move_type, x, y, v, w, v_target, w_target, v_descendant,
+            w_descendant, v_ancestor, w_ancestor, v_target_ancestor, w_target_ancestor, y_ancestor);
       }
     }
   }
@@ -313,7 +236,8 @@ public:
    *
    * This method is designed for CPUs and is not usable on FPGAs.
    *
-   * @param parent_vector The parent vector to compute the ancestor matrix from.
+   * @param parent_vector The parent vector to compute the ancestor matrix
+   * from.
    * @return AncestorMatrix The ancestor matrix of the tree described by the
    * parent vector.
    */
@@ -352,8 +276,8 @@ public:
   }
 
   /**
-   * @brief Compute the parent vector of the tree described by the given Prüfer
-   * code.
+   * @brief Compute the parent vector of the tree described by the given
+   * Prüfer code.
    *
    * A Prüfer code is a sequence of indices that describe a tree. Prüfer codes
    * are used to randomly generate trees since any sequence of integers with n
@@ -474,12 +398,13 @@ public:
   uint32_t get_root() const { return n_nodes - 1; }
 
   /**
-   * @brief Check whether one node is the parent of the other node in this tree.
+   * @brief Check whether one node is the parent of the other node in this
+   * tree.
    *
    * This is equivalent to asking whether there is an edge from `parent` to
    * `child` in the tree. However, the root is its own parent per convention,
-   * which means that this edge only exists if `parent` is the parent of `child`
-   * and `child` is not the root of the tree.
+   * which means that this edge only exists if `parent` is the parent of
+   * `child` and `child` is not the root of the tree.
    *
    * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
@@ -596,7 +521,8 @@ public:
    *
    * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
-   * @param node_i The index of the node who's number of descendants is queried.
+   * @param node_i The index of the node who's number of descendants is
+   * queried.
    * @return The number of descendants.
    */
   uint32_t get_n_descendants(uint32_t node_i) const {
@@ -757,6 +683,208 @@ public:
   }
 
 private:
+  static bool are_connected_after_update(MoveType move_type, uint32_t x,
+                                         uint32_t y, uint32_t v, uint32_t w,
+                                         uint32_t v_target, uint32_t w_target,
+                                         AncestryVector v_descendant,
+                                         AncestryVector w_descendant,
+                                         AncestryVector x_descendant) {
+    switch (move_type) {
+    case MoveType::SwapNodes:
+      if (x == v) {
+        if (y == v) {
+          return w_descendant[w];
+        } else if (y == w) {
+          return w_descendant[v];
+        } else {
+          return w_descendant[y];
+        }
+      } else if (x == w) {
+        if (y == v) {
+          return v_descendant[w];
+        } else if (y == w) {
+          return v_descendant[v];
+        } else {
+          return v_descendant[y];
+        }
+      } else {
+        if (y == v) {
+          return x_descendant[w];
+        } else if (y == w) {
+          return x_descendant[v];
+        } else {
+          return x_descendant[y];
+        }
+      }
+      break;
+
+    case MoveType::PruneReattach:
+      if (v_descendant[y]) {
+        // if (v -> y),
+        // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+        return x_descendant[v_target] || (v_descendant[x] && x_descendant[y]);
+      } else {
+        // otherwise, we have (v !-> y).
+        // Since this node is unaffected, everything remains the same.
+        return x_descendant[y];
+      }
+      break;
+
+    case MoveType::SwapSubtrees:
+      if (w_descendant[v]) {
+        ac_int<2, false> class_x;
+        if (v_descendant[x]) {
+          class_x = 2;
+        } else if (w_descendant[x]) {
+          class_x = 1;
+        } else {
+          class_x = 0;
+        }
+
+        ac_int<2, false> class_y;
+        if (v_descendant[y]) {
+          class_y = 2;
+        } else if (w_descendant[y]) {
+          class_y = 1;
+        } else {
+          class_y = 0;
+        }
+
+        if ((class_x == class_y) ||
+            (class_x == 0 && (class_y == 1 || class_y == 2))) {
+          return x_descendant[y];
+        } else if (class_x == 2 && class_y == 1) {
+          return x_descendant[w_target];
+        } else {
+          return false;
+        }
+      } else {
+        if (v_descendant[y] && !w_descendant[y]) {
+          // if (v -> y && w !-> y),
+          // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+          return x_descendant[v_target] || (v_descendant[x] && x_descendant[y]);
+        } else if (!v_descendant[y] && w_descendant[y]) {
+          // if (v !-> y && w -> y),
+          // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
+          return x_descendant[w_target] || (w_descendant[x] && x_descendant[y]);
+        } else {
+          // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
+          // In this case, everything remains the same.
+          return x_descendant[y];
+        }
+      }
+      break;
+
+    case MoveType::ChangeBeta:
+    default:
+      return x_descendant[y];
+      break;
+    }
+  }
+
+  static bool are_connected_after_update2(MoveType move_type, uint32_t x,
+                                         uint32_t y, uint32_t v, uint32_t w,
+                                         uint32_t v_target, uint32_t w_target,
+                                         AncestryVector v_descendant,
+                                         AncestryVector w_descendant,
+                                         AncestryVector v_ancestor,
+                                         AncestryVector w_ancestor,
+                                         AncestryVector v_target_ancestor,
+                                         AncestryVector w_target_ancestor,
+                                         AncestryVector y_ancestor) {
+    switch (move_type) {
+    case MoveType::SwapNodes:
+      if (x == v) {
+        if (y == v) {
+          return w_descendant[w];
+        } else if (y == w) {
+          return w_descendant[v];
+        } else {
+          return w_descendant[y];
+        }
+      } else if (x == w) {
+        if (y == v) {
+          return v_descendant[w];
+        } else if (y == w) {
+          return v_descendant[v];
+        } else {
+          return v_descendant[y];
+        }
+      } else {
+        if (y == v) {
+          return w_ancestor[x];
+        } else if (y == w) {
+          return v_ancestor[x];
+        } else {
+          return y_ancestor[x];
+        }
+      }
+      break;
+
+    case MoveType::PruneReattach:
+      if (y_ancestor[v]) {
+        // if (v -> y),
+        // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+        return v_target_ancestor[x] || (v_descendant[x] && y_ancestor[x]);
+      } else {
+        // otherwise, we have (v !-> y).
+        // Since this node is unaffected, everything remains the same.
+        return y_ancestor[x];
+      }
+      break;
+
+    case MoveType::SwapSubtrees:
+      if (w_descendant[v]) {
+        ac_int<2, false> class_x;
+        if (v_descendant[x]) {
+          class_x = 2;
+        } else if (w_descendant[x]) {
+          class_x = 1;
+        } else {
+          class_x = 0;
+        }
+
+        ac_int<2, false> class_y;
+        if (v_descendant[y]) {
+          class_y = 2;
+        } else if (w_descendant[y]) {
+          class_y = 1;
+        } else {
+          class_y = 0;
+        }
+
+        if ((class_x == class_y) ||
+            (class_x == 0 && (class_y == 1 || class_y == 2))) {
+          return y_ancestor[x];
+        } else if (class_x == 2 && class_y == 1) {
+          return w_target_ancestor[x];
+        } else {
+          return false;
+        }
+      } else {
+        if (v_descendant[y] && !w_descendant[y]) {
+          // if (v -> y && w !-> y),
+          // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
+          return v_target_ancestor[x] || (v_descendant[x] && y_ancestor[x]);
+        } else if (!v_descendant[y] && w_descendant[y]) {
+          // if (v !-> y && w -> y),
+          // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
+          return w_target_ancestor[x] || (w_descendant[x] && y_ancestor[x]);
+        } else {
+          // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
+          // In this case, everything remains the same.
+          return y_ancestor[x];
+        }
+      }
+      break;
+
+    case MoveType::ChangeBeta:
+    default:
+      return y_ancestor[x];
+      break;
+    }
+  }
+
   uint32_t get_descendant_or_nondescendant(uint32_t node_i,
                                            uint32_t i_descendant,
                                            bool get_descendant) const {
