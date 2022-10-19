@@ -380,7 +380,8 @@ private:
           is_known_buffer.template get_access<access::mode::read>(cgh);
 
       auto best_am_dm_ac =
-          best_am_dm_buffer.template get_access<access::mode::discard_write>(cgh);
+          best_am_dm_buffer.template get_access<access::mode::discard_write>(
+              cgh);
       auto best_beta_ac =
           best_beta_buffer.template get_access<access::mode::discard_write>(
               cgh);
@@ -407,7 +408,10 @@ private:
         float best_beta = 1.0;
         float best_score = -std::numeric_limits<float>::infinity();
 
-        for (uint32_t i = 0; i < n_chains * n_steps; i++) {
+        [[intel::max_concurrency(pipeline_capacity)]] for (uint32_t i = 0;
+                                                           i <
+                                                           n_chains * n_steps;
+                                                           i++) {
           ChainMeta tree_meta = InputMetaPipe::read();
 
           [[intel::fpga_memory]] AncestorMatrix current_am, current_dm;
