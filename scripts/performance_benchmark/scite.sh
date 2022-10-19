@@ -9,7 +9,7 @@
 
 set -e 
 
-ml fpga devel intel/oneapi bittware/520n Boost/1.74.0-GCC CMake
+ml fpga devel intel/oneapi/22.2.0 bittware/520n Boost/1.74.0-GCC CMake
 
 BASE_DIR=performance_benchmark.out
 ALPHA=6e-5
@@ -27,7 +27,7 @@ do
 
     INPUT=$OUT_DIR/input.csv
 
-    for N_CHAINS in 6 12
+    for N_CHAINS in 18 36
     do
         for N_STEPS in `seq 500000 500000 2000000`
         do
