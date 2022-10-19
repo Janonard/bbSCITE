@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 module reset
-module load fpga devel intel/oneapi bittware/520n/20.4.0_hpc Boost/1.74.0-GCC CMake
+module load fpga devel intel/oneapi/22.2.0 bittware/520n/20.4.0_hpc Boost/1.74.0-GCC CMake
 
 TOOL=./tool.py
 
