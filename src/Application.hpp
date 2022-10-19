@@ -94,8 +94,7 @@ public:
         current_dm_buffer(cl::sycl::range<1>(1)),
         current_beta_buffer(cl::sycl::range<1>(1)),
         current_score_buffer(cl::sycl::range<1>(1)),
-        best_am_buffer(cl::sycl::range<1>(1)),
-        best_dm_buffer(cl::sycl::range<1>(1)),
+        best_am_dm_buffer(cl::sycl::range<1>(2)),
         best_beta_buffer(cl::sycl::range<1>(1)),
         best_score_buffer(cl::sycl::range<1>(1)),
         is_mutated_buffer(is_mutated_buffer), is_known_buffer(is_known_buffer),
@@ -223,18 +222,18 @@ public:
    * @brief Get the ancestor matrix of the most-likely chain state.
    */
   AncestorMatrix get_best_am() {
-    auto best_am_ac =
-        best_am_buffer.template get_access<cl::sycl::access::mode::read>();
-    return best_am_ac[0];
+    auto best_am_dm_ac =
+        best_am_dm_buffer.template get_access<cl::sycl::access::mode::read>();
+    return best_am_dm_ac[0];
   }
 
   /**
    * @brief Get the descendant matrix of the most-likely chain state.
    */
   AncestorMatrix get_best_dm() {
-    auto best_dm_ac =
-        best_dm_buffer.template get_access<cl::sycl::access::mode::read>();
-    return best_dm_ac[0];
+    auto best_am_dm_ac =
+        best_am_dm_buffer.template get_access<cl::sycl::access::mode::read>();
+    return best_am_dm_ac[1];
   }
 
   /**
@@ -380,10 +379,8 @@ private:
       auto is_known_ac =
           is_known_buffer.template get_access<access::mode::read>(cgh);
 
-      auto best_am_ac =
-          best_am_buffer.template get_access<access::mode::discard_write>(cgh);
-      auto best_dm_ac =
-          best_dm_buffer.template get_access<access::mode::discard_write>(cgh);
+      auto best_am_dm_ac =
+          best_am_dm_buffer.template get_access<access::mode::discard_write>(cgh);
       auto best_beta_ac =
           best_beta_buffer.template get_access<access::mode::discard_write>(
               cgh);
@@ -484,8 +481,8 @@ private:
         }
 
         for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-          best_am_ac[0][word_i] = best_am[word_i];
-          best_dm_ac[0][word_i] = best_dm[word_i];
+          best_am_dm_ac[0][word_i] = best_am[word_i];
+          best_am_dm_ac[1][word_i] = best_dm[word_i];
         }
         best_beta_ac[0] = best_beta;
         best_score_ac[0] = best_score;
@@ -500,8 +497,7 @@ private:
   cl::sycl::buffer<float, 1> current_beta_buffer;
   cl::sycl::buffer<float, 1> current_score_buffer;
 
-  cl::sycl::buffer<AncestorMatrix, 1> best_am_buffer;
-  cl::sycl::buffer<AncestorMatrix, 1> best_dm_buffer;
+  cl::sycl::buffer<AncestorMatrix, 1> best_am_dm_buffer;
   cl::sycl::buffer<float, 1> best_beta_buffer;
   cl::sycl::buffer<float, 1> best_score_buffer;
 
