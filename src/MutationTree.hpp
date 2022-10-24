@@ -15,7 +15,8 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "MoveType.hpp"
+#include "RawMoveDistribution.hpp"
+
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -252,6 +253,58 @@ public:
   MutationTree(MutationTree const &other) = default;
   MutationTree<max_n_genes> &
   operator=(MutationTree<max_n_genes> const &other) = default;
+
+  ModificationParameters
+  realize_raw_move_sample(RawMoveSample raw_move_sample) const {
+    uint32_t v = raw_move_sample.raw_v;
+    uint32_t w = raw_move_sample.raw_w;
+    if (is_ancestor(v, w)) {
+      std::swap(v, w);
+    }
+
+    uint32_t parent_of_v, parent_of_w;
+    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
+      if (node_i >= get_n_nodes()) {
+        continue;
+      }
+      if (is_parent(node_i, v)) {
+        parent_of_v = node_i;
+      }
+      if (is_parent(node_i, w)) {
+        parent_of_w = node_i;
+      }
+    }
+
+    uint32_t n_descendants = get_n_descendants(v);
+    uint32_t n_nondescendants = n_nodes - n_descendants;
+
+    uint32_t i_descendant =
+        std::floor(raw_move_sample.raw_descendant_of_v * n_descendants);
+    uint32_t i_nondescendant =
+        std::floor(raw_move_sample.raw_nondescendant_of_v * n_nondescendants);
+
+    uint32_t descendant_of_v = get_descendant(v, i_descendant);
+    uint32_t nondescendant_of_v = get_nondescendant(v, i_nondescendant);
+
+    float new_beta = beta + raw_move_sample.beta_jump;
+    if (new_beta < 0) {
+      new_beta = std::abs(new_beta);
+    }
+    if (new_beta > 1) {
+      new_beta = new_beta - 2 * (new_beta - 1);
+    }
+
+    return ModificationParameters{
+        .move_type = raw_move_sample.move_type,
+        .v = v,
+        .w = w,
+        .parent_of_v = parent_of_v,
+        .parent_of_w = parent_of_w,
+        .descendant_of_v = descendant_of_v,
+        .nondescendant_of_v = nondescendant_of_v,
+        .new_beta = new_beta,
+    };
+  }
 
   /**
    * @brief Compute the ancestor matrix of the tree described by the given
@@ -555,6 +608,14 @@ public:
     return n_descendants;
   }
 
+  uint32_t get_descendant(uint32_t node_i, uint32_t i_descendant) const {
+    return get_descendant_or_nondescendant(node_i, i_descendant, true);
+  }
+
+  uint32_t get_nondescendant(uint32_t node_i, uint32_t i_nondescendant) const {
+    return get_descendant_or_nondescendant(node_i, i_nondescendant, false);
+  }
+
   /**
    * @brief Return a boolean array describing a node's ancestors.
    *
@@ -649,154 +710,6 @@ public:
   }
 
   /**
-   * @brief Sample one of the random move types, with customized move
-   * probabilities.
-   *
-   * The probabilities for the beta change, the "prune and reattach" move, and
-   * the "swap nodes" move are parameters of this method, and it is assumed that
-   * all of these probabilities are non-negative and that their sum is less than
-   * or equal to one. The probability of the "swap subtrees" move is the
-   * remaining probability given the other probabilities.
-   *
-   * This method works equally well on CPUs and on FPGAs.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @param prob_beta_change The probability of a beta-changing move.
-   * @param prob_prune_n_reattach The probability of a "prune and reattach"
-   * move.
-   * @param prob_swap_nodes The probability of a "swap nodes" move.
-   * @return MoveType The sampled move type.
-   */
-  template <typename RNG>
-  MoveType sample_move(RNG &rng, float prob_beta_change,
-                       float prob_prune_n_reattach,
-                       float prob_swap_nodes) const {
-    float change_type_draw =
-        oneapi::dpl::uniform_real_distribution(0.0, 1.0)(rng);
-    if (change_type_draw <= prob_beta_change) {
-      return MoveType::ChangeBeta;
-    } else if (change_type_draw <= prob_beta_change + prob_prune_n_reattach) {
-      return MoveType::PruneReattach;
-    } else if (change_type_draw <=
-               prob_beta_change + prob_prune_n_reattach + prob_swap_nodes) {
-      return MoveType::SwapNodes;
-    } else {
-      return MoveType::SwapSubtrees;
-    }
-  }
-
-  /**
-   * @brief Sample one of the random move types, with default probabilities.
-   *
-   * The default probabilities for the different move types are:
-   *
-   * * beta change: 0
-   * * "prune and reattach": 0.5
-   * * "swap nodes": 0.45
-   * * "swap subtrees": 0.05
-   *
-   * This method works equally well on CPUs and on FPGAs.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @return MoveType The sampled move type.
-   */
-  template <typename RNG> MoveType sample_move(RNG &rng) const {
-    return sample_move(rng, 0.0, 0.5, 0.45);
-  }
-
-  /**
-   * @brief Sample two distinct nodes uniformly from the tree.
-   *
-   * The first node v is sampled uniformly from the entire tree and the second
-   * node w is sampled from all nodes except v. v and w are either unrelated or
-   * w is an ancestor of v.
-   *
-   * This method works equally well on CPUs and on FPGAs.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @return std::array<uint32_t, 2> Two distinct nodes from the tree.
-   */
-  template <typename RNG>
-  std::array<uint32_t, 2> sample_nonroot_nodepair(RNG &rng) const {
-    // excluding n_nodes - 1, the root.
-    uint32_t v = oneapi::dpl::uniform_int_distribution<uint32_t>(
-        0, get_n_nodes() - 2)(rng);
-    uint32_t w = oneapi::dpl::uniform_int_distribution<uint32_t>(
-        0, get_n_nodes() - 3)(rng);
-    if (w >= v) {
-      w++;
-    }
-    if (is_ancestor(v, w)) {
-      std::swap(v, w);
-    }
-    return {v, w};
-  }
-
-  /**
-   * @brief Sample uniformly from all descendants of a node.
-   *
-   * Note that the sampled node may be `node_i` too.
-   *
-   * This method is designed and optimized for FPGAs, but works on CPUs too.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @param node_i The pivot node who's descendants are considered.
-   * @return uint32_t A descendant of `node_i`.
-   */
-  template <typename RNG>
-  uint32_t sample_descendant(RNG &rng, uint32_t node_i) const {
-    return sample_descendant_or_nondescendant(rng, node_i, true);
-  }
-
-  /**
-   * @brief Sample uniformly from all non-descendants of a node.
-   *
-   * Note that the sampled node may be the root of the tree too if `node_i` is
-   * not the root.
-   *
-   * This method is designed and optimized for FPGAs, but works on CPUs too.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @param node_i The pivot node who's non-descendants are considered.
-   * @return uint32_t A non-descendant of `node_i`.
-   */
-  template <typename RNG>
-  uint32_t sample_nondescendant(RNG &rng, uint32_t node_i) const {
-    return sample_descendant_or_nondescendant(rng, node_i, false);
-  }
-
-  /**
-   * @brief Sample a new beta value (Probability of false negatives).
-   *
-   * This is done by adding a normally distributed value to the current beta
-   * value and bounding it to [0,1].
-   *
-   * This method works equally well on CPUs and on FPGAs.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @param beta_jump_sd The standard derivation of the added value.
-   * @return float The newly sampled beta value.
-   */
-  template <typename RNG>
-  float sample_new_beta(RNG &rng, float beta_jump_sd) const {
-    float new_beta =
-        beta + oneapi::dpl::normal_distribution<float>(0, beta_jump_sd)(rng);
-    if (new_beta < 0) {
-      new_beta = std::abs(new_beta);
-    }
-    if (new_beta > 1) {
-      new_beta = new_beta - 2 * (new_beta - 1);
-    }
-    return new_beta;
-  }
-
-  /**
    * @brief Generate a graphviz file that plots the tree.
    *
    * This method is designed for CPUs and is not usable on FPGAs.
@@ -844,36 +757,14 @@ public:
   }
 
 private:
-  /**
-   * @brief Sample uniformly from either all descendants or non-descendants of a
-   * node.
-   *
-   * Depending on the `sample_descendant` flag, this method either samples a
-   * node uniformly from all descendants of `node_i` or all non-descendants of
-   * `node_i`.
-   *
-   * When sampling from all descendants, the sampled node may also be `node_i`
-   * itself, and when sampling from all non-descendants, the sampled node may
-   * also be the root of the tree if `node_i` is not the root.
-   *
-   * This method is designed and optimized for FPGAs, but works on CPUs too.
-   *
-   * @tparam The type of URNG to use.
-   * @param rng The URNG instance to use.
-   * @param node_i The pivot node who's descendants or non-descendants are
-   * considered.
-   * @param sample_descendant Set to true iff the sampled node should be sampled
-   * from all descendants of `node_i`. Otherwise, set to false.
-   * @return uint32_t A (non-)descendant of `node_i`.
-   */
-  template <typename RNG>
-  uint32_t sample_descendant_or_nondescendant(RNG &rng, uint32_t node_i,
-                                              bool sample_descendant) const {
+  uint32_t get_descendant_or_nondescendant(uint32_t node_i,
+                                           uint32_t i_descendant,
+                                           bool get_descendant) const {
     AncestryVector descendant = get_descendants(node_i);
 
     // If we have to sample a nondescendant, we invert the bitvector and
     // continue as if we were to sample a descendant.
-    if (!sample_descendant) {
+    if (!get_descendant) {
 #pragma unroll
       for (uint32_t i = 0; i < max_n_nodes; i++) {
         descendant[i] = !descendant[i];
@@ -889,27 +780,21 @@ private:
       }
     }
 
-    // Sample the occurrence of the (non)descendant to pick. The resulting node
-    // will be the `sampled_occurrence_i`th (non)descendant.
-    uint32_t sampled_occurrence_i =
-        oneapi::dpl::uniform_int_distribution<uint32_t>(0,
-                                                        n_descendants - 1)(rng);
-
     // Walk through the (non)descendant bitvector and pick the correct node
     // index.
-    uint32_t sampled_node_i = 0;
+    uint32_t descendant_i = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
       if (i < get_n_nodes() && descendant[i]) {
-        if (sampled_occurrence_i == 0) {
-          sampled_node_i = i;
+        if (i_descendant == 0) {
+          descendant_i = i;
           break;
         } else {
-          sampled_occurrence_i--;
+          i_descendant--;
         }
       }
     }
-    return sampled_node_i;
+    return descendant_i;
   }
 
   void

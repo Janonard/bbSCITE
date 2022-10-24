@@ -576,6 +576,15 @@ public:
   }
 
   /**
+   * @brief Get the standard derivation of the beta change per move.
+   *
+   * @return float The standard derivation of the beta change per move.
+   */
+  float get_beta_jump_sd() const {
+    return get_beta_sd() / get_beta_jump_scaling_chi();
+  }
+
+  /**
    * @brief Get the gamma factor for the exploration behavior.
    *
    * For gamma = 1.0, the chains converge on the posterior distribution. For

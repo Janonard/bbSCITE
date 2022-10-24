@@ -17,6 +17,7 @@
 #pragma once
 #include "MutationTree.hpp"
 #include "StaticMatrix.hpp"
+
 #include <CL/sycl.hpp>
 #include <bit>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
