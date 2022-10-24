@@ -254,9 +254,9 @@ private:
   };
 
   using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
-  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector>;
+  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector, max_n_genes+1>;
   using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
-  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector>;
+  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector, max_n_genes+1>;
 
   /**
    * @brief Enqueue the IO kernel which controls the introduction of initial
