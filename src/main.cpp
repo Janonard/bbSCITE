@@ -25,7 +25,7 @@ using namespace ffSCITE;
 
 constexpr uint32_t max_n_cells = 64;
 constexpr uint32_t max_n_genes = 63;
-constexpr uint32_t pipeline_capacity = 12;
+constexpr uint32_t pipeline_capacity = 1;
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
