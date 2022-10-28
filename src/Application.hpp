@@ -382,6 +382,7 @@ private:
         float best_beta = 1.0;
         float best_score = -std::numeric_limits<float>::infinity();
 
+        [[intel::max_concurrency(pipeline_capacity)]]
         for (uint32_t i = 0; i < n_chains * n_steps; i++) {
           ChainMeta tree_meta = InputMetaPipe::read();
 
