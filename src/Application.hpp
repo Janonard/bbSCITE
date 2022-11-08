@@ -177,7 +177,8 @@ public:
     }
     std::chrono::time_point end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double, std::ratio<1>> generation_makespan = end - start;
+    std::chrono::duration<double, std::ratio<1>> generation_makespan =
+        end - start;
     std::cout << "Move generation makespan: ";
     std::cout << generation_makespan.count();
     std::cout << " s" << std::endl;
@@ -254,9 +255,11 @@ private:
   };
 
   using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
-  using InputTreePipe = cl::sycl::pipe<class InputTreePipeID, AncestryVector, max_n_genes+1>;
+  using InputTreePipe =
+      cl::sycl::pipe<class InputTreePipeID, AncestryVector, max_n_genes + 1>;
   using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
-  using OutputTreePipe = cl::sycl::pipe<class OutputTreePipeID, AncestryVector, max_n_genes+1>;
+  using OutputTreePipe =
+      cl::sycl::pipe<class OutputTreePipeID, AncestryVector, max_n_genes + 1>;
 
   /**
    * @brief Enqueue the IO kernel which controls the introduction of initial
@@ -348,7 +351,7 @@ private:
     return working_queue.submit([&](handler &cgh) {
       auto raw_moves_ac =
           raw_moves.template get_access<access::mode::read>(cgh);
-          
+
       auto is_mutated_ac =
           is_mutated_buffer.template get_access<access::mode::read>(cgh);
       auto is_known_ac =
@@ -382,8 +385,10 @@ private:
         float best_beta = 1.0;
         float best_score = -std::numeric_limits<float>::infinity();
 
-        [[intel::max_concurrency(pipeline_capacity)]]
-        for (uint32_t i = 0; i < n_chains * n_steps; i++) {
+        [[intel::max_concurrency(pipeline_capacity)]] for (uint32_t i = 0;
+                                                           i <
+                                                           n_chains * n_steps;
+                                                           i++) {
           ChainMeta tree_meta = InputMetaPipe::read();
 
           AncestorMatrix current_am;
