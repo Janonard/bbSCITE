@@ -26,11 +26,11 @@ do
 
     INPUT=$OUT_DIR/input.csv
 
-    for N_CHAINS in 18 36
+    for N_CHAINS in 24 48
     do
         for N_STEPS in `seq 500000 500000 2000000`
         do
-            for i in `seq 10`
+            for i in `seq 4`
             do
                 ./build/ffSCITE \
                     -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \

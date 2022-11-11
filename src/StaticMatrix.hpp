@@ -84,13 +84,15 @@ public:
 
   /**
    * @brief Vector-add another matrix to this matrix.
-   * 
-   * It is assumed that the add-assign operation for entries exists and is well-defined.
+   *
+   * It is assumed that the add-assign operation for entries exists and is
+   * well-defined.
    *
    * This method is designed and optimized for FPGAs, but works on CPUs too.
-   * 
+   *
    * @param rhs The other matrix to add.
-   * @return StaticMatrix<T, width, height>& A reference to this, resulting matrix.
+   * @return StaticMatrix<T, width, height>& A reference to this, resulting
+   * matrix.
    */
   StaticMatrix<T, width, height> &
   operator+=(StaticMatrix<T, width, height> rhs) {
@@ -106,13 +108,15 @@ public:
 
   /**
    * @brief Multiply the given value to the entries of this matrix.
-   * 
-   * It is assumed that the multiply-assign operation for entries exists and is well-defined.
+   *
+   * It is assumed that the multiply-assign operation for entries exists and is
+   * well-defined.
    *
    * This method is designed and optimized for FPGAs, but works on CPUs too.
-   * 
+   *
    * @param scalar The scalar to multiply with all entries.
-   * @return StaticMatrix<T, width, height>& A reference to this, resulting matrix.
+   * @return StaticMatrix<T, width, height>& A reference to this, resulting
+   * matrix.
    */
   StaticMatrix<T, width, height> &operator*=(T scalar) {
 #pragma unroll

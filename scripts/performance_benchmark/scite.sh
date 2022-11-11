@@ -2,7 +2,7 @@
 #SBATCH -A hpc-lco-kenter
 #SBATCH -p normal
 #SBATCH --mem 8G
-#SBATCH --cpus-per-task 1
+#SBATCH --cpus-per-task 24
 #SBATCH --time=12:00:00
 #SBATCH --mail-type=All
 #SBATCH --mail-user=joo@mail.upb.de
@@ -27,16 +27,17 @@ do
 
     INPUT=$OUT_DIR/input.csv
 
-    for N_CHAINS in 18 36
+    for N_CHAINS in 24 48
     do
         for N_STEPS in `seq 500000 500000 2000000`
         do
-            for i in `seq 10`
+            for i in `seq 4`
             do
                 ./build/scite \
                     -n $GENES -m $CELLS -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
                     >> "${SCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
-            done
+            done &
         done
     done
 done
+wait
