@@ -2,7 +2,7 @@
 #SBATCH -A hpc-lco-kenter
 #SBATCH -p normal
 #SBATCH --mem 8G
-#SBATCH --cpus-per-task 1
+#SBATCH --cpus-per-task 24
 #SBATCH --time=12:00:00
 #SBATCH --mail-type=All
 #SBATCH --mail-user=joo@mail.upb.de
@@ -36,7 +36,8 @@ do
                 ./build/scite \
                     -n $GENES -m $CELLS -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
                     >> "${SCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
-            done
+            done &
         done
     done
 done
+wait
