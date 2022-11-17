@@ -401,7 +401,7 @@ private:
                                                            n_chains * n_steps;
                                                            i++) {
           ChainMeta tree_meta;
-          AncestorMatrix current_am, current_dm;
+          [[intel::fpga_memory]] AncestorMatrix current_am, current_dm;
 
           for (uint32_t word_i = 0; word_i < max_n_nodes + 1; word_i++) {
             PipeValue read_pipe_value = InputPipe::read();
