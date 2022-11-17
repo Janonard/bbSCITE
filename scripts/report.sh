@@ -6,6 +6,6 @@ ml fpga devel intel/oneapi/22.2.0 bittware/520n Boost/1.74.0-GCC CMake
 mkdir -p build
 cd build
 
-dpcpp -std=c++20 -fintelfpga -qactypes -fsycl-link \
+time dpcpp -std=c++20 -fintelfpga -qactypes -fsycl-link \
     -Xshardware -Xsv -Xsclock=350MHz \
     ../src/main.cpp -o ffSCITE

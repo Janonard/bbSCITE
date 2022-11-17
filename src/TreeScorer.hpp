@@ -168,8 +168,8 @@ public:
             popcount_t n_occurrences = 0;
 
             #pragma unroll
-            for (uint32_t i_unit = 0; i_unit < max_n_genes+1; i_unit += 4) {
-              n_occurrences += unit_popcount(occurrence_vector.template slc<4>(i_unit));
+            for (uint32_t i_unit = 0; i_unit < max_n_genes+1; i_unit++) {
+              n_occurrences += occurrence_vector[i_unit];
             }
 
             individual_score += float(n_occurrences) *
@@ -205,34 +205,6 @@ public:
   }
 
 private:
-  ac_int<4, false> unit_popcount(ac_int<4, false> unit) const {
-    switch (unit) {
-      case 0b0000:
-        return 0;
-      case 0b0001:
-      case 0b0010:
-      case 0b0100:
-      case 0b1000:
-        return 1;
-      case 0b0011:
-      case 0b0101:
-      case 0b1001:
-      case 0b0110:
-      case 0b1010:
-      case 0b1100:
-        return 2;
-      case 0b0111:
-      case 0b1011:
-      case 0b1101:
-      case 0b1110:
-        return 3;
-      case 0b1111:
-        return 4;
-      default:
-        return 0; // doesn't happen
-    }
-  }
-
   float log_error_probabilities[2][2];
   float bpriora, bpriorb;
   MutationDataMatrix &is_mutated;
