@@ -89,7 +89,7 @@ public:
 
   /**
    * @brief Sample a random raw move.
-   * 
+   *
    * @tparam RNG The type of URNG to use.
    * @param rng The URNG instance to use.
    * @return RawMoveSample The sampled move.
