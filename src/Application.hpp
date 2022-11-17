@@ -264,16 +264,19 @@ private:
     float score;
   };
 
-  using InputMetaPipe = cl::sycl::pipe<class InputMetaPipeID, ChainMeta>;
-  using InputAncestorPipe =
-      cl::sycl::pipe<class InputAncestorPipeID, AncestryVector>;
-  using InputDescendantPipe =
-      cl::sycl::pipe<class InputDescendantPipeID, AncestryVector>;
-  using OutputMetaPipe = cl::sycl::pipe<class OutputMetaPipeID, ChainMeta>;
-  using OutputAncestorPipe =
-      cl::sycl::pipe<class OutputAncestorPipeID, AncestryVector>;
-  using OutputDescendantPipe =
-      cl::sycl::pipe<class OutputDescendantPipeID, AncestryVector>;
+  union PipeValue {
+    PipeValue() : ancestry_vector{0, 0} {}
+    PipeValue(ChainMeta meta) : meta(meta) {}
+    PipeValue(AncestryVector av, AncestryVector dv) : ancestry_vector{av, dv} {}
+
+    ChainMeta meta;
+    std::array<AncestryVector, 2> ancestry_vector;
+  };
+
+  using InputPipe =
+      cl::sycl::pipe<class InputPipeID, PipeValue, max_n_genes + 2>;
+  using OutputPipe =
+      cl::sycl::pipe<class OutputPipeID, PipeValue, max_n_genes + 2>;
 
   /**
    * @brief Enqueue the IO kernel which controls the introduction of initial
@@ -302,58 +305,43 @@ private:
       cgh.single_task<class IOKernel>([=]() {
         uint32_t i_initial_state = 0;
 
-        for (uint32_t i = 0; i < n_steps * n_chains + pipeline_capacity; i++) {
+        [[intel::loop_coalesce(2)]] for (uint32_t i = 0;
+                                         i <
+                                         n_steps * n_chains + pipeline_capacity;
+                                         i++) {
           bool read_output = i >= pipeline_capacity;
           bool write_input = i < n_steps * n_chains;
           ac_int<1, false> input_source =
               (i % (n_steps * pipeline_capacity) < pipeline_capacity) ? 1 : 0;
 
-          ChainMeta initial_meta, output_meta;
-          if (input_source == 1) {
-            initial_meta = ChainMeta{
-                .beta = current_beta_ac[i_initial_state],
-                .score = current_score_ac[i_initial_state],
-            };
-          }
-          if (read_output) {
-            output_meta = OutputMetaPipe::read();
-          }
-
-          [[intel::fpga_memory]] AncestorMatrix initial_am, initial_dm,
-              output_am, output_dm;
-          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            if (input_source == 1) {
-              initial_am[word_i] = current_am_ac[i_initial_state][word_i];
-              initial_dm[word_i] = current_dm_ac[i_initial_state][word_i];
-            }
+          for (uint32_t packet_i = 0; packet_i < max_n_nodes + 1; packet_i++) {
+            PipeValue in_packet, out_packet;
             if (read_output) {
-              output_am[word_i] = OutputAncestorPipe::read();
-              output_dm[word_i] = OutputDescendantPipe::read();
+              in_packet = OutputPipe::read();
+            }
+
+            if (input_source == 0) {
+              out_packet = in_packet;
+            } else {
+              if (packet_i < max_n_nodes) {
+                out_packet =
+                    PipeValue(current_am_ac[i_initial_state][packet_i],
+                              current_dm_ac[i_initial_state][packet_i]);
+              } else {
+                out_packet = ChainMeta{
+                    .beta = current_beta_ac[i_initial_state],
+                    .score = current_score_ac[i_initial_state],
+                };
+              }
+            }
+
+            if (write_input) {
+              InputPipe::write(out_packet);
             }
           }
 
           if (input_source == 1) {
             i_initial_state++;
-          }
-
-          if (write_input) {
-            ChainMeta input_meta =
-                (input_source == 1) ? initial_meta : output_meta;
-            InputMetaPipe::write(input_meta);
-          }
-          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            if (write_input) {
-              AncestryVector input_ancestor_vector, input_descendant_vector;
-              if (input_source == 1) {
-                input_ancestor_vector = initial_am[word_i];
-                input_descendant_vector = initial_dm[word_i];
-              } else {
-                input_ancestor_vector = output_am[word_i];
-                input_descendant_vector = output_dm[word_i];
-              }
-              InputAncestorPipe::write(input_ancestor_vector);
-              InputDescendantPipe::write(input_descendant_vector);
-            }
           }
         }
       });
@@ -412,12 +400,17 @@ private:
                                                            i <
                                                            n_chains * n_steps;
                                                            i++) {
-          ChainMeta tree_meta = InputMetaPipe::read();
+          ChainMeta tree_meta;
+          AncestorMatrix current_am, current_dm;
 
-          [[intel::fpga_memory]] AncestorMatrix current_am, current_dm;
-          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            current_am[word_i] = InputAncestorPipe::read();
-            current_dm[word_i] = InputDescendantPipe::read();
+          for (uint32_t word_i = 0; word_i < max_n_nodes + 1; word_i++) {
+            PipeValue read_pipe_value = InputPipe::read();
+            if (word_i < max_n_nodes) {
+              current_am[word_i] = read_pipe_value.ancestry_vector[0];
+              current_dm[word_i] = read_pipe_value.ancestry_vector[1];
+            } else {
+              tree_meta = read_pipe_value.meta;
+            }
           }
 
           float current_beta = tree_meta.beta;
@@ -453,34 +446,35 @@ private:
           bool accept_move = acceptance_probability > raw_move.acceptance_level;
           bool new_maximum = i == 0 || proposed_score > best_score;
 
-          ChainMeta output_meta{
-              .beta = accept_move ? proposed_beta : current_beta,
-              .score = accept_move ? proposed_score : current_score,
-          };
+          for (uint32_t word_i = 0; word_i < max_n_nodes + 1; word_i++) {
+            PipeValue out_pipe_value;
 
-          OutputMetaPipe::write(output_meta);
+            if (word_i < max_n_nodes) {
+              if (accept_move) {
+                out_pipe_value =
+                    PipeValue(proposed_am[word_i], proposed_dm[word_i]);
+              } else {
+                out_pipe_value =
+                    PipeValue(current_am[word_i], current_dm[word_i]);
+              }
 
-          for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
-            AncestryVector output_ancestor_vector, output_descendant_vector;
-            if (accept_move) {
-              output_ancestor_vector = proposed_am[word_i];
-              output_descendant_vector = proposed_dm[word_i];
+              if (new_maximum) {
+                best_am[word_i] = proposed_am[word_i];
+                best_dm[word_i] = proposed_dm[word_i];
+              }
             } else {
-              output_ancestor_vector = current_am[word_i];
-              output_descendant_vector = proposed_dm[word_i];
-            }
-            OutputAncestorPipe::write(output_ancestor_vector);
-            OutputDescendantPipe::write(output_descendant_vector);
+              out_pipe_value = ChainMeta{
+                  .beta = accept_move ? proposed_beta : current_beta,
+                  .score = accept_move ? proposed_score : current_score,
+              };
 
-            if (new_maximum) {
-              best_am[word_i] = proposed_am[word_i];
-              best_dm[word_i] = proposed_dm[word_i];
+              if (new_maximum) {
+                best_beta = proposed_beta;
+                best_score = proposed_score;
+              }
             }
-          }
 
-          if (new_maximum) {
-            best_beta = proposed_beta;
-            best_score = proposed_score;
+            OutputPipe::write(out_pipe_value);
           }
         }
 
