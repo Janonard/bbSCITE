@@ -168,8 +168,8 @@ public:
             popcount_t n_occurrences = 0;
 
             #pragma unroll
-            for (uint32_t i_unit = 0; i_unit < max_n_genes+1; i_unit++) {
-              n_occurrences += occurrence_vector[i_unit];
+            for (uint32_t bit_offset = 0; bit_offset < max_n_genes+1; bit_offset += 64) {
+              n_occurrences += std::popcount(occurrence_vector.template slc<64>(bit_offset).to_uint64());
             }
 
             individual_score += float(n_occurrences) *

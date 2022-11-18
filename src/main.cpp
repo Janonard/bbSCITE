@@ -23,15 +23,15 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t max_n_cells = 64;
-constexpr uint32_t max_n_genes = 63;
+constexpr uint32_t max_n_cells = 128;
+constexpr uint32_t max_n_genes = 127;
 constexpr uint32_t pipeline_capacity = 24;
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
 // I often lower the max number of cells and genes for experiments and then
 // forgot to reset them. This should fix it.
-static_assert(max_n_cells == 64 && max_n_genes == 63);
+static_assert(max_n_cells == 128 && max_n_genes == 127);
 #endif
 
 using URNG = oneapi::dpl::minstd_rand;
