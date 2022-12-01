@@ -7,5 +7,5 @@ mkdir -p build
 cd build
 
 dpcpp -std=c++20 -fintelfpga -qactypes -fsycl-link \
-    -Xshardware -Xsv -Xsclock=350MHz \
+    -Xshardware -Xsv \
     ../src/main.cpp -o ffSCITE

@@ -467,14 +467,14 @@ private:
                   .beta = accept_move ? proposed_beta : current_beta,
                   .score = accept_move ? proposed_score : current_score,
               };
-
-              if (new_maximum) {
-                best_beta = proposed_beta;
-                best_score = proposed_score;
-              }
             }
-
+            
             OutputPipe::write(out_pipe_value);
+          }
+
+          if (new_maximum) {
+            best_beta = proposed_beta;
+            best_score = proposed_score;
           }
         }
 
