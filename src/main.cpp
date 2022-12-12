@@ -166,9 +166,10 @@ int main(int argc, char **argv) {
   std::cout << "Time elapsed: " << runtime << " ms" << std::endl;
 
   AncestorMatrix best_am = app.get_best_am();
+  AncestorMatrix best_dm = app.get_best_dm();
   float best_beta = app.get_best_beta();
 
-  MutationTreeImpl tree(best_am, n_genes, best_beta);
+  MutationTreeImpl tree(best_am, best_dm, n_genes, best_beta);
 
   // Output the tree as a graphviz file.
   {

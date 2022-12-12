@@ -101,8 +101,10 @@ public:
    * @param n_genes The number of genes represented by the mutation tree.
    * @param beta The probability for false negatives.
    */
-  MutationTree(AncestorMatrix &ancestor, uint32_t n_genes, float beta)
-      : ancestor(ancestor), n_nodes(n_genes + 1), beta(beta) {}
+  MutationTree(AncestorMatrix &ancestor, AncestorMatrix &descendant,
+               uint32_t n_genes, float beta)
+      : ancestor(ancestor), descendant(descendant), n_nodes(n_genes + 1),
+        beta(beta) {}
 
   /**
    * @brief Construct a new Mutation Tree by computing a modified version of an
@@ -118,9 +120,11 @@ public:
    * @param old_tree The old tree to base the new tree of.
    * @param parameters The parameters of the modification.
    */
-  MutationTree(AncestorMatrix &am, MutationTree<max_n_genes> const &old_tree,
+  MutationTree(AncestorMatrix &am, AncestorMatrix &dm,
+               MutationTree<max_n_genes> const &old_tree,
                ModificationParameters parameters)
-      : ancestor(am), n_nodes(old_tree.n_nodes), beta(old_tree.beta) {
+      : ancestor(am), descendant(dm), n_nodes(old_tree.n_nodes),
+        beta(old_tree.beta) {
     if (parameters.move_type == MoveType::ChangeBeta) {
       beta = parameters.new_beta;
     }
@@ -128,8 +132,10 @@ public:
     uint32_t v = parameters.v;
     uint32_t w = parameters.w;
 
-    AncestryVector v_descendant = old_tree.ancestor[v];
-    AncestryVector w_descendant = old_tree.ancestor[w];
+    AncestryVector v_descendant = old_tree.get_descendants(v);
+    AncestryVector w_descendant = old_tree.get_descendants(w);
+    AncestryVector v_ancestor = old_tree.get_ancestors(v);
+    AncestryVector w_ancestor = old_tree.get_ancestors(w);
 
     uint32_t v_target, w_target;
     switch (parameters.move_type) {
@@ -148,53 +154,78 @@ public:
       v_target = w_target = 0; // No targets necessary.
     }
 
+    AncestryVector v_target_ancestor = old_tree.get_ancestors(v_target);
+    AncestryVector w_target_ancestor = old_tree.get_ancestors(w_target);
+
     for (uint32_t x = 0; x < max_n_nodes; x++) {
       // Compute the new ancestry vector.
-      AncestryVector old_vector = old_tree.ancestor[x];
-      AncestryVector new_vector = 0;
+      AncestryVector x_descendant = old_tree.get_descendants(x);
+      AncestryVector x_ancestor = old_tree.get_ancestors(x);
 
-      // Declaring the swap variable for the "Swap Nodes" move here since you
-      // can't declare it inside the switch statement.
-      bool swap = true;
-
-      switch (parameters.move_type) {
-      case MoveType::ChangeBeta:
-        new_vector = old_vector;
-        break;
-
-      case MoveType::SwapNodes:
-        if (x == v) {
-          new_vector = w_descendant;
-        } else if (x == w) {
-          new_vector = v_descendant;
-        } else {
-          new_vector = old_vector;
-        }
-
-        swap = new_vector[v];
-        new_vector[v] = new_vector[w];
-        new_vector[w] = swap;
-        break;
-
-      case MoveType::PruneReattach:
 #pragma unroll
-        for (uint32_t y = 0; y < max_n_nodes; y++) {
+      for (uint32_t y = 0; y < max_n_nodes; y++) {
+        bool x_to_y, y_to_x;
+
+        switch (parameters.move_type) {
+        case MoveType::SwapNodes:
+          if (x == v) {
+            if (y == v) {
+              x_to_y = y_to_x = true;
+            } else if (y == w) {
+              x_to_y = w_descendant[v];
+              y_to_x = v_descendant[w];
+            } else {
+              x_to_y = w_descendant[y];
+              y_to_x = w_ancestor[y];
+            }
+          } else if (x == w) {
+            if (y == v) {
+              x_to_y = v_descendant[w];
+              y_to_x = w_descendant[v];
+            } else if (y == w) {
+              x_to_y = y_to_x = true;
+            } else {
+              x_to_y = v_descendant[y];
+              y_to_x = v_ancestor[y];
+            }
+          } else {
+            if (y == v) {
+              x_to_y = x_descendant[w];
+              y_to_x = x_ancestor[w];
+            } else if (y == w) {
+              x_to_y = x_descendant[v];
+              y_to_x = x_ancestor[v];
+            } else {
+              x_to_y = x_descendant[y];
+              y_to_x = x_ancestor[y];
+            }
+          }
+          break;
+
+        case MoveType::PruneReattach:
           if (v_descendant[y]) {
             // if (v -> y),
             // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-            new_vector[y] =
-                old_vector[v_target] || (v_descendant[x] && old_vector[y]);
+            x_to_y =
+                x_descendant[v_target] || (v_descendant[x] && x_descendant[y]);
           } else {
             // otherwise, we have (v !-> y).
             // Since this node is unaffected, everything remains the same.
-            new_vector[y] = old_vector[y];
+            x_to_y = x_descendant[y];
           }
-        }
-        break;
 
-      case MoveType::SwapSubtrees:
-#pragma unroll
-        for (uint32_t y = 0; y < max_n_nodes; y++) {
+          if (v_descendant[x]) {
+            // if (v -> x),
+            // we have (x <- y) <=> (y -> x)
+            //                  <=> (y -> v_target) || (v -> y -> x)
+            //                  <=> (v_target <- y) || (v -> y && x <- y)
+            y_to_x = v_target_ancestor[y] || (x_ancestor[y] && v_descendant[y]);
+          } else {
+            y_to_x = x_ancestor[y];
+          }
+          break;
+
+        case MoveType::SwapSubtrees:
           if (w_descendant[v]) {
             ac_int<2, false> class_x;
             if (v_descendant[x]) {
@@ -216,37 +247,60 @@ public:
 
             if ((class_x == class_y) ||
                 (class_x == 0 && (class_y == 1 || class_y == 2))) {
-              new_vector[y] = old_vector[y];
+              x_to_y = x_descendant[y];
             } else if (class_x == 2 && class_y == 1) {
-              new_vector[y] = old_vector[w_target];
+              x_to_y = x_descendant[w_target];
             } else {
-              new_vector[y] = false;
+              x_to_y = false;
+            }
+
+            if ((class_x == class_y) ||
+                (class_y == 0 && (class_x == 1 || class_x == 2))) {
+              y_to_x = x_ancestor[y];
+            } else if (class_y == 2 && class_x == 1) {
+              y_to_x = w_target_ancestor[y];
+            } else {
+              y_to_x = false;
             }
           } else {
             if (v_descendant[y] && !w_descendant[y]) {
               // if (v -> y && w !-> y),
               // we have (x -> y) <=> (x -> v_target) || (v -> x -> y)
-              new_vector[y] =
-                  old_vector[v_target] || (v_descendant[x] && old_vector[y]);
+              x_to_y = x_descendant[v_target] ||
+                       (v_descendant[x] && x_descendant[y]);
             } else if (!v_descendant[y] && w_descendant[y]) {
               // if (v !-> y && w -> y),
               // we have (x -> y) <=> (x -> w_target) || (w -> x -> y)
-              new_vector[y] =
-                  old_vector[w_target] || (w_descendant[x] && old_vector[y]);
+              x_to_y = x_descendant[w_target] ||
+                       (w_descendant[x] && x_descendant[y]);
             } else {
               // we have (v !-> y && w !-> y), (v -> y && w -> y) is impossible.
               // In this case, everything remains the same.
-              new_vector[y] = old_vector[y];
+              x_to_y = x_descendant[y];
+            }
+
+            if (v_descendant[x] && !w_descendant[x]) {
+              y_to_x =
+                  v_target_ancestor[y] || (v_descendant[y] && x_ancestor[y]);
+            } else if (!v_descendant[x] && w_descendant[x]) {
+              y_to_x =
+                  w_target_ancestor[y] || (w_descendant[y] && x_ancestor[y]);
+            } else {
+              y_to_x = x_ancestor[y];
             }
           }
+          break;
+
+        case MoveType::ChangeBeta:
+        default:
+          x_to_y = x_descendant[y];
+          y_to_x = x_ancestor[y];
+          break;
         }
-        break;
 
-      default:
-        break;
+        ancestor[x][y] = x_to_y;
+        descendant[x][y] = y_to_x;
       }
-
-      ancestor[x] = new_vector;
     }
   }
 
@@ -262,18 +316,8 @@ public:
       std::swap(v, w);
     }
 
-    uint32_t parent_of_v, parent_of_w;
-    for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
-      if (node_i >= get_n_nodes()) {
-        continue;
-      }
-      if (is_parent(node_i, v)) {
-        parent_of_v = node_i;
-      }
-      if (is_parent(node_i, w)) {
-        parent_of_w = node_i;
-      }
-    }
+    uint32_t parent_of_v = get_parent(v);
+    uint32_t parent_of_w = get_parent(w);
 
     uint32_t n_descendants = get_n_descendants(v);
     uint32_t n_nondescendants = n_nodes - n_descendants;
@@ -315,19 +359,21 @@ public:
    *
    * This method is designed for CPUs and is not usable on FPGAs.
    *
-   * @param parent_vector The parent vector to compute the ancestor matrix from.
+   * @param parent_vector The parent vector to compute the ancestor matrix
+   * from.
    * @return AncestorMatrix The ancestor matrix of the tree described by the
    * parent vector.
    */
-  static AncestorMatrix
-  parent_vector_to_ancestor_matrix(std::vector<uint32_t> const &parent_vector) {
-    AncestorMatrix ancestor;
+  static std::tuple<AncestorMatrix, AncestorMatrix>
+  parent_vector_to_matrix(std::vector<uint32_t> const &parent_vector) {
+    AncestorMatrix ancestor, descendant;
     uint32_t n_nodes = parent_vector.size();
     uint32_t root = n_nodes - 1;
 
     for (uint32_t j = 0; j < max_n_nodes; j++) {
       // Zero all vectors. This is equivalent to setting everything to false.
       ancestor[j] = 0;
+      descendant[j] = 0;
     }
 
     for (uint32_t i = 0; i < max_n_nodes; i++) {
@@ -337,6 +383,7 @@ public:
         uint32_t anc = i;
         while (anc != root) {
           ancestor[anc][i] = true;
+          descendant[i][anc] = true;
           anc = parent_vector[anc];
           // Otherwise, there is a circle in the graph!
           assert(anc != i && anc < n_nodes);
@@ -344,15 +391,16 @@ public:
       }
 
       // Lastly, also mark the root as our ancestor.
-      ancestor[i][i] = ancestor[root][i] = true;
+      ancestor[i][i] = descendant[i][i] = ancestor[root][i] =
+          descendant[i][root] = true;
     }
 
-    return ancestor;
+    return {ancestor, descendant};
   }
 
   /**
-   * @brief Compute the parent vector of the tree described by the given Prüfer
-   * code.
+   * @brief Compute the parent vector of the tree described by the given
+   * Prüfer code.
    *
    * A Prüfer code is a sequence of indices that describe a tree. Prüfer codes
    * are used to randomly generate trees since any sequence of integers with n
@@ -473,12 +521,13 @@ public:
   uint32_t get_root() const { return n_nodes - 1; }
 
   /**
-   * @brief Check whether one node is the parent of the other node in this tree.
+   * @brief Check whether one node is the parent of the other node in this
+   * tree.
    *
    * This is equivalent to asking whether there is an edge from `parent` to
    * `child` in the tree. However, the root is its own parent per convention,
-   * which means that this edge only exists if `parent` is the parent of `child`
-   * and `child` is not the root of the tree.
+   * which means that this edge only exists if `parent` is the parent of
+   * `child` and `child` is not the root of the tree.
    *
    * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
@@ -491,7 +540,11 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(parent < n_nodes && child < n_nodes);
 #endif
-    if (!ancestor[parent][child]) {
+    AncestryVector parent_ancestor = get_ancestors(parent);
+    AncestryVector child_ancestor = get_ancestors(child);
+
+    // If the parent is not an ancestor of the child, return false.
+    if (!child_ancestor[parent]) {
       return false;
     }
 
@@ -504,7 +557,7 @@ public:
       if (node_i >= n_nodes || node_i == child) {
         continue;
       }
-      if (ancestor[node_i][parent] != ancestor[node_i][child]) {
+      if (parent_ancestor[node_i] != child_ancestor[node_i]) {
         return false;
       }
     }
@@ -523,13 +576,13 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
-    for (uint32_t parent = 0; parent < max_n_nodes; parent++) {
-      if (parent < n_nodes && is_parent(parent, node_i)) {
-        return parent;
+    uint32_t parent = 0;
+    for (uint32_t node_j = 0; node_j < max_n_nodes; node_j++) {
+      if (node_j < n_nodes && is_parent(node_j, node_i)) {
+        parent = node_j;
       }
     }
-    assert(false);
-    return 0; // Illegal option, will not occur if the tree is correct.
+    return parent;
   }
 
   uint32_t get_n_nodes() const { return n_nodes; }
@@ -563,7 +616,7 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_a_i < max_n_nodes && node_b_i < max_n_nodes);
 #endif
-    return ancestor[node_b_i][node_a_i];
+    return descendant[node_a_i][node_b_i];
   }
 
   /**
@@ -591,17 +644,19 @@ public:
    *
    * This method is designed and optimized for FPGAs, but works on CPUs too.
    *
-   * @param node_i The index of the node who's number of descendants is queried.
+   * @param node_i The index of the node who's number of descendants is
+   * queried.
    * @return The number of descendants.
    */
   uint32_t get_n_descendants(uint32_t node_i) const {
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
+    AncestryVector descendant = get_descendants(node_i);
     uint32_t n_descendants = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes && is_ancestor(node_i, i)) {
+      if (i < n_nodes && descendant[i]) {
         n_descendants++;
       }
     }
@@ -633,14 +688,7 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
-    AncestryVector ancestors = 0;
-#pragma unroll
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes) {
-        ancestors[i] = is_ancestor(i, node_i);
-      }
-    }
-    return ancestors;
+    return descendant[node_i];
   }
 
   /**
@@ -655,10 +703,11 @@ public:
 #if __SYCL_DEVICE_ONLY__ == 0
     assert(node_i < max_n_nodes);
 #endif
+    AncestryVector ancestor = get_ancestors(node_i);
     uint32_t n_ancestors = 0;
 #pragma unroll
     for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes && is_ancestor(i, node_i)) {
+      if (i < n_nodes && ancestor[i]) {
         n_ancestors++;
       }
     }
@@ -813,7 +862,7 @@ private:
     stream << node_i;
   }
 
-  std::array<AncestryVector, max_n_nodes> &ancestor;
+  std::array<AncestryVector, max_n_nodes> &ancestor, &descendant;
   uint32_t n_nodes;
   float beta;
 };
