@@ -14,13 +14,13 @@ ffSCITE is written in Data Parallel C++ using [Intel oneAPI](https://www.intel.c
 
 * Intel oneAPI Base Toolkit, version 22.3.0 or higher
 * Intel FPGA Add-on for oneAPI Base Toolkit, together with the BSP for your FPGA board
-* Boost, version 1.74.0
+* Boost, version 1.79.0
 * CMake, version 3.23.1 or higher
 
 Some newer versions of Boost have lead to certain problems during compilation, but future release may be unaffected. On the Noctua 2 supercomputer, the required modules to target the Bittware 520N cards can be loaded with the command
 
 ``` bash
-module load fpga devel intel/oneapi bittware/520n Boost/1.74.0-GCC CMake
+module load fpga devel intel/oneapi bittware/520n Boost/1.79.0-GCC CMake
 ```
 
 ### Hardware

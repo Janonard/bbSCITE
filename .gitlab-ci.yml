@@ -7,7 +7,7 @@ stages:
 
 default:
   before_script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost/1.74.0-GCC CMake"
+    - "ml fpga devel intel/oneapi bittware/520n Boost/1.79.0-GCC CMake"
     - "mkdir -p build"
     - "cd build"
 

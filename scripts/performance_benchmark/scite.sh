@@ -9,7 +9,7 @@
 
 set -e 
 
-ml fpga devel intel/oneapi/22.2.0 bittware/520n Boost/1.74.0-GCC CMake
+ml fpga devel intel/oneapi/22.2.0 bittware/520n Boost/1.79.0-GCC CMake
 
 BASE_DIR=performance_benchmark.out
 ALPHA=6e-5
