@@ -151,7 +151,7 @@ public:
     for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
       AncestryVector is_ancestor = tree.get_ancestors(node_i);
 
-#pragma unroll
+#pragma unroll 64
       for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
         AncestryVector is_mutated = this->is_mutated[cell_i];
         AncestryVector is_known = this->is_known[cell_i];
