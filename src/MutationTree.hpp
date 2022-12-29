@@ -157,7 +157,7 @@ public:
     AncestryVector v_target_ancestor = old_tree.get_ancestors(v_target);
     AncestryVector w_target_ancestor = old_tree.get_ancestors(w_target);
 
-    for (uint32_t x = 0; x < max_n_nodes; x++) {
+    for (uint32_t x = 0; x < n_nodes; x++) {
       // Compute the new ancestry vector.
       AncestryVector x_descendant = old_tree.get_descendants(x);
       AncestryVector x_ancestor = old_tree.get_ancestors(x);
@@ -376,18 +376,16 @@ public:
       descendant[j] = 0;
     }
 
-    for (uint32_t i = 0; i < max_n_nodes; i++) {
-      if (i < n_nodes) {
-        // Then we start from the node i and walk up to the root, marking all
-        // nodes on the way as ancestors.
-        uint32_t anc = i;
-        while (anc != root) {
-          ancestor[anc][i] = true;
-          descendant[i][anc] = true;
-          anc = parent_vector[anc];
-          // Otherwise, there is a circle in the graph!
-          assert(anc != i && anc < n_nodes);
-        }
+    for (uint32_t i = 0; i < n_nodes; i++) {
+      // Then we start from the node i and walk up to the root, marking all
+      // nodes on the way as ancestors.
+      uint32_t anc = i;
+      while (anc != root) {
+        ancestor[anc][i] = true;
+        descendant[i][anc] = true;
+        anc = parent_vector[anc];
+        // Otherwise, there is a circle in the graph!
+        assert(anc != i && anc < n_nodes);
       }
 
       // Lastly, also mark the root as our ancestor.
@@ -577,7 +575,7 @@ public:
     assert(node_i < max_n_nodes);
 #endif
     uint32_t parent = 0;
-    for (uint32_t node_j = 0; node_j < max_n_nodes; node_j++) {
+    for (uint32_t node_j = 0; node_j < n_nodes; node_j++) {
       if (node_j < n_nodes && is_parent(node_j, node_i)) {
         parent = node_j;
       }
@@ -732,6 +730,7 @@ public:
     }
 #pragma unroll
     for (uint32_t node_i = 0; node_i < max_n_nodes; node_i++) {
+#pragma unroll
       for (uint32_t node_j = 0; node_j < max_n_nodes; node_j++) {
         if (node_i < n_nodes && node_j < n_nodes &&
             ancestor[node_i][node_j] != other.ancestor[node_i][node_j]) {

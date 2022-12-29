@@ -301,6 +301,7 @@ private:
 
       uint32_t n_steps = parameters.get_chain_length();
       uint32_t n_chains = parameters.get_n_chains();
+      uint32_t n_nodes = n_genes + 1;
 
       cgh.single_task<class IOKernel>([=]() {
         uint32_t i_initial_state = 0;
@@ -314,7 +315,7 @@ private:
           ac_int<1, false> input_source =
               (i % (n_steps * pipeline_capacity) < pipeline_capacity) ? 1 : 0;
 
-          for (uint32_t packet_i = 0; packet_i < max_n_nodes + 1; packet_i++) {
+          for (uint32_t packet_i = 0; packet_i < n_nodes + 1; packet_i++) {
             PipeValue in_packet, out_packet;
             if (read_output) {
               in_packet = OutputPipe::read();
@@ -323,7 +324,7 @@ private:
             if (input_source == 0) {
               out_packet = in_packet;
             } else {
-              if (packet_i < max_n_nodes) {
+              if (packet_i < n_nodes) {
                 out_packet =
                     PipeValue(current_am_ac[i_initial_state][packet_i],
                               current_dm_ac[i_initial_state][packet_i]);
@@ -379,6 +380,7 @@ private:
 
       uint32_t n_cells = this->n_cells;
       uint32_t n_genes = this->n_genes;
+      uint32_t n_nodes = n_genes + 1;
       float alpha_mean = parameters.get_alpha_mean();
       float beta_mean = parameters.get_beta_mean();
       float beta_sd = parameters.get_beta_sd();
@@ -403,9 +405,9 @@ private:
           ChainMeta tree_meta;
           [[intel::fpga_memory]] AncestorMatrix current_am, current_dm;
 
-          for (uint32_t word_i = 0; word_i < max_n_nodes + 1; word_i++) {
+          for (uint32_t word_i = 0; word_i < n_nodes + 1; word_i++) {
             PipeValue read_pipe_value = InputPipe::read();
-            if (word_i < max_n_nodes) {
+            if (word_i < n_nodes) {
               current_am[word_i] = read_pipe_value.ancestry_vector[0];
               current_dm[word_i] = read_pipe_value.ancestry_vector[1];
             } else {
@@ -446,10 +448,10 @@ private:
           bool accept_move = acceptance_probability > raw_move.acceptance_level;
           bool new_maximum = i == 0 || proposed_score > best_score;
 
-          for (uint32_t word_i = 0; word_i < max_n_nodes + 1; word_i++) {
+          for (uint32_t word_i = 0; word_i < n_nodes + 1; word_i++) {
             PipeValue out_pipe_value;
 
-            if (word_i < max_n_nodes) {
+            if (word_i < n_nodes) {
               if (accept_move) {
                 out_pipe_value =
                     PipeValue(proposed_am[word_i], proposed_dm[word_i]);
@@ -478,7 +480,7 @@ private:
           }
         }
 
-        for (uint32_t word_i = 0; word_i < max_n_nodes; word_i++) {
+        for (uint32_t word_i = 0; word_i < n_nodes; word_i++) {
           best_am_dm_ac[0][word_i] = best_am[word_i];
           best_am_dm_ac[1][word_i] = best_dm[word_i];
         }
