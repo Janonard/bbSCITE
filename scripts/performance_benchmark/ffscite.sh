@@ -15,7 +15,7 @@ ALPHA=6e-5
 BETA=0.42
 MISSING=0.25
 
-for CELLS in 16 32 64
+for CELLS in 32 64 128
 do
     GENES=$(($CELLS-1))
 
