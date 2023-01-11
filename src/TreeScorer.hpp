@@ -148,7 +148,7 @@ public:
 
     float individual_scores[max_n_cells];
 
-    for (uint32_t node_i = 0; node_i < max_n_genes + 1; node_i++) {
+    for (uint32_t node_i = 0; node_i < n_genes + 1; node_i++) {
       AncestryVector is_ancestor = tree.get_ancestors(node_i);
 
 #pragma unroll
