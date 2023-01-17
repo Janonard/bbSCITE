@@ -389,7 +389,7 @@ private:
       uint32_t n_chains = parameters.get_n_chains();
 
       cgh.single_task<class WorkKernel>([=]() {
-        MutationDataMatrix is_mutated, is_known;
+        [[intel::fpga_register]] MutationDataMatrix is_mutated, is_known;
         TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
                                    n_genes, is_mutated_ac, is_known_ac,
                                    is_mutated, is_known);

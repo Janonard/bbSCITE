@@ -23,8 +23,8 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t max_n_cells = 32;
-constexpr uint32_t max_n_genes = 31;
+constexpr uint32_t max_n_cells = 128;
+constexpr uint32_t max_n_genes = 127;
 constexpr uint32_t pipeline_capacity = 24;
 
 #ifdef HARDWARE
