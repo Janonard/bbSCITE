@@ -280,3 +280,6 @@ def load_performance_data(base_dir: Path, verify_coverage: bool = False) -> Any:
                 assert set(ffscite_perf_data[n_chains].keys()) == set(scite_perf_data[n_chains].keys())
 
     return ffscite_perf_data, scite_perf_data
+
+def calc_expected_runtime(n_words: int , n_chains: int, n_steps: int, f: float = 252.5e6, occupancy: float = 1.0) -> float:
+    return (n_words * n_chains * n_steps) / occupancy / f

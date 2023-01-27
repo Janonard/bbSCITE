@@ -183,8 +183,8 @@ def performance_table(args: argparse.Namespace):
     else:
         out_file = open(args.out_file, mode="w")
 
-    print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: throughput | SCITE: mean total makespan | SCITE: throughput | speedup |", file=out_file)
-    print("|-|-|-|-|-|-|-|-|-|", file=out_file)
+    print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: mean total makespan | ffSCITE: throughput | ffSCITE: model makespan | ffSCITE: model accuracy | SCITE: mean total makespan | SCITE: throughput | speedup |", file=out_file)
+    print("|-|-|-|-|-|-|-|-|-|-|-|", file=out_file)
 
     ffscite_perf_data, scite_perf_data = load_performance_data(args.basedir)
 
@@ -213,12 +213,16 @@ def performance_table(args: argparse.Namespace):
                 datapoint_in_f = (n_chains in ffscite_m) and (n_steps in ffscite_m[n_chains])
                 datapoint_in_s = (n_chains in scite_m) and (n_steps in scite_m[n_chains])
 
+                ffscite_model_makespan = calc_expected_runtime(n_genes+1, n_chains, n_steps, args.clock_frequency, args.occupancy)
                 if datapoint_in_f:
                     ffscite_makespan = f"{ffscite_m[n_chains][n_steps] * 1e-3:.2f} s"
                     ffscite_throughput = f"{(n_chains * n_steps) / ffscite_m[n_chains][n_steps]:.2f} ksteps/s"
+                    ffscite_model_accurracy = f"{ffscite_m[n_chains][n_steps] * 1e-3 / ffscite_model_makespan * 100:.2f} %"
                 else:
                     ffscite_makespan = "n/a"
                     ffscite_throughput = "n/a"
+                    ffscite_model_accurracy = "n/a"
+                ffscite_model_makespan = f"{ffscite_model_makespan:.2f} s"
 
                 if datapoint_in_s:
                     scite_makespan = f"{scite_m[n_chains][n_steps] * 1e-3:.2f} s"
@@ -232,7 +236,7 @@ def performance_table(args: argparse.Namespace):
                 else:
                     speedup = "n/a"
                 
-                print(f"| {n_cells} | {n_genes} | {n_chains} | {n_steps} | {ffscite_makespan} | {ffscite_throughput} | {scite_makespan} | {scite_throughput} | {speedup} |", file=out_file)
+                print(f"| {n_cells} | {n_genes} | {n_chains} | {n_steps} | {ffscite_makespan} | {ffscite_throughput} | {ffscite_model_makespan} | {ffscite_model_accurracy} | {scite_makespan} | {scite_throughput} | {speedup} |", file=out_file)
 
 def performance_graph(args: argparse.Namespace):
     ffscite_perf_data, scite_perf_data = load_performance_data(args.basedir, verify_coverage=True)
@@ -394,6 +398,8 @@ quickperf_parser.add_argument("-d", "--basedir", default=Path("./performance_ben
 perftable_parser = subparsers.add_parser("perftable", help="Analyze the outputs of the performance benchmark and print a table")
 
 perftable_parser.add_argument("-d", "--basedir", default=Path("./performance_benchmark.out"), type=Path, help="Base path of the collected data")
+perftable_parser.add_argument("-f", "--clock-frequency", required=True, type=float, help="Clock frequency of the FPGA design.")
+perftable_parser.add_argument("-p", "--occupancy", default=1.0, type=float, help="The mean occupancy of the design.")
 perftable_parser.add_argument("-o", "--out-file", default=None, type=Path, help="Path to the output file. Stdout if not given")
 
 perfgraph_parser = subparsers.add_parser("perfgraph", help="Analyze the outputs of the performance benchmark and plot a graph")
