@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
 
   std::cout << "Submitting work" << std::endl;
 
-  working_queue.submit([&](handler &cgh) {
+  event work_event = working_queue.submit([&](handler &cgh) {
     auto is_mutated_ac = is_mutated_buffer.get_access<access::mode::read>(cgh);
     auto is_known_ac = is_known_buffer.get_access<access::mode::read>(cgh);
     auto am_ac = am_buffer.get_access<access::mode::read_write>(cgh);
@@ -199,5 +199,28 @@ int main(int argc, char **argv) {
         scores_ac[idx[0]][iteration] = tree_scorer.logscore_tree(tree);
       }
     });
-  }).wait();
+  });
+
+  uint64_t start = work_event.template get_profiling_info<info::event_profiling::command_start>();
+  uint64_t end = work_event.template get_profiling_info<info::event_profiling::command_end>();
+  double runtime = (end - start) / 1000000000.0;
+  std::cout << "Work finished in " << runtime << " s" << std::endl;
+
+  uint64_t n_chains = parameters.get_n_chains();
+  uint64_t chain_length = parameters.get_chain_length();
+  uint64_t n_steps = n_chains * chain_length;
+  uint64_t popcounted_words = n_steps * n_nodes * n_cells * 4;
+  uint64_t floating_point_operations = n_steps * n_nodes * n_cells * 8;
+
+  double steps_per_second = n_steps / runtime;
+  double popcounts_per_second = popcounted_words / runtime;
+  double counted_bits_per_second = (popcounted_words * max_n_genes+1) / runtime;
+  double flops = floating_point_operations / runtime;
+
+  std::cout << "Performance:" << std::endl;
+  std::cout << steps_per_second * 1e-3 << " thousand steps per second." << std::endl;
+  std::cout << popcounts_per_second * 1e-9 << " billion popcounts per second." << std::endl;
+  std::cout << flops * 1e-9 << " GFLOPS" << std::endl;
+
+  return 0;
 }
