@@ -7,8 +7,7 @@ set(CMAKE_PROJECT_VERSION 0.1.0)
 
 find_package(Boost 1.79.0 REQUIRED)
 
-add_compile_options(-qactypes -fintelfpga -Wtautological-constant-compare)
-
+add_subdirectory(cpu_scoring_benchmark)
 add_subdirectory(test)
 add_subdirectory(src)
 
