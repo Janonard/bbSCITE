@@ -14,10 +14,10 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#include "CPUTreeScorer.hpp"
 #include <CL/sycl.hpp>
 #include <MutationTree.hpp>
 #include <Parameters.hpp>
-#include <TreeScorer.hpp>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -25,23 +25,16 @@
 using namespace ffSCITE;
 using namespace cl::sycl;
 
-constexpr uint32_t max_n_cells = 64;
-constexpr uint32_t max_n_genes = 63;
+constexpr uint32_t n_cells = CPUTreeScorer::n_cells;
+constexpr uint32_t n_genes = CPUTreeScorer::n_genes;
+constexpr uint32_t n_nodes = CPUTreeScorer::n_nodes;
 
-#ifdef HARDWARE
-// Assert that this design does indeed have the correct ranges set.
-// I often lower the max number of cells and genes for experiments and then
-// forgot to reset them. This should fix it.
-static_assert(max_n_cells == 128 && max_n_genes == 127);
-#endif
+using MutationDataMatrix = CPUTreeScorer::MutationDataMatrix;
+using AncestorMatrix = CPUTreeScorer::AncestorMatrix;
+using AncestryVector = CPUTreeScorer::AncestryVector;
+using MutationTreeImpl = MutationTree<n_genes>;
 
 using URNG = std::minstd_rand;
-
-using TreeScorerImpl = TreeScorer<max_n_cells, max_n_genes>;
-using MutationDataMatrix = TreeScorerImpl::MutationDataMatrix;
-using MutationTreeImpl = MutationTree<max_n_genes>;
-using AncestorMatrix = MutationTreeImpl::AncestorMatrix;
-using AncestryVector = MutationTreeImpl::AncestryVector;
 
 int main(int argc, char **argv) {
   // Load the CLI parameters.
@@ -53,24 +46,23 @@ int main(int argc, char **argv) {
 
   // First pass over the input data to check validity and identify number of
   // cells and genes.
-  uint32_t n_cells = 0, n_genes = 0;
   {
     std::ifstream input_file(parameters.get_input_path());
     char c;
     uint32_t cells_in_line = 0;
+    uint32_t genes_in_file = 0;
 
     while ((c = input_file.get()) != -1) {
       if (c == '0' || c == '1' || c == '2' || c == '3') {
         cells_in_line++;
       } else if (c == '\n') {
-        if (n_cells == 0) {
-          n_cells = cells_in_line;
-        } else if (n_cells != cells_in_line) {
-          std::cerr << "Error: Inconsistent rows in the input file!"
-                    << std::endl;
+        if (cells_in_line != n_cells) {
+          std::cerr << "Error: Illegal number of cells! This benchmark "
+                       "requires exactly "
+                    << n_cells << " cells!" << std::endl;
           return 1;
         }
-        n_genes++;
+        genes_in_file++;
         cells_in_line = 0;
       } else if (c == ' ') {
         continue;
@@ -82,34 +74,27 @@ int main(int argc, char **argv) {
     }
 
     if (cells_in_line == n_cells) {
-      n_genes++;
+      genes_in_file++;
     } else if (cells_in_line != 0) {
-      std::cerr << "Error: Inconsistent rows in the input file!" << std::endl;
+      std::cerr
+          << "Error: Illegal number of cells! This benchmark requires exactly "
+          << n_cells << " cells!" << std::endl;
+      return 1;
+    }
+
+    if (genes_in_file != n_genes) {
+      std::cerr
+          << "Error: Illegal number of genes! This benchmark requires exactly "
+          << n_genes << " genes!" << std::endl;
+      return 1;
     }
   }
-  if (n_cells == 0 || n_genes == 0) {
-    std::cerr << "Error: Empty input file!" << std::endl;
-    return 1;
-  }
-  if (n_cells > max_n_cells) {
-    std::cerr << "Error: This build of ffSCITE only supports up " << max_n_cells
-              << " cells. The input data contains " << n_cells << " cells."
-              << std::endl;
-    return 1;
-  }
-  if (n_genes > max_n_genes) {
-    std::cerr << "Error: This build of ffSCITE only supports up " << max_n_genes
-              << " genes. The input data contains " << n_genes << " genes."
-              << std::endl;
-    return 1;
-  }
-  uint32_t n_nodes = n_genes + 1;
 
   std::cout << "Loading mutation data" << std::endl;
 
   // Load the mutation input data.
-  buffer<AncestryVector, 1> is_mutated_buffer = range<1>(n_cells);
-  buffer<AncestryVector, 1> is_known_buffer = range<1>(n_cells);
+  buffer<MutationDataMatrix, 1> is_mutated_buffer = range<1>(1);
+  buffer<MutationDataMatrix, 1> is_known_buffer = range<1>(1);
   {
     auto is_mutated =
         is_mutated_buffer.get_access<access::mode::discard_write>();
@@ -118,7 +103,7 @@ int main(int argc, char **argv) {
 
     // Zeroing the data.
     for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-      is_mutated[cell_i] = is_known[cell_i] = 0;
+      is_mutated[0][cell_i] = is_known[0][cell_i] = 0;
     }
 
     for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
@@ -127,16 +112,20 @@ int main(int argc, char **argv) {
         input_file >> entry;
         switch (entry) {
         case 0:
-          is_mutated[cell_i][gene_i] = 0;
-          is_known[cell_i][gene_i] = 1;
+          // gene reported as unmutated
+          // Leave the gene_i'th bit of is_mutated as 0.
+          is_known[0][cell_i] += 1 << gene_i; // Set the gene_i'th bit to 1.
           break;
         case 1:
         case 2:
-          is_mutated[cell_i][gene_i] = 1;
-          is_known[cell_i][gene_i] = 1;
+          // gene reported as mutated
+          is_mutated[0][cell_i] += 1 << gene_i; // Set the gene_i'th bit to 1.
+          is_known[0][cell_i] += 1 << gene_i;   // Set the gene_i'th bit to 1.
           break;
         case 3:
-          is_known[cell_i][gene_i] = 0;
+          // gene reported as unknown
+          // Leave the gene_i'th bit of is_mutated as 0.
+          // Leave the gene_i'th bit of is_known as 0.
           break;
         default:
           std::cerr << "Error: The input file contains the invalid entry "
@@ -149,12 +138,10 @@ int main(int argc, char **argv) {
 
   std::cout << "Generating random trees" << std::endl;
 
-  buffer<AncestorMatrix, 1> am_buffer = range<1>(parameters.get_n_chains());
   buffer<AncestorMatrix, 1> dm_buffer = range<1>(parameters.get_n_chains());
   buffer<float, 2> scores_buffer =
       range<2>(parameters.get_n_chains(), parameters.get_chain_length());
   {
-    auto am_ac = am_buffer.get_access<access::mode::discard_write>();
     auto dm_ac = dm_buffer.get_access<access::mode::discard_write>();
     std::minstd_rand rng;
     rng.seed(std::random_device()());
@@ -164,8 +151,12 @@ int main(int argc, char **argv) {
           MutationTreeImpl::sample_random_pruefer_code(rng, n_genes);
       std::vector<uint32_t> parent_vector =
           MutationTreeImpl::pruefer_code_to_parent_vector(pruefer_code);
-      std::tie(am_ac[i], dm_ac[i]) =
-          MutationTreeImpl::parent_vector_to_matrix(parent_vector);
+      auto arithmetic_c_dm =
+          std::get<1>(MutationTreeImpl::parent_vector_to_matrix(parent_vector));
+
+      for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
+        dm_ac[i][node_i] = arithmetic_c_dm[node_i];
+      }
     }
   }
 
@@ -178,7 +169,6 @@ int main(int argc, char **argv) {
   event work_event = working_queue.submit([&](handler &cgh) {
     auto is_mutated_ac = is_mutated_buffer.get_access<access::mode::read>(cgh);
     auto is_known_ac = is_known_buffer.get_access<access::mode::read>(cgh);
-    auto am_ac = am_buffer.get_access<access::mode::read_write>(cgh);
     auto dm_ac = dm_buffer.get_access<access::mode::read_write>(cgh);
     auto scores_ac = scores_buffer.get_access<access::mode::discard_write>(cgh);
 
@@ -191,13 +181,9 @@ int main(int argc, char **argv) {
 
     cgh.parallel_for_work_group<class TreeScoringKernel>(
         range<2>(n_chains, chain_length), [=](id<2> idx) {
-          MutationDataMatrix is_mutated, is_known;
-          TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
-                                     n_genes, is_mutated_ac, is_known_ac,
-                                     is_mutated, is_known);
-          MutationTreeImpl tree(am_ac[idx[0]], dm_ac[idx[0]], n_genes,
-                                beta_mean);
-          scores_ac[idx[0]][idx[1]] = tree_scorer.logscore_tree(tree);
+          CPUTreeScorer tree_scorer(alpha_mean, beta_mean, beta_sd,
+                                    is_mutated_ac[0], is_known_ac[0]);
+          scores_ac[idx[0]][idx[1]] = tree_scorer.logscore_tree(dm_ac[idx[0]]);
         });
   });
 
@@ -218,8 +204,7 @@ int main(int argc, char **argv) {
 
   double steps_per_second = n_steps / runtime;
   double popcounts_per_second = popcounted_words / runtime;
-  double counted_bits_per_second =
-      (popcounted_words * max_n_genes + 1) / runtime;
+  double counted_bits_per_second = (popcounted_words * n_genes + 1) / runtime;
   double flops = floating_point_operations / runtime;
 
   std::cout << "Performance:" << std::endl;
