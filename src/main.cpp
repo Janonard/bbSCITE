@@ -34,7 +34,7 @@ constexpr uint32_t pipeline_capacity = 24;
 static_assert(max_n_cells == 128 && max_n_genes == 127);
 #endif
 
-using URNG = std::minstd_rand;
+using URNG = oneapi::dpl::minstd_rand;
 
 using ApplicationImpl =
     Application<max_n_cells, max_n_genes, pipeline_capacity>;

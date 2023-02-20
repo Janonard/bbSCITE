@@ -20,8 +20,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
-#include <random>
-#include <sstream>
+#include <oneapi/dpl/random>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
 #include <unordered_map>
 #include <vector>
@@ -486,8 +485,8 @@ public:
     assert(n_nodes <= max_n_nodes);
 #endif
 
-    std::uniform_int_distribution<unsigned long> int_distribution(0,
-                                                                  n_nodes - 1);
+    oneapi::dpl::uniform_int_distribution<unsigned long> int_distribution(
+        0, n_nodes - 1);
 
     // Generate a pruefer code for the tree.
     std::vector<uint32_t> pruefer_code;
