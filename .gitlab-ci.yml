@@ -3,13 +3,10 @@ variables:
 
 stages:
   - precheck
-  - synthesis
+  - benchmark
 
 default:
-  before_script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost/1.79.0-GCC CMake"
-    - "mkdir -p build"
-    - "cd build"
+  
 
 build-thesis:
   stage: precheck
@@ -18,7 +15,6 @@ build-thesis:
     - staging
     - thesis
   image: "texlive/texlive"
-  before_script: []
   script:
     - "cd docs/thesis"
     - "latexmk --pdf thesis.tex"
@@ -32,3 +28,24 @@ build-thesis:
   tags:
     - docker
 
+cpu-scoring-benchmark:
+  stage: benchmark
+  only:
+    - cpu_scoring_benchmark
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:10:00 --exclusive"
+  before_script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "python3 -m venv .venv"
+    - "source .venv/bin/activate"
+    - "pip install --upgrade pip"
+    - "pip install -r requirements.txt"
+    - "mkdir -p build"
+    - "cd build"
+    - "../tool.py generate -o . -n 63 -m 64 -a 1e-6 -b 0.42 -e 0.4"
+    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "make cpu_scoring_benchmark"
+  script:
+    - "./cpu_scoring_benchmark/cpu_scoring_benchmark -i input.csv -r 42 -l 1000000"
