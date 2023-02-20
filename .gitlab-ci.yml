@@ -3,10 +3,8 @@ variables:
 
 stages:
   - precheck
+  - build 
   - benchmark
-
-default:
-  
 
 build-thesis:
   stage: precheck
@@ -28,25 +26,39 @@ build-thesis:
   tags:
     - docker
 
-cpu-scoring-benchmark:
+build-cpu-scoring-benchmark:
+  stage: build
+  only:
+    - cpu_scoring_benchmark
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:05:00 -c 1 --mem 8G"
+  script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "mkdir -p build"
+    - "cd build"
+    - "python3 -m venv .venv"
+    - "source .venv/bin/activate"
+    - "pip install --upgrade pip"
+    - "pip install -r requirements.txt"
+    - "../tool.py generate -o . -n 63 -m 64 -a 1e-6 -b 0.42 -e 0.4"
+    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "make cpu_scoring_benchmark"
+  artifacts:
+    paths:
+      - "build"
+
+run-cpu-scoring-benchmark:
   stage: benchmark
   only:
     - cpu_scoring_benchmark
   tags:
     - noctua2
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 -c 8 --mem 8G"
-    DPCPP_CPU_NUM_CUS: 8
-  before_script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
-    - "python3 -m venv .venv"
-    - "source .venv/bin/activate"
-    - "pip install --upgrade pip"
-    - "pip install -r requirements.txt"
-    - "mkdir -p build"
-    - "cd build"
-    - "../tool.py generate -o . -n 63 -m 64 -a 1e-6 -b 0.42 -e 0.4"
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "make cpu_scoring_benchmark"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 -c 16 --mem 8G"
+    DPCPP_CPU_NUM_CUS: 16
   script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "cd build"
     - "./cpu_scoring_benchmark/cpu_scoring_benchmark -i input.csv -r 42 -l 10000000"
