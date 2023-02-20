@@ -56,7 +56,7 @@ run-cpu-scoring-benchmark:
   tags:
     - noctua2
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 -c 16 --mem 8G"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 -c 16 --mem 16G"
     DPCPP_CPU_NUM_CUS: 16
   script:
     - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
