@@ -41,7 +41,7 @@ build-cpu-scoring-benchmark:
     - "python3 -m venv .venv"
     - "source .venv/bin/activate"
     - "pip install --upgrade pip"
-    - "pip install -r requirements.txt"
+    - "pip install -r ../requirements.txt"
     - "../tool.py generate -o . -n 63 -m 64 -a 1e-6 -b 0.42 -e 0.4"
     - "cmake -DCMAKE_BUILD_TYPE=Release .."
     - "make cpu_scoring_benchmark"
