@@ -4,6 +4,7 @@ build
 *.newick
 *.csv
 *.txt
+!CMakeLists.txt
 !requirements.txt
 *.png
 *.samples
