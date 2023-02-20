@@ -47,7 +47,8 @@ build-cpu-scoring-benchmark:
     - "make cpu_scoring_benchmark"
   artifacts:
     paths:
-      - "build"
+      - "build/input.csv"
+      - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
 
 run-cpu-scoring-benchmark:
   stage: benchmark
