@@ -151,7 +151,8 @@ int main(int argc, char **argv) {
 
   buffer<AncestorMatrix, 1> am_buffer = range<1>(parameters.get_n_chains());
   buffer<AncestorMatrix, 1> dm_buffer = range<1>(parameters.get_n_chains());
-  buffer<float, 2> scores_buffer = range<2>(parameters.get_n_chains(), parameters.get_chain_length());
+  buffer<float, 2> scores_buffer =
+      range<2>(parameters.get_n_chains(), parameters.get_chain_length());
   {
     auto am_ac = am_buffer.get_access<access::mode::discard_write>();
     auto dm_ac = dm_buffer.get_access<access::mode::discard_write>();
@@ -185,24 +186,27 @@ int main(int argc, char **argv) {
     float beta_mean = parameters.get_beta_mean();
     float beta_sd = parameters.get_beta_sd();
 
-    range<1> iteration_range =
-        range<1>(parameters.get_n_chains());
-    uint32_t chain_length = parameters.get_chain_length();
+    uint64_t n_chains = parameters.get_n_chains();
+    uint64_t chain_length = parameters.get_chain_length();
 
-    cgh.parallel_for<class TreeScoringKernel>(iteration_range, [=](id<1> idx) {
-      MutationDataMatrix is_mutated, is_known;
-      TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
-                                 n_genes, is_mutated_ac, is_known_ac,
-                                 is_mutated, is_known);
-      MutationTreeImpl tree(am_ac[idx[0]], dm_ac[idx[0]], n_genes, beta_mean);
-      for (uint32_t iteration = 0; iteration < chain_length; iteration++) {
-        scores_ac[idx[0]][iteration] = tree_scorer.logscore_tree(tree);
-      }
-    });
+    cgh.parallel_for_work_group<class TreeScoringKernel>(
+        range<2>(n_chains, chain_length), [=](id<2> idx) {
+          MutationDataMatrix is_mutated, is_known;
+          TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
+                                     n_genes, is_mutated_ac, is_known_ac,
+                                     is_mutated, is_known);
+          MutationTreeImpl tree(am_ac[idx[0]], dm_ac[idx[0]], n_genes,
+                                beta_mean);
+          scores_ac[idx[0]][idx[1]] = tree_scorer.logscore_tree(tree);
+        });
   });
 
-  uint64_t start = work_event.template get_profiling_info<info::event_profiling::command_start>();
-  uint64_t end = work_event.template get_profiling_info<info::event_profiling::command_end>();
+  uint64_t start =
+      work_event
+          .template get_profiling_info<info::event_profiling::command_start>();
+  uint64_t end =
+      work_event
+          .template get_profiling_info<info::event_profiling::command_end>();
   double runtime = (end - start) / 1000000000.0;
   std::cout << "Work finished in " << runtime << " s" << std::endl;
 
@@ -214,12 +218,15 @@ int main(int argc, char **argv) {
 
   double steps_per_second = n_steps / runtime;
   double popcounts_per_second = popcounted_words / runtime;
-  double counted_bits_per_second = (popcounted_words * max_n_genes+1) / runtime;
+  double counted_bits_per_second =
+      (popcounted_words * max_n_genes + 1) / runtime;
   double flops = floating_point_operations / runtime;
 
   std::cout << "Performance:" << std::endl;
-  std::cout << steps_per_second * 1e-3 << " thousand steps per second." << std::endl;
-  std::cout << popcounts_per_second * 1e-9 << " billion popcounts per second." << std::endl;
+  std::cout << steps_per_second * 1e-3 << " thousand steps per second."
+            << std::endl;
+  std::cout << popcounts_per_second * 1e-9 << " billion popcounts per second."
+            << std::endl;
   std::cout << flops * 1e-9 << " GFLOPS" << std::endl;
 
   return 0;
