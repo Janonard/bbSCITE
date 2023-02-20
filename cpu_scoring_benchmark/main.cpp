@@ -14,10 +14,11 @@
  * You should have received a copy of the GNU General Public License along with
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
+#include "TreeScorer.hpp"
 #include <CL/sycl.hpp>
 #include <MutationTree.hpp>
 #include <Parameters.hpp>
-#include <TreeScorer.hpp>
+#include <chrono>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -107,103 +108,96 @@ int main(int argc, char **argv) {
 
   std::cout << "Loading mutation data" << std::endl;
 
+  MutationDataMatrix is_mutated, is_known;
+
+  // Filling the vectors with zeroes.
+  for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+    is_mutated[cell_i] = is_known[cell_i] = 0;
+  }
+
   // Load the mutation input data.
-  buffer<AncestryVector, 1> is_mutated_buffer = range<1>(n_cells);
-  buffer<AncestryVector, 1> is_known_buffer = range<1>(n_cells);
-  {
-    auto is_mutated =
-        is_mutated_buffer.get_access<access::mode::discard_write>();
-    auto is_known = is_known_buffer.get_access<access::mode::discard_write>();
-    std::ifstream input_file(parameters.get_input_path());
+  std::ifstream input_file(parameters.get_input_path());
 
-    // Zeroing the data.
+  for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
     for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-      is_mutated[cell_i] = is_known[cell_i] = 0;
-    }
-
-    for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
-      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-        int entry;
-        input_file >> entry;
-        switch (entry) {
-        case 0:
-          is_mutated[cell_i][gene_i] = 0;
-          is_known[cell_i][gene_i] = 1;
-          break;
-        case 1:
-        case 2:
-          is_mutated[cell_i][gene_i] = 1;
-          is_known[cell_i][gene_i] = 1;
-          break;
-        case 3:
-          is_known[cell_i][gene_i] = 0;
-          break;
-        default:
-          std::cerr << "Error: The input file contains the invalid entry "
-                    << entry << std::endl;
-          exit(1);
-        }
+      int entry;
+      input_file >> entry;
+      switch (entry) {
+      case 0:
+        is_mutated[cell_i][gene_i] = 0;
+        is_known[cell_i][gene_i] = 1;
+        break;
+      case 1:
+      case 2:
+        is_mutated[cell_i][gene_i] = 1;
+        is_known[cell_i][gene_i] = 1;
+        break;
+      case 3:
+        is_known[cell_i][gene_i] = 0;
+        break;
+      default:
+        std::cerr << "Error: The input file contains the invalid entry "
+                  << entry << std::endl;
+        exit(1);
       }
     }
   }
 
   std::cout << "Generating random trees" << std::endl;
 
-  buffer<AncestorMatrix, 1> am_buffer = range<1>(parameters.get_n_chains());
-  buffer<AncestorMatrix, 1> dm_buffer = range<1>(parameters.get_n_chains());
-  buffer<float, 2> scores_buffer = range<2>(parameters.get_n_chains(), parameters.get_chain_length());
-  {
-    auto am_ac = am_buffer.get_access<access::mode::discard_write>();
-    auto dm_ac = dm_buffer.get_access<access::mode::discard_write>();
-    std::minstd_rand rng;
-    rng.seed(std::random_device()());
+  std::vector<AncestorMatrix> am;
+  std::vector<AncestorMatrix> dm;
+  am.reserve(parameters.get_n_chains());
+  dm.reserve(parameters.get_n_chains());
 
-    for (uint32_t i = 0; i < parameters.get_n_chains(); i++) {
-      std::vector<uint32_t> pruefer_code =
-          MutationTreeImpl::sample_random_pruefer_code(rng, n_genes);
-      std::vector<uint32_t> parent_vector =
-          MutationTreeImpl::pruefer_code_to_parent_vector(pruefer_code);
-      std::tie(am_ac[i], dm_ac[i]) =
-          MutationTreeImpl::parent_vector_to_matrix(parent_vector);
+  std::vector<std::vector<float>> scores;
+  scores.reserve(parameters.get_n_chains());
+
+  std::minstd_rand rng;
+  rng.seed(std::random_device()());
+
+  // Initialize ancestor matrix, descendant matrix, and scores.
+  for (uint32_t chain_i = 0; chain_i < parameters.get_n_chains(); chain_i++) {
+    std::vector<uint32_t> pruefer_code =
+        MutationTreeImpl::sample_random_pruefer_code(rng, n_genes);
+    std::vector<uint32_t> parent_vector =
+        MutationTreeImpl::pruefer_code_to_parent_vector(pruefer_code);
+    auto am_and_dm = MutationTreeImpl::parent_vector_to_matrix(parent_vector);
+    am.push_back(std::get<0>(am_and_dm));
+    dm.push_back(std::get<1>(am_and_dm));
+
+    scores.push_back(std::vector<float>());
+    scores[chain_i].reserve(parameters.get_chain_length());
+    for (uint32_t step_i = 0; step_i < n_cells; step_i++) {
+      scores[chain_i].push_back(0);
     }
   }
 
   // Initializing the SYCL queue.
-  property_list queue_properties = {property::queue::enable_profiling{}};
-  queue working_queue(cpu_selector().select_device(), queue_properties);
 
   std::cout << "Submitting work" << std::endl;
 
-  event work_event = working_queue.submit([&](handler &cgh) {
-    auto is_mutated_ac = is_mutated_buffer.get_access<access::mode::read>(cgh);
-    auto is_known_ac = is_known_buffer.get_access<access::mode::read>(cgh);
-    auto am_ac = am_buffer.get_access<access::mode::read_write>(cgh);
-    auto dm_ac = dm_buffer.get_access<access::mode::read_write>(cgh);
-    auto scores_ac = scores_buffer.get_access<access::mode::discard_write>(cgh);
+  TreeScorerImpl tree_scorer(
+      parameters.get_alpha_mean(), parameters.get_beta_mean(),
+      parameters.get_beta_sd(), n_cells, n_genes, is_mutated, is_known);
 
-    float alpha_mean = parameters.get_alpha_mean();
-    float beta_mean = parameters.get_beta_mean();
-    float beta_sd = parameters.get_beta_sd();
+  auto start = std::chrono::high_resolution_clock::now();
 
-    range<1> iteration_range =
-        range<1>(parameters.get_n_chains());
-    uint32_t chain_length = parameters.get_chain_length();
+  for (uint32_t chain_i = 0; chain_i < parameters.get_n_chains(); chain_i++) {
+    for (uint32_t step_i = 0; step_i < parameters.get_chain_length();
+         step_i++) {
+      MutationTreeImpl tree(am[chain_i], dm[chain_i], n_genes,
+                            parameters.get_beta_mean());
+      scores[chain_i][step_i] = tree_scorer.logscore_tree(tree);
+    }
+  }
 
-    cgh.parallel_for<class TreeScoringKernel>(iteration_range, [=](id<1> idx) {
-      MutationDataMatrix is_mutated, is_known;
-      TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
-                                 n_genes, is_mutated_ac, is_known_ac,
-                                 is_mutated, is_known);
-      MutationTreeImpl tree(am_ac[idx[0]], dm_ac[idx[0]], n_genes, beta_mean);
-      for (uint32_t iteration = 0; iteration < chain_length; iteration++) {
-        scores_ac[idx[0]][iteration] = tree_scorer.logscore_tree(tree);
-      }
-    });
-  });
+  auto end = std::chrono::high_resolution_clock::now();
 
-  uint64_t start = work_event.template get_profiling_info<info::event_profiling::command_start>();
-  uint64_t end = work_event.template get_profiling_info<info::event_profiling::command_end>();
-  double runtime = (end - start) / 1000000000.0;
+  double runtime =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  runtime /= 1000.0;
   std::cout << "Work finished in " << runtime << " s" << std::endl;
 
   uint64_t n_chains = parameters.get_n_chains();
@@ -214,12 +208,15 @@ int main(int argc, char **argv) {
 
   double steps_per_second = n_steps / runtime;
   double popcounts_per_second = popcounted_words / runtime;
-  double counted_bits_per_second = (popcounted_words * max_n_genes+1) / runtime;
+  double counted_bits_per_second =
+      (popcounted_words * max_n_genes + 1) / runtime;
   double flops = floating_point_operations / runtime;
 
   std::cout << "Performance:" << std::endl;
-  std::cout << steps_per_second * 1e-3 << " thousand steps per second." << std::endl;
-  std::cout << popcounts_per_second * 1e-9 << " billion popcounts per second." << std::endl;
+  std::cout << steps_per_second * 1e-3 << " thousand steps per second."
+            << std::endl;
+  std::cout << popcounts_per_second * 1e-9 << " billion popcounts per second."
+            << std::endl;
   std::cout << flops * 1e-9 << " GFLOPS" << std::endl;
 
   return 0;
