@@ -62,4 +62,4 @@ run-cpu-scoring-benchmark:
   script:
     - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
     - "cd build"
-    - "perf stat -e ex_ret_mmx_fp_instr.sse_instr,l2_cache_misses_from_dc_misses,all_dc_accesses,power/energy-cores/ ./cpu_scoring_benchmark/cpu_scoring_benchmark -i input.csv -r 32 -l 10000000"
+    - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,l2_cache_misses_from_dc_misses,all_dc_accesses,power/energy-pkg/,power/energy-pkg/,power/energy-psys/ ./cpu_scoring_benchmark/cpu_scoring_benchmark -i input.csv -r 32 -l 10000000"
