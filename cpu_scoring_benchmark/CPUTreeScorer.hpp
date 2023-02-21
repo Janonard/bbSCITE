@@ -100,8 +100,11 @@ public:
         for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
 #pragma unroll
           for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
+            AncestryVector occurrence_vector =
+                is_known & (i_posterior == 1 ? is_mutated : ~is_mutated) &
+                (i_prior == 1 ? is_ancestor : ~is_ancestor);
 
-            individual_score += is_ancestor.count() *
+            individual_score += occurrence_vector.count() *
                                 log_error_probabilities[i_posterior][i_prior];
           }
         }
