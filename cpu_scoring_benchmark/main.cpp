@@ -36,6 +36,34 @@ using MutationTreeImpl = MutationTree<n_genes>;
 
 using URNG = std::minstd_rand;
 
+AncestorMatrix
+parent_vector_to_descendant_matrix(std::vector<uint32_t> const &parent_vector) {
+  AncestorMatrix descendant;
+  uint32_t root = n_nodes - 1;
+
+  for (uint32_t j = 0; j < n_nodes; j++) {
+    // Zero all vectors. This is equivalent to setting everything to false.
+    descendant[j] = 0;
+  }
+
+  for (uint32_t i = 0; i < n_nodes; i++) {
+    // Then we start from the node i and walk up to the root, marking all
+    // nodes on the way as ancestors.
+    uint32_t anc = i;
+    while (anc != root) {
+      descendant[i][anc] = true;
+      anc = parent_vector[anc];
+      // Otherwise, there is a circle in the graph!
+      assert(anc != i && anc < n_nodes);
+    }
+
+    // Lastly, also mark the root as our ancestor.
+    descendant[i][i] = descendant[i][root] = true;
+  }
+
+  return descendant;
+}
+
 int main(int argc, char **argv) {
   // Load the CLI parameters.
   Parameters parameters;
@@ -113,19 +141,20 @@ int main(int argc, char **argv) {
         switch (entry) {
         case 0:
           // gene reported as unmutated
-          // Leave the gene_i'th bit of is_mutated as 0.
-          is_known[0][cell_i] += 1 << gene_i; // Set the gene_i'th bit to 1.
+          // Setting bit to false is unnecessary, but makes the point clear.
+          is_mutated[0][cell_i][gene_i] = false;
+          is_known[0][cell_i][gene_i] = true;
           break;
         case 1:
         case 2:
           // gene reported as mutated
-          is_mutated[0][cell_i] += 1 << gene_i; // Set the gene_i'th bit to 1.
-          is_known[0][cell_i] += 1 << gene_i;   // Set the gene_i'th bit to 1.
+          is_mutated[0][cell_i][gene_i] = true;
+          is_known[0][cell_i][gene_i] = true;
           break;
         case 3:
           // gene reported as unknown
-          // Leave the gene_i'th bit of is_mutated as 0.
-          // Leave the gene_i'th bit of is_known as 0.
+          is_mutated[0][cell_i][gene_i] = false;
+          is_known[0][cell_i][gene_i] = false;
           break;
         default:
           std::cerr << "Error: The input file contains the invalid entry "
@@ -151,12 +180,7 @@ int main(int argc, char **argv) {
           MutationTreeImpl::sample_random_pruefer_code(rng, n_genes);
       std::vector<uint32_t> parent_vector =
           MutationTreeImpl::pruefer_code_to_parent_vector(pruefer_code);
-      auto arithmetic_c_dm =
-          std::get<1>(MutationTreeImpl::parent_vector_to_matrix(parent_vector));
-
-      for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
-        dm_ac[i][node_i] = arithmetic_c_dm[node_i];
-      }
+      dm_ac[i] = parent_vector_to_descendant_matrix(parent_vector);
     }
   }
 

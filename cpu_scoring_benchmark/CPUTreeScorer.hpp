@@ -17,6 +17,7 @@
 #pragma once
 #include <array>
 #include <bit>
+#include <bitset>
 #include <cmath>
 #include <cstdint>
 
@@ -44,7 +45,7 @@ public:
   static constexpr uint32_t n_genes = 63;
   static constexpr uint32_t n_nodes = n_genes + 1;
 
-  using AncestryVector = uint64_t;
+  using AncestryVector = std::bitset<n_nodes>;
   using AncestorMatrix = std::array<AncestryVector, n_nodes>;
   using MutationDataMatrix = std::array<AncestryVector, n_cells>;
 
@@ -103,10 +104,8 @@ public:
                 is_known & (i_posterior == 1 ? is_mutated : ~is_mutated) &
                 (i_prior == 1 ? is_ancestor : ~is_ancestor);
 
-            float n_occurrences = std::popcount(occurrence_vector);
-
-            individual_score +=
-                n_occurrences * log_error_probabilities[i_posterior][i_prior];
+            individual_score += occurrence_vector.count() *
+                                log_error_probabilities[i_posterior][i_prior];
           }
         }
 
