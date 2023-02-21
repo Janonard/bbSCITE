@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
   uint64_t chain_length = parameters.get_chain_length();
   uint64_t n_steps = n_chains * chain_length;
   uint64_t popcounted_words = n_steps * n_nodes * n_cells * 4;
-  uint64_t floating_point_operations = n_steps * n_nodes * n_cells * 8;
+  uint64_t floating_point_operations = n_steps * n_nodes * (n_cells * 9 + 1);
 
   double steps_per_second = n_steps / runtime;
   double popcounts_per_second = popcounted_words / runtime;
@@ -236,7 +236,9 @@ int main(int argc, char **argv) {
             << std::endl;
   std::cout << popcounts_per_second * 1e-9 << " billion popcounts per second."
             << std::endl;
-  std::cout << flops * 1e-9 << " GFLOPS" << std::endl;
+  std::cout << floating_point_operations * 1e-9 << " billion floating point operations."
+            << std::endl;
+  std::cout << flops * 1e-9 << " GFLOPS." << std::endl;
 
   return 0;
 }
