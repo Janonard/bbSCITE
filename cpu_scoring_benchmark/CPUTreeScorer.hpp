@@ -91,24 +91,36 @@ public:
       AncestryVector is_ancestor = descendant_matrix[node_i];
       float node_score = -std::numeric_limits<float>::infinity();
 
+      // 49 instructions, assuming that all data already resides in registers.
       for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
         AncestryVector is_mutated = this->is_mutated[cell_i];
         AncestryVector is_known = this->is_known[cell_i];
         float individual_score = 0.0;
 
+        // 4 unrolled iterations, 4*(6+6)=48 instructions
 #pragma unroll
         for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
 #pragma unroll
           for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
+            // Instructions: (2x2)/2 invert, 2x2 bitwise and
+            // Each invert is only executed in two of the four unrolled
+            // iterations and is therefore counted half.
+            // 6 total instructions.
             AncestryVector occurrence_vector =
                 is_known & (i_posterior == 1 ? is_mutated : ~is_mutated) &
                 (i_prior == 1 ? is_ancestor : ~is_ancestor);
 
+            // Instructions: 2 popcount, 1 add, 1 int-to-float convert, 1
+            // multiply, 1 add.
+            // Assuming that count() is implemented bypopcounting the two
+            // halfs of the bitset and then adding those values.
+            // 6 total instructions.
             individual_score += occurrence_vector.count() *
                                 log_error_probabilities[i_posterior][i_prior];
           }
         }
 
+        // 1 max instruction.
         node_score = std::max(node_score, individual_score);
       }
 
