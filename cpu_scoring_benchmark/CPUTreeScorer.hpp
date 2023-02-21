@@ -41,8 +41,8 @@ namespace ffSCITE {
  */
 class CPUTreeScorer {
 public:
-  static constexpr uint32_t n_cells = 64;
-  static constexpr uint32_t n_genes = 63;
+  static constexpr uint32_t n_cells = 128;
+  static constexpr uint32_t n_genes = 127;
   static constexpr uint32_t n_nodes = n_genes + 1;
 
   using AncestryVector = std::bitset<n_nodes>;
