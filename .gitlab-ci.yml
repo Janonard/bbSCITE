@@ -44,7 +44,7 @@ build-cpu-scoring-benchmark:
     - "pip install -r ../requirements.txt"
     - "../tool.py generate -o . -n 127 -m 128 -a 1e-6 -b 0.42 -e 0.4"
     - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "make cpu_scoring_benchmark"
+    - "VERBOSE=1 make cpu_scoring_benchmark"
   artifacts:
     paths:
       - "build/input.csv"
