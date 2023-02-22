@@ -66,3 +66,23 @@ cpu scoring benchmark noctua2:
     - "VERBOSE=1 make cpu_scoring_benchmark"
     - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,L1-dcache-load-misses,L1-dcache-loads
         ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 128 -l 10000000"
+
+cpu scoring benchmark noctua1:
+  stage: benchmark
+  only:
+    - main
+    - staging
+    - cpu_scoring_benchmark
+  tags:
+    - noctua1
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 --exclusive"
+    DPCPP_CPU_NUM_CUS: 40
+  script:
+    - "ml toolchain devel intel/2022b Boost CMake"
+    - "mkdir -p build"
+    - "cd build"
+    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "VERBOSE=1 make cpu_scoring_benchmark"
+    - "perf stat -e instructions,L1-dcache-load-misses,L1-dcache-loads
+        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 40 -l 1000000"
