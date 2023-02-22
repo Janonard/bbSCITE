@@ -12,6 +12,8 @@ build-thesis:
     - main
     - staging
     - thesis
+  tags:
+    - imt-no-sla
   image: "texlive/texlive"
   script:
     - "cd docs/thesis"
@@ -23,36 +25,33 @@ build-thesis:
       - "docs/thesis/thesis.pdf"
       - "docs/proposal/proposal.pdf"
     expire_in: 1 month
-  tags:
-    - docker
 
-build-cpu-scoring-benchmark:
+generate inputs:
   stage: build
   only:
+    - main
+    - staging
     - cpu_scoring_benchmark
   tags:
-    - noctua2
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:05:00 -c 1 --mem 8G"
+    - imt-no-sla
+  image: "python"
   script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
-    - "mkdir -p build"
-    - "cd build"
     - "python3 -m venv .venv"
     - "source .venv/bin/activate"
     - "pip install --upgrade pip"
     - "pip install -r ../requirements.txt"
-    - "../tool.py generate -o . -n 127 -m 128 -a 1e-6 -b 0.42 -e 0.4"
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "VERBOSE=1 make cpu_scoring_benchmark"
+    - "./scripts/performance_benchmark/generate_inputs.sh"
+    - "./scripts/quality_benchmark/generate_inputs.sh"
   artifacts:
     paths:
-      - "build/input.csv"
-      - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
+      - "performance_benchmark.out"
+      - "quality_benchmark.out"
 
-run-cpu-scoring-benchmark:
+cpu scoring benchmark noctua2:
   stage: benchmark
   only:
+    - main
+    - staging
     - cpu_scoring_benchmark
   tags:
     - noctua2
@@ -61,5 +60,9 @@ run-cpu-scoring-benchmark:
     DPCPP_CPU_NUM_CUS: 128
   script:
     - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "mkdir -p build"
     - "cd build"
-    - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,L1-dcache-load-misses,L1-dcache-loads ./cpu_scoring_benchmark/cpu_scoring_benchmark -i input.csv -r 128 -l 10000000"
+    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "VERBOSE=1 make cpu_scoring_benchmark"
+    - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,L1-dcache-load-misses,L1-dcache-loads
+        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark/128/input.csv -r 128 -l 10000000"
