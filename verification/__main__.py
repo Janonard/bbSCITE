@@ -1,5 +1,4 @@
 import sys
-from turtle import color
 from verification.lib import *
 from networkx.drawing.nx_pydot import write_dot
 import random
@@ -8,9 +7,6 @@ from pathlib import Path
 from scipy.stats import ttest_1samp
 from statistics import mean
 from matplotlib import pyplot
-from matplotlib.ticker import MultipleLocator
-import re
-from itertools import groupby
 from math import exp
 
 
