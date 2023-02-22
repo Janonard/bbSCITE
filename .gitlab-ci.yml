@@ -65,4 +65,4 @@ cpu scoring benchmark noctua2:
     - "cmake -DCMAKE_BUILD_TYPE=Release .."
     - "VERBOSE=1 make cpu_scoring_benchmark"
     - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,L1-dcache-load-misses,L1-dcache-loads
-        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark/128/input.csv -r 128 -l 10000000"
+        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 128 -l 10000000"
