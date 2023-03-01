@@ -8,7 +8,8 @@
 
 set -e 
 
-ml fpga devel intel/oneapi/22.2.0 bittware/520n Boost/1.79.0-GCC CMake
+module reset
+ml fpga devel intel/oneapi bittware/520n Boost CMake
 
 BASE_DIR=performance_benchmark.out
 ALPHA=6e-5
@@ -30,11 +31,21 @@ do
     do
         for N_STEPS in `seq 500000 500000 2000000`
         do
+            LOGFILE="${FFSCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
             for i in `seq 4`
             do
                 ./build/ffSCITE \
                     -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
-                    >> "${FFSCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
+                    >> $LOGFILE &
+
+                while [ `jobs -r | wc -l` -gt 0 ]
+                do
+                    newgrp dialout <<< /usr/share/nallatech/520n/bist/utilities/nalla_serial_cardmon/bin/nalla_serial_cardmon \
+                    | grep "Total board power" >> $LOGFILE
+                    echo "At instant $(date -Iseconds)" >> $LOGFILE
+                done
+
+                wait # Should not be necessary, but there for contingency.
             done
         done
     done
