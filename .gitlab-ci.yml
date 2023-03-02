@@ -62,7 +62,7 @@ cpu scoring benchmark noctua2:
     - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
     - "mkdir -p build"
     - "cd build"
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2SYSTEM=Noctua2 .."
     - "VERBOSE=1 make cpu_scoring_benchmark"
     - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,L1-dcache-load-misses,L1-dcache-loads
         ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 128 -l 10000000"
@@ -82,7 +82,7 @@ cpu scoring benchmark noctua1:
     - "ml toolchain devel intel/2022b Boost CMake"
     - "mkdir -p build"
     - "cd build"
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2SYSTEM=Noctua1 .."
     - "VERBOSE=1 make cpu_scoring_benchmark"
     - "perf stat -e instructions,L1-dcache-load-misses,L1-dcache-loads
         ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 40 -l 2500000"
