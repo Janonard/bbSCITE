@@ -92,6 +92,11 @@ public:
       float node_score = -std::numeric_limits<float>::infinity();
 
       // 49 instructions, assuming that all data already resides in registers.
+#if PC2_SYSTEM == 1
+#pragma unroll 8
+#elif PC2_SYSTEM == 2
+#pragma unroll 4
+#endif
       for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
         AncestryVector is_mutated = this->is_mutated[cell_i];
         AncestryVector is_known = this->is_known[cell_i];
