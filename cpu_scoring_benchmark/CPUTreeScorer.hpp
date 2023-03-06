@@ -103,9 +103,7 @@ public:
         float individual_score = 0.0;
 
         // 4 unrolled iterations, 4*(6+6)=48 instructions
-#pragma unroll
         for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
-#pragma unroll
           for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
             // Instructions: (2x2)/2 invert, 2x2 bitwise and
             // Each invert is only executed in two of the four unrolled
