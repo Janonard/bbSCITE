@@ -71,7 +71,7 @@ cpu scoring benchmark noctua2:
   artifacts:
     paths:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
-      - "build offload.asm"
+      - "build/offload.asm"
 
 cpu scoring benchmark noctua1:
   stage: benchmark
@@ -97,4 +97,4 @@ cpu scoring benchmark noctua1:
   artifacts:
     paths:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
-      - "build offload.asm"
+      - "build/offload.asm"
