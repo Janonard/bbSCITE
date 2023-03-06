@@ -59,7 +59,7 @@ cpu scoring benchmark noctua2:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 --exclusive"
     DPCPP_CPU_NUM_CUS: 64
     DPCPP_CPU_CU_AFFINITY: close
-    DPCPP_CPU_PLACES: sockets
+    DPCPP_CPU_PLACES: cores
   script:
     - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
     - "mkdir -p build"
@@ -81,7 +81,7 @@ cpu scoring benchmark noctua1:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 --exclusive"
     DPCPP_CPU_NUM_CUS: 20
     DPCPP_CPU_CU_AFFINITY: close
-    DPCPP_CPU_PLACES: sockets
+    DPCPP_CPU_PLACES: cores
   script:
     - "ml toolchain devel intel/2022b Boost CMake"
     - "mkdir -p build"
