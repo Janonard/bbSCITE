@@ -30,7 +30,6 @@ constexpr uint32_t n_cells = CPUTreeScorer::n_cells;
 constexpr uint32_t n_genes = CPUTreeScorer::n_genes;
 constexpr uint32_t n_nodes = CPUTreeScorer::n_nodes;
 
-using MutationDataMatrix = CPUTreeScorer::MutationDataMatrix;
 using AncestorMatrix = CPUTreeScorer::AncestorMatrix;
 using MutationTreeImpl = MutationTree<n_genes>;
 
@@ -124,8 +123,8 @@ int main(int argc, char **argv) {
   std::cout << "Loading mutation data" << std::endl;
 
   // Load the mutation input data.
-  buffer<MutationDataMatrix, 1> is_mutated_buffer = range<1>(1);
-  buffer<MutationDataMatrix, 1> is_known_buffer = range<1>(1);
+  buffer<uint64_t, 2> is_mutated_buffer = range<2>(n_words, n_genes);
+  buffer<uint64_t, 2> is_known_buffer = range<2>(n_words, n_genes);
   {
     auto is_mutated =
         is_mutated_buffer.get_access<access::mode::discard_write>();
@@ -134,8 +133,8 @@ int main(int argc, char **argv) {
 
     // Zeroing the data.
     for (uint32_t word_i = 0; word_i < n_words; word_i++) {
-      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-        is_mutated[0][word_i][cell_i] = is_known[0][word_i][cell_i] = 0;
+      for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
+        is_mutated[word_i][gene_i] = is_known[word_i][gene_i] = 0;
       }
     }
 
@@ -146,13 +145,13 @@ int main(int argc, char **argv) {
         switch (entry) {
         case 0:
           // gene reported as unmutated
-          is_known[0][cell_i / 64][gene_i] += 1 << (cell_i % 64);
+          is_known[cell_i / 64][gene_i] += 1 << (cell_i % 64);
           break;
         case 1:
         case 2:
           // gene reported as mutated
-          is_known[0][cell_i / 64][gene_i] += 1 << (cell_i % 64);
-          is_mutated[0][cell_i / 64][gene_i] += 1 << (cell_i % 64);
+          is_known[cell_i / 64][gene_i] += 1 << (cell_i % 64);
+          is_mutated[cell_i / 64][gene_i] += 1 << (cell_i % 64);
           break;
         case 3:
           // gene reported as unknown
@@ -207,7 +206,7 @@ int main(int argc, char **argv) {
     cgh.parallel_for_work_group<class TreeScoringKernel>(
         range<2>(n_chains, chain_length), [=](id<2> idx) {
           CPUTreeScorer tree_scorer(alpha_mean, beta_mean, beta_sd,
-                                    is_mutated_ac[0], is_known_ac[0]);
+                                    is_mutated_ac, is_known_ac);
           scores_ac[idx[0]][idx[1]] = tree_scorer.logscore_tree(dm_ac[idx[0]]);
         });
   });

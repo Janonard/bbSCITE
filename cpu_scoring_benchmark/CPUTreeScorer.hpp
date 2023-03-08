@@ -15,6 +15,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+#include <CL/sycl.hpp>
 #include <array>
 #include <bit>
 #include <bitset>
@@ -43,11 +44,24 @@ class CPUTreeScorer {
 public:
   static constexpr uint32_t n_words = 2;
   static constexpr uint32_t n_cells = n_words * 64; // 128
-  static constexpr uint32_t n_genes = n_cells - 1; // 127
-  static constexpr uint32_t n_nodes = n_cells; // 128
+  static constexpr uint32_t n_genes = n_cells - 1;  // 127
+  static constexpr uint32_t n_nodes = n_cells;      // 128
+#if PC2_SYSTEM == 1
+  static constexpr uint32_t n_vec_elems = 8;
+#elif PC2_SYSTEM == 2
+  static constexpr uint32_t n_vec_elems = 4;
+#else
+  static constexpr uint32_t n_vec_elems = 1;
+#endif
 
+  static_assert(n_cells % n_vec_elems == 0);
+
+  using float_vec_t = cl::sycl::vec<float, n_vec_elems>;
+  using uint64_vec_t = cl::sycl::vec<uint64_t, n_vec_elems>;
   using AncestorMatrix = std::array<std::array<uint64_t, n_nodes>, n_words>;
-  using MutationDataMatrix = std::array<std::array<uint64_t, n_cells>, n_words>;
+  using MutationDataAccessor =
+      cl::sycl::accessor<uint64_t, 2, cl::sycl::access::mode::read,
+                         cl::sycl::access::target::device>;
 
   /**
    * @brief Initialize a new tree scorer
@@ -68,8 +82,7 @@ public:
    * mutation knowledge bit vectors.
    */
   CPUTreeScorer(float alpha_mean, float beta_mean, float beta_sd,
-                MutationDataMatrix const &is_mutated,
-                MutationDataMatrix const &is_known)
+                MutationDataAccessor is_mutated, MutationDataAccessor is_known)
       : log_error_probabilities(), is_mutated(is_mutated), is_known(is_known) {
     // mutation not observed, not present
     log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
@@ -88,26 +101,41 @@ public:
     float tree_score = 0.0;
 
     for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
-      float individual_scores[n_cells];
-      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-        individual_scores[cell_i] = 0;
+      float_vec_t individual_scores[n_cells / n_vec_elems];
+      for (uint32_t cell_vec_i = 0; cell_vec_i < n_cells / n_vec_elems;
+           cell_vec_i++) {
+        individual_scores[cell_vec_i] = 0;
       }
 
       for (uint32_t word_i = 0; word_i < n_words; word_i++) {
-        uint64_t is_ancestor = descendant_matrix[word_i][node_i];
+        uint64_vec_t is_ancestor_vec(descendant_matrix[word_i][node_i]);
 
-        for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-          uint64_t is_mutated = this->is_mutated[word_i][cell_i];
-          uint64_t is_known = this->is_known[word_i][cell_i];
+        for (uint32_t cell_vec_i = 0; cell_vec_i < n_cells / n_vec_elems;
+             cell_vec_i++) {
+          uint64_vec_t is_mutated_vec;
+          uint64_vec_t is_known_vec;
+
+          for (uint32_t element = 0; element < n_vec_elems; element++) {
+            is_mutated_vec[element] =
+                is_mutated[word_i][cell_vec_i * n_vec_elems + element];
+            is_known_vec[element] =
+                is_known[word_i][cell_vec_i * n_vec_elems + element];
+          }
 
           for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
             for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
-              uint64_t occurrence_vector =
-                  is_known & (i_posterior == 1 ? is_mutated : ~is_mutated) &
-                  (i_prior == 1 ? is_ancestor : ~is_ancestor);
-                
-              individual_scores[cell_i] += std::popcount(occurrence_vector) *
-                                  log_error_probabilities[i_posterior][i_prior];
+              uint64_vec_t occurrences_vec =
+                  is_known_vec &
+                  (i_posterior == 1 ? is_mutated_vec : ~is_mutated_vec) &
+                  (i_prior == 1 ? is_ancestor_vec : ~is_ancestor_vec);
+
+              float_vec_t popcount_vec;
+              for (uint32_t element = 0; element < n_vec_elems; element++) {
+                popcount_vec[element] = std::popcount(occurrences_vec[element]);
+              }
+
+              individual_scores[cell_vec_i] +=
+                  popcount_vec * log_error_probabilities[i_posterior][i_prior];
             }
           }
         }
@@ -115,7 +143,9 @@ public:
 
       float node_score = -std::numeric_limits<float>::infinity();
       for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-        node_score = std::max(node_score, individual_scores[cell_i]);
+        node_score = std::max(
+            node_score,
+            individual_scores[cell_i / n_vec_elems][cell_i % n_vec_elems]);
       }
       tree_score += node_score;
     }
@@ -125,6 +155,6 @@ public:
 
 private:
   float log_error_probabilities[2][2];
-  MutationDataMatrix is_mutated, is_known;
+  MutationDataAccessor is_mutated, is_known;
 };
 } // namespace ffSCITE
