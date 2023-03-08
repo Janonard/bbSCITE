@@ -49,7 +49,7 @@ public:
 #if PC2_SYSTEM == 1
   static constexpr uint32_t n_vec_elems = 8;
 #elif PC2_SYSTEM == 2
-  static constexpr uint32_t n_vec_elems = 4;
+  static constexpr uint32_t n_vec_elems = 1;
 #else
   static constexpr uint32_t n_vec_elems = 1;
 #endif
