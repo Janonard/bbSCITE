@@ -41,13 +41,13 @@ namespace ffSCITE {
  */
 class CPUTreeScorer {
 public:
-  static constexpr uint32_t n_cells = 128;
-  static constexpr uint32_t n_genes = 127;
-  static constexpr uint32_t n_nodes = n_genes + 1;
+  static constexpr uint32_t n_words = 2;
+  static constexpr uint32_t n_cells = n_words * 64; // 128
+  static constexpr uint32_t n_genes = n_cells - 1; // 127
+  static constexpr uint32_t n_nodes = n_cells; // 128
 
-  using AncestryVector = std::bitset<n_nodes>;
-  using AncestorMatrix = std::array<AncestryVector, n_nodes>;
-  using MutationDataMatrix = std::array<AncestryVector, n_cells>;
+  using AncestorMatrix = std::array<std::array<uint64_t, n_nodes>, n_words>;
+  using MutationDataMatrix = std::array<std::array<uint64_t, n_cells>, n_words>;
 
   /**
    * @brief Initialize a new tree scorer
@@ -87,46 +87,36 @@ public:
   float logscore_tree(AncestorMatrix const &descendant_matrix) const {
     float tree_score = 0.0;
 
-    for (uint32_t node_i = 0; node_i < n_genes + 1; node_i++) {
-      AncestryVector is_ancestor = descendant_matrix[node_i];
-      float node_score = -std::numeric_limits<float>::infinity();
-
-      // 49 instructions, assuming that all data already resides in registers.
-#if PC2_SYSTEM == 1
-#pragma unroll 8
-#elif PC2_SYSTEM == 2
-#pragma unroll 4
-#endif
+    for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
+      float individual_scores[n_cells];
       for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-        AncestryVector is_mutated = this->is_mutated[cell_i];
-        AncestryVector is_known = this->is_known[cell_i];
-        float individual_score = 0.0;
-
-        // 4 unrolled iterations, 4*(6+6)=48 instructions
-        for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
-          for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
-            // Instructions: (2x2)/2 invert, 2x2 bitwise and
-            // Each invert is only executed in two of the four unrolled
-            // iterations and is therefore counted half.
-            // 6 total instructions.
-            AncestryVector occurrence_vector =
-                is_known & (i_posterior == 1 ? is_mutated : ~is_mutated) &
-                (i_prior == 1 ? is_ancestor : ~is_ancestor);
-
-            // Instructions: 2 popcount, 1 add, 1 int-to-float convert, 1
-            // multiply, 1 add.
-            // Assuming that count() is implemented bypopcounting the two
-            // halfs of the bitset and then adding those values.
-            // 6 total instructions.
-            individual_score += occurrence_vector.count() *
-                                log_error_probabilities[i_posterior][i_prior];
-          }
-        }
-
-        // 1 max instruction.
-        node_score = std::max(node_score, individual_score);
+        individual_scores[cell_i] = 0;
       }
 
+      for (uint32_t word_i = 0; word_i < n_words; word_i++) {
+        uint64_t is_ancestor = descendant_matrix[word_i][node_i];
+
+        for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+          uint64_t is_mutated = this->is_mutated[word_i][cell_i];
+          uint64_t is_known = this->is_known[word_i][cell_i];
+
+          for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
+            for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
+              uint64_t occurrence_vector =
+                  is_known & (i_posterior == 1 ? is_mutated : ~is_mutated) &
+                  (i_prior == 1 ? is_ancestor : ~is_ancestor);
+                
+              individual_scores[cell_i] += std::popcount(occurrence_vector) *
+                                  log_error_probabilities[i_posterior][i_prior];
+            }
+          }
+        }
+      }
+
+      float node_score = -std::numeric_limits<float>::infinity();
+      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+        node_score = std::max(node_score, individual_scores[cell_i]);
+      }
       tree_score += node_score;
     }
 
@@ -135,7 +125,6 @@ public:
 
 private:
   float log_error_probabilities[2][2];
-  MutationDataMatrix const &is_mutated;
-  MutationDataMatrix const &is_known;
+  MutationDataMatrix is_mutated, is_known;
 };
 } // namespace ffSCITE

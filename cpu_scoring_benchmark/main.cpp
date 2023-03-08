@@ -25,13 +25,13 @@
 using namespace ffSCITE;
 using namespace cl::sycl;
 
+constexpr uint32_t n_words = CPUTreeScorer::n_words;
 constexpr uint32_t n_cells = CPUTreeScorer::n_cells;
 constexpr uint32_t n_genes = CPUTreeScorer::n_genes;
 constexpr uint32_t n_nodes = CPUTreeScorer::n_nodes;
 
 using MutationDataMatrix = CPUTreeScorer::MutationDataMatrix;
 using AncestorMatrix = CPUTreeScorer::AncestorMatrix;
-using AncestryVector = CPUTreeScorer::AncestryVector;
 using MutationTreeImpl = MutationTree<n_genes>;
 
 using URNG = std::minstd_rand;
@@ -41,9 +41,11 @@ parent_vector_to_descendant_matrix(std::vector<uint32_t> const &parent_vector) {
   AncestorMatrix descendant;
   uint32_t root = n_nodes - 1;
 
-  for (uint32_t j = 0; j < n_nodes; j++) {
-    // Zero all vectors. This is equivalent to setting everything to false.
-    descendant[j] = 0;
+  for (uint32_t i_word = 0; i_word < n_words; i_word++) {
+    for (uint32_t j = 0; j < n_nodes; j++) {
+      // Zero all vectors.
+      descendant[i_word][j] = 0;
+    }
   }
 
   for (uint32_t i = 0; i < n_nodes; i++) {
@@ -51,14 +53,15 @@ parent_vector_to_descendant_matrix(std::vector<uint32_t> const &parent_vector) {
     // nodes on the way as ancestors.
     uint32_t anc = i;
     while (anc != root) {
-      descendant[i][anc] = true;
+      descendant[anc / 64][i] += 1 << (anc % 64);
       anc = parent_vector[anc];
       // Otherwise, there is a circle in the graph!
       assert(anc != i && anc < n_nodes);
     }
 
-    // Lastly, also mark the root as our ancestor.
-    descendant[i][i] = descendant[i][root] = true;
+    // Lastly, also mark ourselves and the root as our ancestor.
+    descendant[i / 64][i] += 1 << (i % 64);
+    descendant[root / 64][i] += 1 << (i % root);
   }
 
   return descendant;
@@ -130,8 +133,10 @@ int main(int argc, char **argv) {
     std::ifstream input_file(parameters.get_input_path());
 
     // Zeroing the data.
-    for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
-      is_mutated[0][cell_i] = is_known[0][cell_i] = 0;
+    for (uint32_t word_i = 0; word_i < n_words; word_i++) {
+      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+        is_mutated[0][word_i][cell_i] = is_known[0][word_i][cell_i] = 0;
+      }
     }
 
     for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
@@ -141,20 +146,16 @@ int main(int argc, char **argv) {
         switch (entry) {
         case 0:
           // gene reported as unmutated
-          // Setting bit to false is unnecessary, but makes the point clear.
-          is_mutated[0][cell_i][gene_i] = false;
-          is_known[0][cell_i][gene_i] = true;
+          is_known[0][cell_i / 64][gene_i] += 1 << (cell_i % 64);
           break;
         case 1:
         case 2:
           // gene reported as mutated
-          is_mutated[0][cell_i][gene_i] = true;
-          is_known[0][cell_i][gene_i] = true;
+          is_known[0][cell_i / 64][gene_i] += 1 << (cell_i % 64);
+          is_mutated[0][cell_i / 64][gene_i] += 1 << (cell_i % 64);
           break;
         case 3:
           // gene reported as unknown
-          is_mutated[0][cell_i][gene_i] = false;
-          is_known[0][cell_i][gene_i] = false;
           break;
         default:
           std::cerr << "Error: The input file contains the invalid entry "
