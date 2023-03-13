@@ -42,8 +42,8 @@ namespace ffSCITE {
  */
 class CPUTreeScorer {
 public:
-  static constexpr uint32_t n_words = 2;
-  static constexpr uint32_t n_cells = n_words * 64; // 128
+  static constexpr uint32_t n_quadwords = 2;
+  static constexpr uint32_t n_cells = n_quadwords * 64; // 128
   static constexpr uint32_t n_genes = n_cells - 1;  // 127
   static constexpr uint32_t n_nodes = n_cells;      // 128
 #if PC2_SYSTEM == 1
@@ -58,7 +58,7 @@ public:
 
   using float_vec_t = cl::sycl::vec<float, n_vec_elems>;
   using uint64_vec_t = cl::sycl::vec<uint64_t, n_vec_elems>;
-  using AncestorMatrix = std::array<std::array<uint64_t, n_nodes>, n_words>;
+  using AncestorMatrix = std::array<std::array<uint64_t, n_nodes>, n_quadwords>;
   using MutationDataAccessor =
       cl::sycl::accessor<uint64_t, 2, cl::sycl::access::mode::read,
                          cl::sycl::access::target::device>;
@@ -107,8 +107,8 @@ public:
         individual_scores[cell_vec_i] = 0;
       }
 
-      for (uint32_t word_i = 0; word_i < n_words; word_i++) {
-        uint64_vec_t is_ancestor_vec(descendant_matrix[word_i][node_i]);
+      for (uint32_t quadword_i = 0; quadword_i < n_quadwords; quadword_i++) {
+        uint64_vec_t is_ancestor_vec(descendant_matrix[quadword_i][node_i]);
 
         for (uint32_t cell_vec_i = 0; cell_vec_i < n_cells / n_vec_elems;
              cell_vec_i++) {
@@ -117,9 +117,9 @@ public:
 
           for (uint32_t element = 0; element < n_vec_elems; element++) {
             is_mutated_vec[element] =
-                is_mutated[word_i][cell_vec_i * n_vec_elems + element];
+                is_mutated[quadword_i][cell_vec_i * n_vec_elems + element];
             is_known_vec[element] =
-                is_known[word_i][cell_vec_i * n_vec_elems + element];
+                is_known[quadword_i][cell_vec_i * n_vec_elems + element];
           }
 
           for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {

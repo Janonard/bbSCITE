@@ -25,7 +25,7 @@
 using namespace ffSCITE;
 using namespace cl::sycl;
 
-constexpr uint32_t n_words = CPUTreeScorer::n_words;
+constexpr uint32_t n_quadwords = CPUTreeScorer::n_quadwords;
 constexpr uint32_t n_cells = CPUTreeScorer::n_cells;
 constexpr uint32_t n_genes = CPUTreeScorer::n_genes;
 constexpr uint32_t n_nodes = CPUTreeScorer::n_nodes;
@@ -40,7 +40,7 @@ parent_vector_to_descendant_matrix(std::vector<uint32_t> const &parent_vector) {
   AncestorMatrix descendant;
   uint32_t root = n_nodes - 1;
 
-  for (uint32_t i_word = 0; i_word < n_words; i_word++) {
+  for (uint32_t i_word = 0; i_word < n_quadwords; i_word++) {
     for (uint32_t j = 0; j < n_nodes; j++) {
       // Zero all vectors.
       descendant[i_word][j] = 0;
@@ -123,8 +123,8 @@ int main(int argc, char **argv) {
   std::cout << "Loading mutation data" << std::endl;
 
   // Load the mutation input data.
-  buffer<uint64_t, 2> is_mutated_buffer = range<2>(n_words, n_genes);
-  buffer<uint64_t, 2> is_known_buffer = range<2>(n_words, n_genes);
+  buffer<uint64_t, 2> is_mutated_buffer = range<2>(n_quadwords, n_genes);
+  buffer<uint64_t, 2> is_known_buffer = range<2>(n_quadwords, n_genes);
   {
     auto is_mutated =
         is_mutated_buffer.get_access<access::mode::discard_write>();
@@ -132,9 +132,9 @@ int main(int argc, char **argv) {
     std::ifstream input_file(parameters.get_input_path());
 
     // Zeroing the data.
-    for (uint32_t word_i = 0; word_i < n_words; word_i++) {
+    for (uint32_t quadword_i = 0; quadword_i < n_quadwords; quadword_i++) {
       for (uint32_t gene_i = 0; gene_i < n_genes; gene_i++) {
-        is_mutated[word_i][gene_i] = is_known[word_i][gene_i] = 0;
+        is_mutated[quadword_i][gene_i] = is_known[quadword_i][gene_i] = 0;
       }
     }
 
