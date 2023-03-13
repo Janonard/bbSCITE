@@ -2,13 +2,13 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
 stages:
-  - precheck
-  - build 
+  - build
   - benchmark
-  - evaluation
+  - evaluate
 
 build thesis:
-  stage: precheck
+  stage: build
+  needs: []
   only:
     - main
     - staging
@@ -27,11 +27,12 @@ build thesis:
     expire_in: 1 month
 
 generate inputs:
-  stage: precheck
+  stage: build
   only:
     - main
     - staging
     - cpu_scoring_benchmark
+  needs: []
   tags:
     - imt-no-sla
   image: "python"
@@ -53,6 +54,8 @@ build ffscite:
     - main
     - staging
     - cpu_scoring_benchmark
+  when: manual
+  needs: []
   tags:
     - noctua2
   variables:
@@ -75,6 +78,9 @@ benchmark ffscite:
     - main
     - staging
     - cpu_scoring_benchmark
+  needs: 
+    - "build ffscite"
+    - "generate inputs"
   tags:
     - noctua2
   variables:
@@ -94,6 +100,9 @@ benchmark scite:
     - main
     - staging
     - cpu_scoring_benchmark
+  needs: 
+    - "build ffscite"
+    - "generate inputs"
   tags:
     - noctua2
   variables:
@@ -113,6 +122,8 @@ benchmark cpu scoring on noctua2:
     - main
     - staging
     - cpu_scoring_benchmark
+  needs: 
+    - "generate inputs"
   tags:
     - noctua2
   variables:
@@ -137,6 +148,8 @@ benchmark cpu scoring on noctua1:
     - main
     - staging
     - cpu_scoring_benchmark
+  needs: 
+    - "generate inputs"
   tags:
     - noctua1
   variables:
@@ -156,11 +169,14 @@ benchmark cpu scoring on noctua1:
       - "build/cpu_scoring_benchmark/cpu_scoring_offload.asm"
 
 analyze benchmark output:
-  stage: evaluation
+  stage: evaluate
   only:
     - main
     - staging
     - cpu_scoring_benchmark
+  needs:
+    - "benchmark ffscite"
+    - "benchmark scite"
   tags:
     - imt-no-sla
   image: "python"
