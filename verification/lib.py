@@ -2,12 +2,13 @@ from math import inf, log
 from pathlib import Path
 import re
 from statistics import mean
-from typing import Any, List
+from typing import Any, List, Tuple, Optional, List, Union, Dict
 import networkx as nx
 import random
 import numpy as np
-from typing import List, Tuple, Optional
 import lark
+import enum
+from datetime import timedelta, datetime
 
 
 class MutationTree(nx.DiGraph):
@@ -161,7 +162,7 @@ def parse_newick_code(newick_code: str) -> Tuple[nx.DiGraph, int]:
         nodes.sort()
         tree = nx.relabel.relabel_nodes(
             tree, {nodes[i]: i for i in range(len(nodes))})
-    
+
     return tree
 
 
@@ -236,50 +237,120 @@ def read_mutation_matrix(path: Path) -> np.ndarray:
         ]
         return np.array(matrix, dtype=np.int8)
 
-def load_performance_data(base_dir: Path, verify_coverage: bool = False) -> Any:
-    ffscite_perf_data = dict()
-    scite_perf_data = dict()
 
-    makespan_re = re.compile("Time elapsed: ([0-9]+(\.[0-9]+)?)")
+move_generation_re = re.compile(r"Move generation makespan: ([0-9.]+) s")
+board_power_re = re.compile(r"Total board power \(W\): ([0-9.]+)")
+instant_re = re.compile(r"At instant (.+)")
+smartvid_disabled_re = re.compile(
+    r"MMD INFO : Disabling SmartVID \(fix\) polling")
+smartvid_enabled_re = re.compile(
+    r"MMD INFO : Enabling SmartVID \(fix\) polling")
+kernel_finished_re = re.compile(r"Time elapsed: ([0-9.]+) ms")
 
-    def analyze_makespans(out_dir):
-        all_makespans = dict()
-        for logfile_path in Path(out_dir).glob("*.log"):
-            parts = logfile_path.stem.split("_")
-            n_chains = int(parts[0])
-            n_steps = int(parts[1])
 
-            with open(logfile_path, mode="r") as logfile:
-                lines = (makespan_re.match(line) for line in logfile.readlines())
-                makespans = [float(match[1]) for match in lines if match is not None]
+class LineType(enum.IntEnum):
+    MOVE_GENERATION = enum.auto()
+    BOARD_POWER = enum.auto()
+    INSTANT = enum.auto()
+    SMARTVID_DISABLED = enum.auto()
+    SMARTVID_ENABLED = enum.auto()
+    KERNEL_FINISHED = enum.auto()
 
-            if len(makespans) == 0:
+    @classmethod
+    def parse_line(cls, line: str) -> Tuple["LineType", Union[timedelta, float, datetime, None]]:
+        if (m := move_generation_re.match(line)) is not None:
+            return cls.MOVE_GENERATION, timedelta(seconds=float(m[1]))
+        elif (m := board_power_re.match(line)) is not None:
+            return cls.BOARD_POWER, float(m[1])
+        elif (m := instant_re.match(line)) is not None:
+            return cls.INSTANT, datetime.fromisoformat(m[1])
+        elif (m := smartvid_disabled_re.match(line)) is not None:
+            return cls.SMARTVID_DISABLED, None
+        elif (m := smartvid_enabled_re.match(line)) is not None:
+            return cls.SMARTVID_ENABLED, None
+        elif (m := kernel_finished_re.match(line)) is not None:
+            return cls.KERNEL_FINISHED, timedelta(milliseconds=float(m[1]))
+        else:
+            raise Exception(f"Illegal log line {line}!")
+
+
+def analyze_log(log: List[Tuple[LineType, Any]]):
+    makespans = list()
+    mean_powers = list()
+
+    power_readings: List[float] = list()
+    instants: List[datetime] = list()
+    for line_type, param in log:
+        if line_type == LineType.BOARD_POWER:
+            assert len(power_readings) == len(
+                instants), "Illegal log file: A power reading is missing its instant!"
+            power_readings += [param]
+        elif line_type == LineType.INSTANT:
+            assert len(power_readings) == len(
+                instants) + 1, "Illegal log file: Power reading is followed by an instant!"
+            instants += [param]
+        elif line_type == LineType.SMARTVID_ENABLED:
+            # Reset the power readings. The FPGA has just been programmed
+            # and we have only measured the power consumption of the idle
+            # bit stream.
+            power_readings = list()
+            instants = list()
+        elif line_type == LineType.KERNEL_FINISHED:
+            # Append the makespan of this kernel invocation
+            makespan = param / timedelta(seconds=1)
+            makespans += [makespan]
+
+            assert len(power_readings) == len(
+                instants), "Illegal log file: Unequal number of power readings and instants!"
+
+            if len(power_readings) > 1:
+                energy = 0.0
+                for i in range(len(power_readings)-1):
+                    base_power = power_readings[i]
+                    triangle_power = abs(
+                        power_readings[i+1] - power_readings[i])/2.0
+                    delta_time = (instants[i+1] -
+                                  instants[i]) / timedelta(seconds=1)
+                    energy += (base_power + triangle_power) * delta_time
+                mean_power = energy / \
+                    ((instants[-1] - instants[0]) / timedelta(seconds=1))
+            elif len(power_readings) == 1:
+                mean_power = power_readings[0]
+            else:
+                mean_power = None
+
+            mean_powers += [mean_power]
+
+            power_readings = list()
+            instants = list()
+
+    return mean(makespans), mean(mean_powers)
+
+
+def load_performance_data(base_dir: Path) -> Dict:
+    data = dict()
+
+    for cell_dir in base_dir.iterdir():
+        n_cells = int(cell_dir.name)
+
+        for program in "ffSCITE", "SCITE":
+            program_dir = cell_dir / Path(program)
+            if not program_dir.is_dir():
                 continue
 
-            if n_chains not in all_makespans:
-                all_makespans[n_chains] = dict()
-            
-            assert (not verify_coverage) or (n_steps not in all_makespans[n_chains])
-            all_makespans[n_chains][n_steps] = mean(makespans)
-        return all_makespans
+            if program not in data:
+                data[program] = dict()
 
-    for n_cell_dir in base_dir.iterdir():
-        n_cells = int(n_cell_dir.name)
-        assert (not verify_coverage) or (n_cells not in ffscite_perf_data)
-        assert (not verify_coverage) or (n_cells not in scite_perf_data)
+            for log_file in program_dir.glob("*.log"):
+                n_chains, n_steps = map(
+                    lambda x: int(x), log_file.stem.split("_"))
+                lines = [LineType.parse_line(line) for line in open(
+                    log_file, mode="r").readlines()]
+                data[program][(n_cells, n_chains, n_steps)] = analyze_log(
+                    lines)
 
-        ffscite_perf_data[n_cells] = analyze_makespans(n_cell_dir / Path("ffSCITE"))
-        scite_perf_data[n_cells] = analyze_makespans(n_cell_dir / Path("SCITE"))
+    return data
 
-        if verify_coverage:
-            # Assert that there are runs with the same number of chains.
-            assert set(ffscite_perf_data.keys()) == set(scite_perf_data.keys())
 
-            # Assert that every run had the same number of steps per chain.
-            for n_chains in ffscite_perf_data.keys():
-                assert set(ffscite_perf_data[n_chains].keys()) == set(scite_perf_data[n_chains].keys())
-
-    return ffscite_perf_data, scite_perf_data
-
-def calc_expected_runtime(n_words: int , n_chains: int, n_steps: int, f: float = 252.5e6, occupancy: float = 1.0) -> float:
+def calc_expected_runtime(n_words: int, n_chains: int, n_steps: int, f: float = 252.5e6, occupancy: float = 1.0) -> float:
     return (n_words * n_chains * n_steps) / occupancy / f
