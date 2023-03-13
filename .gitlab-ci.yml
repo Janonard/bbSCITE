@@ -110,7 +110,7 @@ benchmark scite:
       - "quality_benchmark.out/*/SCITE"
       - "performance_benchmark.out/*/SCITE"
 
-cpu scoring benchmark noctua2:
+benchmark cpu scoring on noctua2:
   stage: benchmark
   only:
     - main
@@ -134,7 +134,7 @@ cpu scoring benchmark noctua2:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
       - "build/cpu_scoring_benchmark/cpu_scoring_offload.asm"
 
-cpu scoring benchmark noctua1:
+benchmark cpu scoring on noctua1:
   stage: benchmark
   only:
     - main
@@ -158,7 +158,7 @@ cpu scoring benchmark noctua1:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
       - "build/cpu_scoring_benchmark/cpu_scoring_offload.asm"
 
-generate inputs:
+analyze benchmark output:
   stage: evaluation
   only:
     - main
