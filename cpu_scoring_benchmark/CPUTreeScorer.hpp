@@ -44,8 +44,8 @@ class CPUTreeScorer {
 public:
   static constexpr uint32_t n_quadwords = 2;
   static constexpr uint32_t n_cells = n_quadwords * 64; // 128
-  static constexpr uint32_t n_genes = n_cells - 1;  // 127
-  static constexpr uint32_t n_nodes = n_cells;      // 128
+  static constexpr uint32_t n_genes = n_cells - 1;      // 127
+  static constexpr uint32_t n_nodes = n_cells;          // 128
 #if PC2_SYSTEM == 1
   static constexpr uint32_t n_vec_elems = 8;
 #elif PC2_SYSTEM == 2
@@ -94,10 +94,19 @@ public:
     log_error_probabilities[1][1] = std::log(1.0 - beta_mean);
   }
 
+  float logscore_tree(AncestorMatrix const &descendant_matrix) const {
+#if PC2_SYSTEM == 1
+    return logscore_tree_avx512(descendant_matrix);
+#else
+    return logscore_tree_avx2(descendant_matrix);
+#endif
+  }
+
+private:
   /**
    * @brief Compute the log-likelihood of the given mutation tree.
    */
-  float logscore_tree(AncestorMatrix const &descendant_matrix) const {
+  float logscore_tree_avx512(AncestorMatrix const &descendant_matrix) const {
     float tree_score = 0.0;
 
     for (uint32_t node_i = 0; node_i < n_nodes; node_i++) {
@@ -147,6 +156,56 @@ public:
             node_score,
             individual_scores[cell_i / n_vec_elems][cell_i % n_vec_elems]);
       }
+      tree_score += node_score;
+    }
+
+    return tree_score;
+  }
+
+  float logscore_tree_avx2(AncestorMatrix const &descendant_matrix) const {
+    float tree_score = 0.0;
+
+    for (uint32_t node_i = 0; node_i < n_genes + 1; node_i++) {
+      float node_score = -std::numeric_limits<float>::infinity();
+
+#pragma unroll 4
+      for (uint32_t cell_i = 0; cell_i < n_cells; cell_i++) {
+        float individual_score = 0.0;
+
+#pragma unroll
+        for (uint32_t i_posterior = 0; i_posterior < 2; i_posterior++) {
+#pragma unroll
+          for (uint32_t i_prior = 0; i_prior < 2; i_prior++) {
+            uint32_t n_occurrences = 0;
+
+#pragma unroll
+            for (uint32_t quadword_i = 0; quadword_i < n_quadwords;
+                 quadword_i++) {
+              uint64_t occurrence_vector = is_known[quadword_i][cell_i];
+
+              if (i_posterior == 1) {
+                occurrence_vector &= is_mutated[quadword_i][cell_i];
+              } else {
+                occurrence_vector &= ~is_mutated[quadword_i][cell_i];
+              }
+
+              if (i_prior == 1) {
+                occurrence_vector &= descendant_matrix[quadword_i][node_i];
+              } else {
+                occurrence_vector &= ~descendant_matrix[quadword_i][node_i];
+              }
+
+              n_occurrences += std::popcount(occurrence_vector);
+            }
+
+            individual_score += float(n_occurrences) *
+                                log_error_probabilities[i_posterior][i_prior];
+          }
+        }
+
+        node_score = std::max(node_score, individual_score);
+      }
+
       tree_score += node_score;
     }
 
