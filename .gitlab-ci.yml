@@ -53,7 +53,6 @@ build ffscite:
     - main
     - staging
     - cpu_scoring_benchmark
-  when: manual
   tags:
     - noctua2
   variables:
@@ -76,7 +75,6 @@ benchmark ffscite:
     - main
     - staging
     - cpu_scoring_benchmark
-  when: manual
   tags:
     - noctua2
   variables:
@@ -96,7 +94,6 @@ benchmark scite:
     - main
     - staging
     - cpu_scoring_benchmark
-  when: manual
   tags:
     - noctua2
   variables:
@@ -164,7 +161,6 @@ analyze benchmark output:
     - main
     - staging
     - cpu_scoring_benchmark
-  when: manual
   tags:
     - imt-no-sla
   image: "python"
