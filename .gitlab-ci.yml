@@ -5,13 +5,13 @@ stages:
   - precheck
   - build 
   - benchmark
+  - evaluation
 
-build-thesis:
+build thesis:
   stage: precheck
   only:
     - main
     - staging
-    - thesis
   tags:
     - imt-no-sla
   image: "texlive/texlive"
@@ -27,7 +27,7 @@ build-thesis:
     expire_in: 1 month
 
 generate inputs:
-  stage: build
+  stage: precheck
   only:
     - main
     - staging
@@ -46,6 +46,69 @@ generate inputs:
     paths:
       - "performance_benchmark.out"
       - "quality_benchmark.out"
+
+build ffscite:
+  stage: build
+  only:
+    - main
+    - staging
+    - cpu_scoring_benchmark
+  when: manual
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis --time=1-00:00:00 --cpus-per-task=8 --mem=200G"
+  script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "mkdir -p build"
+    - "cd build"
+    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
+    - "VERBOSE=1 make -j8 scite ffSCITE"
+  artifacts:
+    paths:
+      - "build/scite"
+      - "build/src/ffSCITE"
+      - "build/src/ffSCITE.prj/reports"
+
+benchmark ffscite:
+  stage: benchmark
+  only:
+    - main
+    - staging
+    - cpu_scoring_benchmark
+  when: manual
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p fpga --constraint=bittware_520n_20.4.0_hpc --time=03:00:00"
+  script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "./scripts/quality_benchmark/ffscite.sh"
+    - "./scripts/performance_benchmark/ffscite.sh"
+  artifacts:
+    paths:
+      - "quality_benchmark.out/*/ffSCITE"
+      - "performance_benchmark.out/*/ffSCITE"
+
+benchmark scite:
+  stage: benchmark
+  only:
+    - main
+    - staging
+    - cpu_scoring_benchmark
+  when: manual
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -c 64 -t 02:30:00"
+  script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "./scripts/quality_benchmark/scite.sh"
+    - "./scripts/performance_benchmark/scite.sh"
+  artifacts:
+    paths:
+      - "quality_benchmark.out/*/SCITE"
+      - "performance_benchmark.out/*/SCITE"
 
 cpu scoring benchmark noctua2:
   stage: benchmark
@@ -94,3 +157,21 @@ cpu scoring benchmark noctua1:
     paths:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
       - "build/cpu_scoring_benchmark/cpu_scoring_offload.asm"
+
+generate inputs:
+  stage: evaluation
+  only:
+    - main
+    - staging
+    - cpu_scoring_benchmark
+  when: manual
+  tags:
+    - imt-no-sla
+  image: "python"
+  script:
+    - "python3 -m venv .venv"
+    - "source .venv/bin/activate"
+    - "pip install --upgrade pip"
+    - "pip install -r requirements.txt"
+    - "./tool.py tost"
+    - "./tool.py perftable"
