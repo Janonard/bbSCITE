@@ -143,7 +143,7 @@ public:
         this->parameters.get_beta_sd(), n_cells, n_genes, is_mutated_ac,
         is_known_ac, is_mutated, is_known);
 
-    oneapi::dpl::minstd_rand rng;
+    std::minstd_rand rng;
     rng.seed(std::random_device()());
 
     for (uint32_t rep_i = 0; rep_i < this->parameters.get_n_chains(); rep_i++) {

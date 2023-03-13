@@ -21,8 +21,8 @@
 #include <cassert>
 #include <cstdint>
 #include <random>
+#include <sstream>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
-#include <unordered_map>
 #include <vector>
 
 namespace ffSCITE {

@@ -21,7 +21,6 @@
 #include <iostream>
 #include <optional>
 #include <random>
-#include <vector>
 
 namespace ffSCITE {
 /**
