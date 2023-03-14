@@ -56,6 +56,7 @@ build ffscite:
     - cpu_scoring_benchmark
   when: manual
   needs: []
+  allow_failure: false
   tags:
     - noctua2
   variables:
@@ -67,6 +68,7 @@ build ffscite:
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
     - "VERBOSE=1 make -j8 scite ffSCITE"
   artifacts:
+    when: always
     paths:
       - "build/scite"
       - "build/src/ffSCITE"
