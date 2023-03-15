@@ -72,7 +72,7 @@ build ffscite:
     paths:
       - "build/scite"
       - "build/src/ffSCITE"
-      - "build/src/ffSCITE.prj"
+      - "build/src/ffSCITE.prj/reports"
 
 benchmark ffscite:
   stage: benchmark
