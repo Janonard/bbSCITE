@@ -72,7 +72,8 @@ build ffscite:
     paths:
       - "build/scite"
       - "build/src/ffSCITE"
-      - "build/src/ffSCITE.prj"
+      - "build/src/ffSCITE.prj/reports"
+      - "build/src/ffSCITE.prj/quartus_sh_compile.log"
 
 benchmark ffscite:
   stage: benchmark
