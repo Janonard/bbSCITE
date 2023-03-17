@@ -31,7 +31,6 @@ generate inputs:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   needs: []
   tags:
     - imt-no-sla
@@ -53,7 +52,6 @@ build ffscite:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   when: manual
   needs: []
   allow_failure: false
@@ -80,7 +78,6 @@ benchmark ffscite:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   needs: 
     - "build ffscite"
     - "generate inputs"
@@ -102,7 +99,6 @@ benchmark scite:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   needs: 
     - "build ffscite"
     - "generate inputs"
@@ -124,7 +120,6 @@ benchmark cpu scoring on noctua2:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   needs: 
     - "generate inputs"
   tags:
@@ -150,7 +145,6 @@ benchmark cpu scoring on noctua1:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   needs: 
     - "generate inputs"
   tags:
@@ -176,7 +170,6 @@ analyze benchmark output:
   only:
     - main
     - staging
-    - cpu_scoring_benchmark
   needs:
     - "benchmark ffscite"
     - "benchmark scite"
