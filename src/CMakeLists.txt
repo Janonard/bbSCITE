@@ -12,7 +12,7 @@ set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE PROPERTY CXX_STANDARD 20)
 # Specific options
 set_property(TARGET ffSCITE_emu APPEND PROPERTY LINK_OPTIONS)
 target_compile_definitions(ffSCITE_emu PUBLIC EMULATOR)
-set_property(TARGET ffSCITE ffSCITE_report APPEND PROPERTY LINK_OPTIONS -Xshardware -Xsclock=250MHz -Xsseed=a2b6)
+set_property(TARGET ffSCITE ffSCITE_report APPEND PROPERTY LINK_OPTIONS -Xshardware -Xsclock=250MHz -Xsseed=41654)
 set_property(TARGET ffSCITE_report APPEND PROPERTY LINK_OPTIONS -fsycl-link)
 
 if(DEFINED ENV{FPGA_BOARD_NAME})
