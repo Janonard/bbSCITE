@@ -23,15 +23,15 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t max_n_cells = 128;
-constexpr uint32_t max_n_genes = 127;
+constexpr uint32_t max_n_cells = 96;
+constexpr uint32_t max_n_genes = 95;
 constexpr uint32_t pipeline_capacity = 32;
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
 // I often lower the max number of cells and genes for experiments and then
 // forgot to reset them. This should fix it.
-static_assert(max_n_cells == 128 && max_n_genes == 127);
+static_assert(max_n_cells == 96 && max_n_genes == 95);
 #endif
 
 using URNG = std::minstd_rand;
