@@ -77,12 +77,14 @@ TEST_CASE("TreeScorer::logscore_tree", "[TreeScorer]") {
     is_known[5] = 0b01111;
   }
 
+  typename ScorerImpl::Parameters scorer_params(alpha, beta, prior_sd, n_cells,
+                                                n_genes);
   auto is_mutated_ac =
       is_mutated_buffer.get_access<cl::sycl::access::mode::read>();
   auto is_known_ac = is_known_buffer.get_access<cl::sycl::access::mode::read>();
   MutationDataMatrix is_mutated, is_known;
-  ScorerImpl scorer(alpha, beta, prior_sd, n_cells, n_genes, is_mutated_ac,
-                    is_known_ac, is_mutated, is_known);
+  ScorerImpl scorer(scorer_params, is_mutated_ac, is_known_ac, is_mutated,
+                    is_known);
 
   float score = scorer.logscore_tree(tree);
   float beta_score = scorer.logscore_beta(tree.get_beta());

@@ -136,12 +136,14 @@ public:
         is_mutated_buffer.template get_access<access::mode::read>();
     auto is_known_ac =
         is_known_buffer.template get_access<access::mode::read>();
+
+    typename HostTreeScorerImpl::Parameters scorer_params(
+        this->parameters.get_alpha_mean(), this->parameters.get_beta_mean(),
+        this->parameters.get_beta_sd(), n_cells, n_genes);
     MutationDataMatrix is_mutated, is_known;
 
-    HostTreeScorerImpl host_scorer(
-        this->parameters.get_alpha_mean(), this->parameters.get_beta_mean(),
-        this->parameters.get_beta_sd(), n_cells, n_genes, is_mutated_ac,
-        is_known_ac, is_mutated, is_known);
+    HostTreeScorerImpl host_scorer(scorer_params, is_mutated_ac, is_known_ac,
+                                   is_mutated, is_known);
 
     std::minstd_rand rng;
     rng.seed(std::random_device()());
@@ -380,7 +382,7 @@ private:
 
       uint32_t n_cells = this->n_cells;
       uint32_t n_genes = this->n_genes;
-      uint32_t n_nodes = n_genes+1;
+      uint32_t n_nodes = n_genes + 1;
       float alpha_mean = parameters.get_alpha_mean();
       float beta_mean = parameters.get_beta_mean();
       float beta_sd = parameters.get_beta_sd();
@@ -388,10 +390,12 @@ private:
       uint32_t n_steps = parameters.get_chain_length();
       uint32_t n_chains = parameters.get_n_chains();
 
+      typename TreeScorerImpl::Parameters scorer_params(
+          alpha_mean, beta_mean, beta_sd, n_cells, n_genes);
+
       cgh.single_task<class WorkKernel>([=]() {
         [[intel::fpga_register]] MutationDataMatrix is_mutated, is_known;
-        TreeScorerImpl tree_scorer(alpha_mean, beta_mean, beta_sd, n_cells,
-                                   n_genes, is_mutated_ac, is_known_ac,
+        TreeScorerImpl tree_scorer(scorer_params, is_mutated_ac, is_known_ac,
                                    is_mutated, is_known);
 
         [[intel::fpga_memory]] AncestorMatrix best_am, best_dm;
@@ -470,7 +474,7 @@ private:
                   .score = accept_move ? proposed_score : current_score,
               };
             }
-            
+
             OutputPipe::write(out_pipe_value);
           }
 
