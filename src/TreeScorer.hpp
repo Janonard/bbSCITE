@@ -68,31 +68,6 @@ public:
 
   using popcount_t = ac_int<std::bit_width(max_n_genes), false>;
 
-  struct Parameters {
-    Parameters(float alpha_mean, float beta_mean, float beta_sd,
-               uint32_t n_cells, uint32_t n_genes)
-        : log_error_probabilities(), bpriora(0.0), bpriorb(0.0),
-          n_cells(n_cells), n_genes(n_genes) {
-      // mutation not observed, not present
-      log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
-      // mutation observed, not present
-      log_error_probabilities[1][0] = std::log(alpha_mean);
-      // mutation not observed, but present
-      log_error_probabilities[0][1] = std::log(beta_mean);
-      // mutation observed and present
-      log_error_probabilities[1][1] = std::log(1.0 - beta_mean);
-      
-      bpriora =
-          ((1 - beta_mean) * std::pow(beta_mean, 2) / std::pow(beta_sd, 2)) -
-          beta_mean;
-      bpriorb = bpriora * ((1 / beta_mean) - 1);
-    }
-
-    std::array<std::array<float, 2>, 2> log_error_probabilities;
-    float bpriora, bpriorb;
-    uint32_t n_cells, n_genes;
-  };
-
   /**
    * @brief Initialize a new tree scorer
    *
@@ -111,22 +86,37 @@ public:
    * @param is_known A reference to the local data memory block to use for the
    * mutation knowledge bit vectors.
    */
-  TreeScorer(Parameters parameters, MutationDataAccessor is_mutated_ac,
+  TreeScorer(float alpha_mean, float beta_mean, float beta_sd, uint32_t n_cells,
+             uint32_t n_genes, MutationDataAccessor is_mutated_ac,
              MutationDataAccessor is_known_ac, MutationDataMatrix &is_mutated,
              MutationDataMatrix &is_known)
-      : parameters(parameters), is_mutated(is_mutated), is_known(is_known) {
-        for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-          is_mutated[cell_i] = is_mutated_ac[cell_i];
-          is_known[cell_i] = is_known_ac[cell_i];
-        }
-      }
+      : log_error_probabilities(), bpriora(0.0), bpriorb(0.0),
+        is_mutated(is_mutated), is_known(is_known), n_cells(n_cells),
+        n_genes(n_genes) {
+    // mutation not observed, not present
+    log_error_probabilities[0][0] = std::log(1.0 - alpha_mean);
+    // mutation observed, not present
+    log_error_probabilities[1][0] = std::log(alpha_mean);
+    // mutation not observed, but present
+    log_error_probabilities[0][1] = std::log(beta_mean);
+    // mutation observed and present
+    log_error_probabilities[1][1] = std::log(1.0 - beta_mean);
+
+    bpriora =
+        ((1 - beta_mean) * std::pow(beta_mean, 2) / std::pow(beta_sd, 2)) -
+        beta_mean;
+    bpriorb = bpriora * ((1 / beta_mean) - 1);
+
+    for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
+      is_mutated[cell_i] = is_mutated_ac[cell_i];
+      is_known[cell_i] = is_known_ac[cell_i];
+    }
+  }
 
   /**
    * @brief Compute the log-likelihood of the given beta probability.
    */
   float logscore_beta(float beta) const {
-    float bpriora = parameters.bpriora;
-    float bpriorb = parameters.bpriorb;
     return std::log(std::tgamma(bpriora + bpriorb)) +
            (bpriora - 1) * std::log(beta) + (bpriorb - 1) * std::log(1 - beta) -
            std::log(std::tgamma(bpriora)) - std::log(std::tgamma(bpriorb));
@@ -137,11 +127,11 @@ public:
    */
   float logscore_tree(MutationTreeImpl const &tree) {
 #if __SYCL_DEVICE_ONLY__ == 0
-    assert(tree.get_n_nodes() == parameters.n_genes + 1);
+    assert(tree.get_n_nodes() == n_genes + 1);
 #endif
 
-    parameters.log_error_probabilities[0][1] = std::log(tree.get_beta());
-    parameters.log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
+    log_error_probabilities[0][1] = std::log(tree.get_beta());
+    log_error_probabilities[1][1] = std::log(1.0 - tree.get_beta());
 
     /*
      * First, we compute the likelihood for every cell-node combination, in
@@ -158,7 +148,7 @@ public:
 
     float individual_scores[max_n_cells];
 
-    for (uint32_t node_i = 0; node_i < parameters.n_genes + 1; node_i++) {
+    for (uint32_t node_i = 0; node_i < n_genes + 1; node_i++) {
       AncestryVector is_ancestor = tree.get_ancestors(node_i);
 
 #pragma unroll
@@ -177,16 +167,13 @@ public:
                 (i_prior == 1 ? is_ancestor : is_ancestor.bit_complement());
             popcount_t n_occurrences = 0;
 
-#pragma unroll
-            for (uint32_t bit_offset = 0; bit_offset < max_n_genes + 1;
-                 bit_offset += 64) {
-              n_occurrences += std::popcount(
-                  occurrence_vector.template slc<64>(bit_offset).to_uint64());
+            #pragma unroll
+            for (uint32_t bit_offset = 0; bit_offset < max_n_genes+1; bit_offset += 64) {
+              n_occurrences += std::popcount(occurrence_vector.template slc<64>(bit_offset).to_uint64());
             }
 
-            individual_score +=
-                float(n_occurrences) *
-                parameters.log_error_probabilities[i_posterior][i_prior];
+            individual_score += float(n_occurrences) *
+                                log_error_probabilities[i_posterior][i_prior];
           }
         }
 
@@ -194,7 +181,7 @@ public:
         float new_score;
         if (node_i == 0) {
           new_score = individual_score;
-        } else if (node_i < parameters.n_genes + 1) {
+        } else if (node_i < n_genes + 1) {
           new_score = std::max(old_score, individual_score);
         } else {
           new_score = old_score;
@@ -207,7 +194,7 @@ public:
 
 #pragma unroll
     for (uint32_t cell_i = 0; cell_i < max_n_cells; cell_i++) {
-      if (cell_i < parameters.n_cells) {
+      if (cell_i < n_cells) {
         tree_score += individual_scores[cell_i];
       }
     }
@@ -218,8 +205,10 @@ public:
   }
 
 private:
-  Parameters parameters;
+  float log_error_probabilities[2][2];
+  float bpriora, bpriorb;
   MutationDataMatrix &is_mutated;
   MutationDataMatrix &is_known;
+  uint32_t n_cells, n_genes;
 };
 } // namespace ffSCITE

@@ -129,10 +129,9 @@ TEST_CASE("Application::run_simulation()", "[Application]") {
   float best_score = app.get_best_score();
   MutationTreeImpl best_tree(best_am, best_dm, n_genes, best_beta);
 
-  typename HostTreeScorerImpl::Parameters scorer_params(alpha, beta, beta_sd, n_cells, n_genes);
   MutationDataMatrix is_mutated, is_known;
   HostTreeScorerImpl host_scorer(
-      scorer_params,
+      alpha, beta, beta_sd, n_cells, n_genes,
       is_mutated_buffer.get_access<cl::sycl::access::mode::read>(),
       is_known_buffer.get_access<cl::sycl::access::mode::read>(), is_mutated,
       is_known);
