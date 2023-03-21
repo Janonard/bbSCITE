@@ -44,7 +44,7 @@ generate inputs:
   tags:
     - noctua2
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal  -t 00:15:00 -c 1 --mem=8G"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal  -t 00:15:00 -c 16 --mem=8G"
   script:
     - "./scripts/performance_benchmark/generate_inputs.sh"
     - "./scripts/quality_benchmark/generate_inputs.sh"

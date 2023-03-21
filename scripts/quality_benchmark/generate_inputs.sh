@@ -13,7 +13,7 @@ do
     INPUT_DIR="${BASE_DIR}/${input_i}"
     mkdir -p $INPUT_DIR
 
-    $TOOL generate -n $N_GENES -m $N_CELLS -a $ALPHA -b $BETA -e $MISSING -o $INPUT_DIR
+    $TOOL generate -n $N_GENES -m $N_CELLS -a $ALPHA -b $BETA -e $MISSING -o $INPUT_DIR &
 done
 wait
 
