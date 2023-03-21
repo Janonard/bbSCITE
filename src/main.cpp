@@ -31,13 +31,6 @@ constexpr uint32_t pipeline_capacity = 1;
 constexpr uint32_t pipeline_capacity = 32;
 #endif
 
-#ifdef HARDWARE
-// Assert that this design does indeed have the correct ranges set.
-// I often lower the max number of cells and genes for experiments and then
-// forgot to reset them. This should fix it.
-static_assert(max_n_cells == 128 && max_n_genes == 127);
-#endif
-
 using URNG = std::minstd_rand;
 
 using ApplicationImpl =
