@@ -6,6 +6,14 @@ stages:
   - benchmark
   - evaluate
 
+default:
+  before_script:
+    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "python3 -m venv .venv"
+    - "source .venv/bin/activate"
+    - "pip install --upgrade pip"
+    - "pip install -r requirements.txt"
+
 build thesis:
   stage: build
   needs: []
@@ -15,6 +23,7 @@ build thesis:
   tags:
     - imt-no-sla
   image: "texlive/texlive"
+  before_script: []
   script:
     - "cd docs/thesis"
     - "latexmk --pdf thesis.tex"
@@ -33,13 +42,10 @@ generate inputs:
     - staging
   needs: []
   tags:
-    - imt-no-sla
-  image: "python"
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal  -t 00:15:00 -c 1 --mem=8G"
   script:
-    - "python3 -m venv .venv"
-    - "source .venv/bin/activate"
-    - "pip install --upgrade pip"
-    - "pip install -r requirements.txt"
     - "./scripts/performance_benchmark/generate_inputs.sh"
     - "./scripts/quality_benchmark/generate_inputs.sh"
   artifacts:
@@ -58,9 +64,8 @@ build ffscite:
   tags:
     - noctua2
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis --time=1-00:00:00 --cpus-per-task=8 --mem=100G"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis -t 1-00:00:00 -c 8 --mem=100G"
   script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
     - "mkdir -p build"
     - "cd build"
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
@@ -84,9 +89,8 @@ benchmark ffscite:
   tags:
     - noctua2
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p fpga --constraint=bittware_520n_20.4.0_hpc --time=03:00:00"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p fpga --constraint=bittware_520n_20.4.0_hpc -t 03:00:00"
   script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
     - "./scripts/quality_benchmark/ffscite.sh"
     - "./scripts/performance_benchmark/ffscite.sh"
   artifacts:
@@ -107,7 +111,6 @@ benchmark scite:
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -c 64 -t 02:30:00"
   script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
     - "./scripts/quality_benchmark/scite.sh"
     - "./scripts/performance_benchmark/scite.sh"
   artifacts:
@@ -127,8 +130,9 @@ benchmark cpu scoring on noctua2:
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 --exclusive"
     DPCPP_CPU_NUM_CUS: 128
-  script:
+  before_script:
     - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+  script:
     - "mkdir -p build"
     - "cd build"
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
@@ -152,8 +156,9 @@ benchmark cpu scoring on noctua1:
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 --exclusive"
     DPCPP_CPU_NUM_CUS: 40
-  script:
+  before_script:
     - "ml toolchain devel intel/2022b Boost CMake"
+  script:
     - "mkdir -p build"
     - "cd build"
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua1 .."
@@ -174,12 +179,9 @@ analyze benchmark output:
     - "benchmark ffscite"
     - "benchmark scite"
   tags:
-    - imt-no-sla
-  image: "python"
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal  -t 00:15:00 -c 1 --mem=8G"
   script:
-    - "python3 -m venv .venv"
-    - "source .venv/bin/activate"
-    - "pip install --upgrade pip"
-    - "pip install -r requirements.txt"
     - "./tool.py tost"
     - "./tool.py perftable"

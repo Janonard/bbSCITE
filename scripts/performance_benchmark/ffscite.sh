@@ -34,7 +34,7 @@ do
             LOGFILE="${FFSCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
             for i in `seq 4`
             do
-                ./build/ffSCITE \
+                ./build/src/ffSCITE \
                     -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
                     >> $LOGFILE &
 

@@ -14,7 +14,7 @@ source scripts/quality_benchmark/variables.sh
 
 module reset
 module load fpga devel intel/oneapi/22.2.0 bittware/520n/20.4.0_hpc Boost/1.79.0-GCC CMake
-EXEC="./build/ffSCITE"
+EXEC="./build/src/ffSCITE"
 EXEC_ID="ffSCITE"
 
 for input_i in `seq $N_INPUTS`
