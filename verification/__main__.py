@@ -184,10 +184,22 @@ def quickperf(args: argparse.Namespace):
 
 
 def performance_table(args: argparse.Namespace):
-    if args.out_file is None:
-        out_file = sys.stdout
-    else:
-        out_file = open(args.out_file, mode="w")
+    raw_perf_data = load_performance_data(args.basedir)
+
+    perf_data = dict()
+    all_n_cells = set()
+    for binary, data in raw_perf_data.items():
+        throughput = dict()
+        for (n_cells, n_chains, n_steps), (runtime, power) in data.items():
+            if n_cells not in throughput:
+                throughput[n_cells] = []
+                all_n_cells.add(n_cells)
+            throughput[n_cells] += [(n_chains * n_steps) / runtime]
+
+        perf_data[binary] = {n_cells: mean(throughput_list) for n_cells, throughput_list in throughput.items()}
+
+    all_n_cells = list(all_n_cells)
+    all_n_cells.sort()
 
     if args.style == "markdown":
         lead = "| "
@@ -205,54 +217,38 @@ def performance_table(args: argparse.Namespace):
     def connect_fields(fields) -> str:
         return lead + sep.join(fields) + end
 
-    print(connect_fields(["configuration", "ffSCITE: total makespan", "ffSCITE: mean power", "ffSCITE: throughput",
-          "ffSCITE: energy per step", "ffSCITE: model makespan", "ffSCITE: model accuracy", "SCITE: total makespan", "SCITE: throughput", "speedup"]), file=out_file)
+    if args.out_file is None:
+        out_file = sys.stdout
+    else:
+        out_file = open(args.out_file, mode="w")
+    
+    print(connect_fields(["input size", "throughput (SCITE)", "throughput (128 bit)", "throughput (96 bit)", "throughput (64 bit)"]), file=out_file)
     if args.style == "markdown":
-        print("|-|-|-|-|-|-|-|-|-|-|-|", file=out_file)
+        print("|-|-|-|-|-|-|-|-|-|", file=out_file)
     elif args.style == "latex":
         print("\\hline", file=out_file)
 
-    perf_data = load_performance_data(args.basedir)
-    ffscite_perf_data = perf_data["ffSCITE"]
-    scite_perf_data = perf_data["SCITE"]
-
-    all_configurations = list(
-        set(ffscite_perf_data.keys()) | set(scite_perf_data.keys()))
-    all_configurations.sort()
-
-    for configuration in all_configurations:
-        n_cells, n_chains, n_steps = configuration
+    for n_cells in all_n_cells:
         n_genes = n_cells - 1
 
-        general_info = [f"{n_cells}/{n_genes}/{n_chains}/{n_steps}"]
+        row = [f"{n_cells} cells x {n_genes} genes"]
 
-        if configuration in ffscite_perf_data:
-            ffscite_makespan, ffscite_energy = ffscite_perf_data[configuration]
-            ffscite_model_makespan = calc_expected_runtime(
-                n_genes+1, n_chains, n_steps, args.clock_frequency, args.occupancy)
-            ffscite_throughput = (n_chains * n_steps) / ffscite_makespan
-
-            ffscite_line = [f"{ffscite_makespan:.2f} s", f"{ffscite_energy:.2f} W", f"{ffscite_throughput * 1e-3:.2f} ksteps/s",
-                            f"{ffscite_energy / ffscite_throughput * 1e6:.2f} µWs/step", f"{ffscite_model_makespan:.2f} s", f"{ffscite_model_makespan / ffscite_makespan * 100:.2f} " + ("\\%" if args.style == "latex" else "%")]
+        if n_cells in perf_data["SCITE"]:
+            scite_makespan = perf_data["SCITE"][n_cells]
+            row += [f"{scite_makespan * 1e-3:.2f} ksteps/s"]
         else:
-            ffscite_line = ["n/a", "n/a", "n/a", "n/a", "n/a"]
+            scite_makespan = None
+            row += ["n/a"]
 
-        if configuration in scite_perf_data:
-            scite_makespan = scite_perf_data[configuration][0]
-            scite_throughput = (n_chains * n_steps) / scite_makespan
-            scite_line = [f"{scite_makespan:.2f} s",
-                          f"{scite_throughput * 1e-3:.2f} ksteps/s"]
-        else:
-            scite_line = ["n/a", "n/a"]
+        for binary in ["ffSCITE128", "ffSCITE96", "ffSCITE64"]:
+            if n_cells in perf_data[binary]:
+                ffscite_makespan = perf_data[binary][n_cells]
+                ffscite_speedup = ffscite_makespan / scite_makespan
+                row += [f"{ffscite_makespan*1e-3:.2f} ksteps/s ({round(ffscite_speedup)} speedup)"]
+            else:
+                row += ["n/a"]
 
-        if configuration in ffscite_perf_data and configuration in scite_perf_data:
-            speedup = scite_makespan / ffscite_makespan
-            speedup_line = [f"{speedup:.2f}"]
-        else:
-            speedup_line = ["n/a"]
-
-        print(connect_fields(general_info + ffscite_line +
-              scite_line + speedup_line), file=out_file)
+        print(connect_fields(row), file=out_file)
 
 
 def performance_graph(args: argparse.Namespace):
@@ -437,10 +433,6 @@ perftable_parser = subparsers.add_parser(
 
 perftable_parser.add_argument("-d", "--basedir", default=Path(
     "./performance_benchmark.out"), type=Path, help="Base path of the collected data")
-perftable_parser.add_argument("-f", "--clock-frequency", required=True,
-                              type=float, help="Clock frequency of the FPGA design.")
-perftable_parser.add_argument(
-    "-p", "--occupancy", default=1.0, type=float, help="The mean occupancy of the design.")
 perftable_parser.add_argument("-o", "--out-file", default=None,
                               type=Path, help="Path to the output file. Stdout if not given")
 perftable_parser.add_argument("-s", "--style", choices=[

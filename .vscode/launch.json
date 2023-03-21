@@ -11,15 +11,7 @@
             "module": "verification",
             "justMyCode": true,
             "args": [
-                "-a",
-                "0.01",
-                "-b",
-                "0.25",
-                "score",
-                "-t",
-                "true_tree.newick",
-                "-m",
-                "input.csv"
+                "perftable"
             ]
         }
     ]

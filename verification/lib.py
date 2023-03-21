@@ -341,7 +341,7 @@ def load_performance_data(base_dir: Path) -> Dict:
     for cell_dir in base_dir.iterdir():
         n_cells = int(cell_dir.name)
 
-        for program in "ffSCITE", "SCITE":
+        for program in "ffSCITE64", "ffSCITE96", "ffSCITE128", "SCITE":
             program_dir = cell_dir / Path(program)
             if not program_dir.is_dir():
                 continue
