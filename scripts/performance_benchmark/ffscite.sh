@@ -4,36 +4,44 @@ set -e
 
 source scripts/performance_benchmark/variables.sh
 
+VECTORLENS="64 96 128"
+
 for CELLS in $CELLS_SET
 do
     GENES=$(($CELLS-1))
-
     OUT_DIR=$BASE_DIR/$CELLS
-    FFSCITE_DIR=$OUT_DIR/ffSCITE
-    SCITE_DIR=$OUT_DIR/SCITE
-    mkdir -p $FFSCITE_DIR $SCITE_DIR
-
     INPUT=$OUT_DIR/input.csv
 
-    for N_CHAINS in $CHAINS_SET
+    for VECTORLEN in $VECTORLENS
     do
-        for N_STEPS in $STEPS_SET
+        if [ $VECTORLEN -lt $CELLS ]; then
+            continue
+        fi
+
+        FFSCITE_DIR=$OUT_DIR/ffSCITE$VECTORLEN
+        mkdir -p $FFSCITE_DIR
+        FFSCITE=./build/src/ffSCITE${VECTORLEN}
+
+        for N_CHAINS in $CHAINS_SET
         do
-            LOGFILE="${FFSCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
-            for i in `seq $N_RUNS`
+            for N_STEPS in $STEPS_SET
             do
-                ./build/src/ffSCITE \
-                    -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
-                    >> $LOGFILE &
-
-                while [ `jobs -r | wc -l` -gt 0 ]
+                LOGFILE="${FFSCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
+                for i in `seq $N_RUNS`
                 do
-                    newgrp dialout <<< /usr/share/nallatech/520n/bist/utilities/nalla_serial_cardmon/bin/nalla_serial_cardmon \
-                    | grep "Total board power" >> $LOGFILE
-                    echo "At instant $(date -Iseconds)" >> $LOGFILE
-                done
+                    $FFSCITE \
+                        -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
+                        >> $LOGFILE &
 
-                wait # Should not be necessary, but there for contingency.
+                    while [ `jobs -r | wc -l` -gt 0 ]
+                    do
+                        newgrp dialout <<< /usr/share/nallatech/520n/bist/utilities/nalla_serial_cardmon/bin/nalla_serial_cardmon \
+                        | grep "Total board power" >> $LOGFILE
+                        echo "At instant $(date -Iseconds)" >> $LOGFILE
+                    done
+
+                    wait # Should not be necessary, but there for contingency.
+                done
             done
         done
     done

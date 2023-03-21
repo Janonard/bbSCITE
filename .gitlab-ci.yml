@@ -35,7 +35,7 @@ build thesis:
       - "docs/proposal/proposal.pdf"
     expire_in: 1 month
 
-generate inputs:
+generate inputs & build scite:
   stage: build
   only:
     - main
@@ -48,12 +48,17 @@ generate inputs:
   script:
     - "./scripts/performance_benchmark/generate_inputs.sh"
     - "./scripts/quality_benchmark/generate_inputs.sh"
+    - "mkdir -p build"
+    - "cd build"
+    - "cmake -DCMAKE_BUILD_TYPE=Release .."
+    - "make -j16 scite"
   artifacts:
     paths:
       - "performance_benchmark.out"
       - "quality_benchmark.out"
+      - "build/scite"
 
-build ffscite:
+build ffscite64:
   stage: build
   only:
     - main
@@ -69,14 +74,61 @@ build ffscite:
     - "mkdir -p build"
     - "cd build"
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
-    - "VERBOSE=1 make -j8 scite ffSCITE"
+    - "VERBOSE=1 make ffSCITE64"
   artifacts:
     when: always
     paths:
-      - "build/scite"
-      - "build/src/ffSCITE"
-      - "build/src/ffSCITE.prj/reports"
-      - "build/src/ffSCITE.prj/quartus_sh_compile.log"
+      - "build/src/ffSCITE64"
+      - "build/src/ffSCITE64.prj/reports"
+      - "build/src/ffSCITE64.prj/quartus_sh_compile.log"
+
+build ffscite96:
+  stage: build
+  only:
+    - main
+    - staging
+  when: manual
+  needs: []
+  allow_failure: false
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis -t 1-00:00:00 -c 8 --mem=100G"
+  script:
+    - "mkdir -p build"
+    - "cd build"
+    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
+    - "VERBOSE=1 make ffSCITE96"
+  artifacts:
+    when: always
+    paths:
+      - "build/src/ffSCITE96"
+      - "build/src/ffSCITE96.prj/reports"
+      - "build/src/ffSCITE96.prj/quartus_sh_compile.log"
+
+build ffscite128:
+  stage: build
+  only:
+    - main
+    - staging
+  when: manual
+  needs: []
+  allow_failure: false
+  tags:
+    - noctua2
+  variables:
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis -t 1-00:00:00 -c 8 --mem=100G"
+  script:
+    - "mkdir -p build"
+    - "cd build"
+    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
+    - "VERBOSE=1 make ffSCITE128"
+  artifacts:
+    when: always
+    paths:
+      - "build/src/ffSCITE128"
+      - "build/src/ffSCITE128.prj/reports"
+      - "build/src/ffSCITE128.prj/quartus_sh_compile.log"
 
 benchmark ffscite:
   stage: benchmark
@@ -84,8 +136,10 @@ benchmark ffscite:
     - main
     - staging
   needs: 
-    - "build ffscite"
-    - "generate inputs"
+    - "build ffscite64"
+    - "build ffscite96"
+    - "build ffscite128"
+    - "generate inputs & build scite"
   tags:
     - noctua2
   variables:
@@ -95,7 +149,9 @@ benchmark ffscite:
     - "./scripts/performance_benchmark/ffscite.sh"
   artifacts:
     paths:
-      - "quality_benchmark.out/*/ffSCITE"
+      - "quality_benchmark.out/*/ffSCITE64"
+      - "quality_benchmark.out/*/ffSCITE96"
+      - "quality_benchmark.out/*/ffSCITE128"
       - "performance_benchmark.out/*/ffSCITE"
 
 benchmark scite:
@@ -104,8 +160,7 @@ benchmark scite:
     - main
     - staging
   needs: 
-    - "build ffscite"
-    - "generate inputs"
+    - "generate inputs & build scite"
   tags:
     - noctua2
   variables:
@@ -124,7 +179,7 @@ benchmark cpu scoring on noctua2:
     - main
     - staging
   needs: 
-    - "generate inputs"
+    - "generate inputs & build scite"
   tags:
     - noctua2
   variables:
@@ -150,7 +205,7 @@ benchmark cpu scoring on noctua1:
     - main
     - staging
   needs: 
-    - "generate inputs"
+    - "generate inputs & build scite"
   tags:
     - noctua1
   variables:
@@ -169,19 +224,3 @@ benchmark cpu scoring on noctua1:
     paths:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
       - "build/cpu_scoring_benchmark/cpu_scoring_offload.asm"
-
-analyze benchmark output:
-  stage: evaluate
-  only:
-    - main
-    - staging
-  needs:
-    - "benchmark ffscite"
-    - "benchmark scite"
-  tags:
-    - noctua2
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal  -t 00:15:00 -c 1 --mem=8G"
-  script:
-    - "./tool.py tost"
-    - "./tool.py perftable"

@@ -1,20 +1,33 @@
 set(FFSCITE_SOURCES main.cpp)
 
-add_executable(ffSCITE_emu ${FFSCITE_SOURCES})
-add_executable(ffSCITE_report ${FFSCITE_SOURCES})
-add_executable(ffSCITE ${FFSCITE_SOURCES})
+foreach(vectorlen 64 96 128)
+  set(base_target ffSCITE${vectorlen})
+  set(emu_target ffSCITE${vectorlen}_emu)
+  set(report_target ffSCITE${vectorlen}_report)
+  set(all_targets ${base_target} ${emu_target} ${report_target})
+  set(hw_targets ${base_target} ${report_target})
 
-# Common options
-set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE APPEND PROPERTY COMPILE_OPTIONS -qactypes -fintelfpga)
-set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE APPEND PROPERTY LINK_OPTIONS -fintelfpga -Xsv)
-set_property(TARGET ffSCITE_emu ffSCITE_report ffSCITE PROPERTY CXX_STANDARD 20)
+  foreach(target ${all_targets})
+    add_executable(${target} ${FFSCITE_SOURCES})
+  endforeach()
 
-# Specific options
-set_property(TARGET ffSCITE_emu APPEND PROPERTY LINK_OPTIONS)
-target_compile_definitions(ffSCITE_emu PUBLIC EMULATOR)
-set_property(TARGET ffSCITE ffSCITE_report APPEND PROPERTY LINK_OPTIONS -Xshardware -Xsclock=200MHz)
-set_property(TARGET ffSCITE_report APPEND PROPERTY LINK_OPTIONS -fsycl-link)
+  # Common options
+  set_property(TARGET ${all_targets} APPEND PROPERTY COMPILE_OPTIONS -qactypes -fintelfpga)
+  set_property(TARGET ${all_targets} APPEND PROPERTY COMPILE_DEFINITIONS FFSCITE_VECTORLEN=${vectorlen})
+  set_property(TARGET ${all_targets} APPEND PROPERTY LINK_OPTIONS -fintelfpga -Xsv)
+  set_property(TARGET ${all_targets} PROPERTY CXX_STANDARD 20)
 
-if(DEFINED ENV{FPGA_BOARD_NAME})
-  set_property(TARGET ffSCITE_report ffSCITE APPEND PROPERTY LINK_OPTIONS -Xsboard=$ENV{FPGA_BOARD_NAME} -Xsboard-package=$ENV{AOCL_BOARD_PACKAGE_ROOT})
-endif()
+  # Specific options
+  target_compile_definitions(${emu_target} PUBLIC EMULATOR)
+  target_compile_definitions(${base_target} PUBLIC HARDWARE)
+  set_property(TARGET ${hw_targets} APPEND PROPERTY LINK_OPTIONS -Xshardware)
+  set_property(TARGET ${report_target} APPEND PROPERTY LINK_OPTIONS -fsycl-link)
+
+  if(DEFINED ENV{FPGA_BOARD_NAME})
+    set_property(TARGET ${hw_targets} APPEND PROPERTY LINK_OPTIONS -Xsboard=$ENV{FPGA_BOARD_NAME} -Xsboard-package=$ENV{AOCL_BOARD_PACKAGE_ROOT})
+  endif()
+
+  if(${vectorlen} EQUAL 128)
+    set_property(TARGET ${hw_targets} APPEND PROPERTY LINK_OPTIONS -Xsclock=200MHz)
+  endif()
+endforeach()

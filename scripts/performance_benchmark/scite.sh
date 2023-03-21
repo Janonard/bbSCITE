@@ -9,9 +9,8 @@ do
     GENES=$(($CELLS-1))
 
     OUT_DIR=$BASE_DIR/$CELLS
-    FFSCITE_DIR=$OUT_DIR/ffSCITE
     SCITE_DIR=$OUT_DIR/SCITE
-    mkdir -p $FFSCITE_DIR $SCITE_DIR
+    mkdir -p $SCITE_DIR
 
     INPUT=$OUT_DIR/input.csv
 

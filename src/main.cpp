@@ -23,9 +23,13 @@
 
 using namespace ffSCITE;
 
-constexpr uint32_t max_n_cells = 128;
-constexpr uint32_t max_n_genes = 127;
+constexpr uint32_t max_n_cells = FFSCITE_VECTORLEN;
+constexpr uint32_t max_n_genes = FFSCITE_VECTORLEN - 1;
+#ifdef EMULATOR
 constexpr uint32_t pipeline_capacity = 1;
+#else
+constexpr uint32_t pipeline_capacity = 32;
+#endif
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
