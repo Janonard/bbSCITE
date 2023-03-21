@@ -2,12 +2,12 @@
 
 set -e
 
-BASE_DIR=performance_benchmark.out
-ALPHA=6e-5
-BETA=0.42
-MISSING=0.25
+source scripts/performance_benchmark/variables.sh
 
-for CELLS in 32 64 96
+rm -rf $BASE_DIR
+mkdir -p $BASE_DIR
+
+for CELLS in $CELLS_SET
 do
     GENES=$(($CELLS-1))
 

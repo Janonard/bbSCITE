@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-#SBATCH -A hpc-lco-kenter
-#SBATCH -p normal
-#SBATCH --cpus-per-task=64
-#SBATCH --time=00:30:00
-#SBATCH --mail-type=All
-#SBATCH --mail-user=joo@mail.upb.de
 
 set -e 
 
 source scripts/quality_benchmark/variables.sh
 
-module reset
-module load fpga devel intel/oneapi/22.2.0 bittware/520n/20.4.0_hpc Boost/1.79.0-GCC CMake
 EXEC="./build/scite"
 EXEC_ID="SCITE"
 

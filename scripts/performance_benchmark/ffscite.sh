@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-#SBATCH -A hpc-lco-kenter
-#SBATCH -p fpga
-#SBATCH --constraint=bittware_520n_20.4.0_hpc
-#SBATCH --time=02:00:00
-#SBATCH --mail-type=All
-#SBATCH --mail-user=joo@mail.upb.de
 
 set -e 
 
-module reset
-ml fpga devel intel/oneapi bittware/520n Boost CMake
+source scripts/performance_benchmark/variables.sh
 
-BASE_DIR=performance_benchmark.out
-ALPHA=6e-5
-BETA=0.42
-MISSING=0.25
-
-for CELLS in 32 64 96
+for CELLS in $CELLS_SET
 do
     GENES=$(($CELLS-1))
 
@@ -27,12 +15,12 @@ do
 
     INPUT=$OUT_DIR/input.csv
 
-    for N_CHAINS in 24 48
+    for N_CHAINS in $CHAINS_SET
     do
-        for N_STEPS in `seq 500000 500000 2000000`
+        for N_STEPS in $STEPS_SET
         do
             LOGFILE="${FFSCITE_DIR}/${N_CHAINS}_${N_STEPS}.log"
-            for i in `seq 4`
+            for i in `seq $N_RUNS`
             do
                 ./build/src/ffSCITE \
                     -i $INPUT -r $N_CHAINS -l $N_STEPS -fd $ALPHA -ad $BETA -max_treelist_size 1 \
