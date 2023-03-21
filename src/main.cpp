@@ -25,7 +25,7 @@ using namespace ffSCITE;
 
 constexpr uint32_t max_n_cells = 96;
 constexpr uint32_t max_n_genes = 95;
-constexpr uint32_t pipeline_capacity = 32;
+constexpr uint32_t pipeline_capacity = 1;
 
 #ifdef HARDWARE
 // Assert that this design does indeed have the correct ranges set.
@@ -196,5 +196,23 @@ int main(int argc, char **argv) {
 
     std::ofstream output_file(output_path.str());
     output_file << best_beta << std::endl;
+  }
+
+  // Output the ancestor and descendant matrix of the tree
+  {
+    std::stringstream am_path, dm_path;
+    am_path << parameters.get_output_path_base() << "_ml0_am.txt";
+    dm_path << parameters.get_output_path_base() << "_ml0_dm.txt";
+
+    std::ofstream am_file(am_path.str());
+    std::ofstream dm_file(dm_path.str());
+    for (uint32_t i = 0; i < n_genes + 1; i++) {
+      for (uint32_t j = 0; j < n_genes + 1; j++) {
+        am_file << best_am[i][j];
+        dm_file << best_dm[i][j];
+      }
+      am_file << "\n";
+      dm_file << "\n";
+    }
   }
 }
