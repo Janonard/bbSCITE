@@ -271,7 +271,7 @@ class LineType(enum.IntEnum):
         elif (m := kernel_finished_re.match(line)) is not None:
             return cls.KERNEL_FINISHED, timedelta(milliseconds=float(m[1]))
         else:
-            raise Exception(f"Illegal log line {line}!")
+            return None
 
 
 def analyze_log(log: List[Tuple[LineType, Any]]):
@@ -300,8 +300,15 @@ def analyze_log(log: List[Tuple[LineType, Any]]):
             makespan = param / timedelta(seconds=1)
             makespans += [makespan]
 
-            assert len(power_readings) == len(
-                instants), "Illegal log file: Unequal number of power readings and instants!"
+            # If the kernel finished message has occurred between a power reading and an instant, move the superfluous line to the next kernel instance.
+            next_instants = []
+            next_power_readings = []
+            if len(power_readings) > len(instants):
+                next_power_readings = power_readings[len(instants):]
+                power_readings = power_readings[:len(instants)]
+            elif len(instants) > len(power_readings):
+                next_instants = instants[len(power_readings):]
+                instants = instants[:len(power_readings)]
 
             if len(power_readings) > 1:
                 energy = 0.0
@@ -319,12 +326,13 @@ def analyze_log(log: List[Tuple[LineType, Any]]):
             else:
                 mean_power = None
 
-            mean_powers += [mean_power]
+            if mean_power is not None:
+                mean_powers += [mean_power]
 
-            power_readings = list()
-            instants = list()
+            power_readings = next_power_readings
+            instants = next_instants
 
-    return mean(makespans), mean(mean_powers)
+    return mean(makespans), (mean(mean_powers) if len(mean_powers) > 0 else None)
 
 
 def load_performance_data(base_dir: Path) -> Dict:
@@ -344,8 +352,9 @@ def load_performance_data(base_dir: Path) -> Dict:
             for log_file in program_dir.glob("*.log"):
                 n_chains, n_steps = map(
                     lambda x: int(x), log_file.stem.split("_"))
-                lines = [LineType.parse_line(line) for line in open(
-                    log_file, mode="r").readlines()]
+                lines = (LineType.parse_line(line) for line in open(
+                    log_file, mode="r").readlines())
+                lines = list(filter(lambda x: x is not None, lines))
                 data[program][(n_cells, n_chains, n_steps)] = analyze_log(
                     lines)
 

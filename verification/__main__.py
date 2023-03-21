@@ -189,8 +189,28 @@ def performance_table(args: argparse.Namespace):
     else:
         out_file = open(args.out_file, mode="w")
 
-    print("| no. of cells | no. of genes | no. of chains | no. of steps per chain | ffSCITE: total makespan | ffSCITE: mean power | ffSCITE: throughput | ffSCITE: energy per step | ffSCITE: model makespan | ffSCITE: model accuracy | SCITE: total makespan | SCITE: throughput | speedup |", file=out_file)
-    print("|-|-|-|-|-|-|-|-|-|-|-|", file=out_file)
+    if args.style == "markdown":
+        lead = "| "
+        sep = " | "
+        end = " |"
+    elif args.style == "latex":
+        lead = ""
+        sep = " & "
+        end = " \\\\"
+    elif args.style == "csv":
+        lead = ""
+        sep = ","
+        end = ""
+
+    def connect_fields(fields) -> str:
+        return lead + sep.join(fields) + end
+
+    print(connect_fields(["configuration", "ffSCITE: total makespan", "ffSCITE: mean power", "ffSCITE: throughput",
+          "ffSCITE: energy per step", "ffSCITE: model makespan", "ffSCITE: model accuracy", "SCITE: total makespan", "SCITE: throughput", "speedup"]), file=out_file)
+    if args.style == "markdown":
+        print("|-|-|-|-|-|-|-|-|-|-|-|", file=out_file)
+    elif args.style == "latex":
+        print("\\hline", file=out_file)
 
     perf_data = load_performance_data(args.basedir)
     ffscite_perf_data = perf_data["ffSCITE"]
@@ -204,7 +224,7 @@ def performance_table(args: argparse.Namespace):
         n_cells, n_chains, n_steps = configuration
         n_genes = n_cells - 1
 
-        general_info = f"{n_cells} | {n_genes} | {n_chains} | {n_steps}"
+        general_info = [f"{n_cells}/{n_genes}/{n_chains}/{n_steps}"]
 
         if configuration in ffscite_perf_data:
             ffscite_makespan, ffscite_energy = ffscite_perf_data[configuration]
@@ -212,29 +232,27 @@ def performance_table(args: argparse.Namespace):
                 n_genes+1, n_chains, n_steps, args.clock_frequency, args.occupancy)
             ffscite_throughput = (n_chains * n_steps) / ffscite_makespan
 
-            ffscite_line = f"{ffscite_makespan:.2f} s | " + \
-                f"{ffscite_energy:.2f} W | " + \
-                f"{ffscite_throughput * 1e-3:.2f} ksteps/s | " + \
-                f"{ffscite_energy / ffscite_throughput * 1e6:.2f} µWs/step | " + \
-                f"{ffscite_model_makespan:.2f} s | " + \
-                f"{ffscite_model_makespan / ffscite_makespan * 100:.2f} %"
+            ffscite_line = [f"{ffscite_makespan:.2f} s", f"{ffscite_energy:.2f} W", f"{ffscite_throughput * 1e-3:.2f} ksteps/s",
+                            f"{ffscite_energy / ffscite_throughput * 1e6:.2f} µWs/step", f"{ffscite_model_makespan:.2f} s", f"{ffscite_model_makespan / ffscite_makespan * 100:.2f} " + ("\\%" if args.style == "latex" else "%")]
         else:
-            ffscite_line = "n/a | n/a | n/a | n/a | n/a"
+            ffscite_line = ["n/a", "n/a", "n/a", "n/a", "n/a"]
 
         if configuration in scite_perf_data:
             scite_makespan = scite_perf_data[configuration][0]
-            scite_line = f"{scite_makespan:.2f} s | {(n_chains * n_steps) / scite_makespan:.2f} ksteps/s"
+            scite_throughput = (n_chains * n_steps) / scite_makespan
+            scite_line = [f"{scite_makespan:.2f} s",
+                          f"{scite_throughput * 1e-3:.2f} ksteps/s"]
         else:
-            scite_line = f"n/a | n/a"
+            scite_line = ["n/a", "n/a"]
 
         if configuration in ffscite_perf_data and configuration in scite_perf_data:
-            speedup = ffscite_makespan / scite_makespan
-            speedup_line = f"{speedup:2.f}"
+            speedup = scite_makespan / ffscite_makespan
+            speedup_line = [f"{speedup:.2f}"]
         else:
-            speedup_line = "n/a"
+            speedup_line = ["n/a"]
 
-        print(
-            f"| {general_info} | {ffscite_line} | {scite_line} | {speedup_line} |", file=out_file)
+        print(connect_fields(general_info + ffscite_line +
+              scite_line + speedup_line), file=out_file)
 
 
 def performance_graph(args: argparse.Namespace):
@@ -425,6 +443,8 @@ perftable_parser.add_argument(
     "-p", "--occupancy", default=1.0, type=float, help="The mean occupancy of the design.")
 perftable_parser.add_argument("-o", "--out-file", default=None,
                               type=Path, help="Path to the output file. Stdout if not given")
+perftable_parser.add_argument("-s", "--style", choices=[
+                              "latex", "markdown", "csv"], default="markdown", help="Style of the output.")
 
 perfgraph_parser = subparsers.add_parser(
     "perfgraph", help="Analyze the outputs of the performance benchmark and plot a graph")
