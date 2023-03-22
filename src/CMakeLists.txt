@@ -26,8 +26,4 @@ foreach(vectorlen 64 96 128)
   if(DEFINED ENV{FPGA_BOARD_NAME})
     set_property(TARGET ${hw_targets} APPEND PROPERTY LINK_OPTIONS -Xsboard=$ENV{FPGA_BOARD_NAME} -Xsboard-package=$ENV{AOCL_BOARD_PACKAGE_ROOT})
   endif()
-
-  if(${vectorlen} EQUAL 128)
-    set_property(TARGET ${hw_targets} APPEND PROPERTY LINK_OPTIONS -Xsclock=175MHz)
-  endif()
 endforeach()
