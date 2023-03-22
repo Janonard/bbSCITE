@@ -161,6 +161,8 @@ public:
       // Compute the new ancestry vector.
       AncestryVector x_descendant = old_tree.get_descendants(x);
       AncestryVector x_ancestor = old_tree.get_ancestors(x);
+      ancestor[x] = x_descendant;
+      descendant[x] = x_ancestor;
 
 #pragma unroll
       for (uint32_t y = 0; y < max_n_nodes; y++) {
