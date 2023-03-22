@@ -164,7 +164,7 @@ benchmark scite:
   tags:
     - noctua2
   variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -c 64 -t 02:30:00"
+    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -c 64 -t 04:00:00"
   script:
     - "./scripts/quality_benchmark/scite.sh"
     - "./scripts/performance_benchmark/scite.sh"
