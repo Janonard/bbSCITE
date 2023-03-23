@@ -161,12 +161,12 @@ public:
       // Compute the new ancestry vector.
       AncestryVector x_descendant = old_tree.get_descendants(x);
       AncestryVector x_ancestor = old_tree.get_ancestors(x);
-      AncestryVector new_x_descendant = 0;
-      AncestryVector new_x_ancestor = 0;
+      ancestor[x] = x_descendant;
+      descendant[x] = x_ancestor;
 
 #pragma unroll
       for (uint32_t y = 0; y < max_n_nodes; y++) {
-        uint8_t x_to_y, y_to_x;
+        bool x_to_y, y_to_x;
 
         switch (parameters.move_type) {
         case MoveType::SwapNodes:
@@ -300,11 +300,9 @@ public:
           break;
         }
 
-        new_x_descendant |= (x_to_y << y);
-        new_x_ancestor |= (y_to_x << y);
+        ancestor[x][y] = x_to_y;
+        descendant[x][y] = y_to_x;
       }
-      ancestor[x] = new_x_descendant;
-      descendant[x] = new_x_ancestor;
     }
   }
 
