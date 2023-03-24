@@ -35,7 +35,7 @@ build thesis:
       - "docs/proposal/proposal.pdf"
     expire_in: 1 month
 
-generate inputs & build scite:
+generate inputs:
   stage: build
   only:
     - main
@@ -48,15 +48,13 @@ generate inputs & build scite:
   script:
     - "./scripts/performance_benchmark/generate_inputs.sh"
     - "./scripts/quality_benchmark/generate_inputs.sh"
-    - "mkdir -p build"
-    - "cd build"
-    - "cmake -DCMAKE_BUILD_TYPE=Release .."
-    - "make -j16 scite"
+    - "mkdir -p cpu_benchmark.out"
+    - "./tool.py generate -o cpu_benchmark.out -n 127 -m 128 -a 6e-5 -b 0.42 -e 0.25"
   artifacts:
     paths:
       - "performance_benchmark.out"
       - "quality_benchmark.out"
-      - "build/scite"
+      - "cpu_benchmark.out"
 
 build ffscite64:
   stage: build
@@ -102,28 +100,6 @@ build ffscite96:
       - "build/src/ffSCITE96.prj/reports"
       - "build/src/ffSCITE96.prj/quartus_sh_compile.log"
 
-build ffscite128:
-  stage: build
-  only:
-    - main
-    - staging
-  needs: []
-  tags:
-    - noctua2
-  variables:
-    SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -q fpgasynthesis -t 1-00:00:00 -c 8 --mem=100G"
-  script:
-    - "mkdir -p build"
-    - "cd build"
-    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
-    - "VERBOSE=1 make ffSCITE128"
-  artifacts:
-    when: always
-    paths:
-      - "build/src/ffSCITE128"
-      - "build/src/ffSCITE128.prj/reports"
-      - "build/src/ffSCITE128.prj/quartus_sh_compile.log"
-
 benchmark ffscite:
   stage: benchmark
   only:
@@ -132,8 +108,7 @@ benchmark ffscite:
   needs: 
     - "build ffscite64"
     - "build ffscite96"
-    - "build ffscite128"
-    - "generate inputs & build scite"
+    - "generate inputs"
   tags:
     - noctua2
   variables:
@@ -145,7 +120,6 @@ benchmark ffscite:
     paths:
       - "quality_benchmark.out/*/ffSCITE64"
       - "quality_benchmark.out/*/ffSCITE96"
-      - "quality_benchmark.out/*/ffSCITE128"
       - "performance_benchmark.out/*/ffSCITE"
 
 benchmark scite:
@@ -154,12 +128,17 @@ benchmark scite:
     - main
     - staging
   needs: 
-    - "generate inputs & build scite"
+    - "generate inputs"
   tags:
     - noctua2
   variables:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -c 64 -t 08:00:00"
   script:
+    - "mkdir -p build"
+    - "cd build"
+    - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
+    - "make -j64 scite"
+    - "cd .."
     - "./scripts/quality_benchmark/scite.sh"
     - "./scripts/performance_benchmark/scite.sh"
   artifacts:
@@ -173,7 +152,7 @@ benchmark cpu scoring on noctua2:
     - main
     - staging
   needs: 
-    - "generate inputs & build scite"
+    - "generate inputs"
   tags:
     - noctua2
   variables:
@@ -187,7 +166,7 @@ benchmark cpu scoring on noctua2:
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
     - "VERBOSE=1 make cpu_scoring_benchmark cpu_scoring_offload"
     - "perf stat -e instructions,ex_ret_mmx_fp_instr.sse_instr,L1-dcache-load-misses,L1-dcache-loads
-        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 128 -l 10000000"
+        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../cpu_benchmark.out/input.csv -r 128 -l 10000000"
   artifacts:
     paths:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"
@@ -199,7 +178,7 @@ benchmark cpu scoring on noctua1:
     - main
     - staging
   needs: 
-    - "generate inputs & build scite"
+    - "generate inputs"
   tags:
     - noctua1
   variables:
@@ -213,7 +192,7 @@ benchmark cpu scoring on noctua1:
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua1 .."
     - "VERBOSE=1 make cpu_scoring_benchmark cpu_scoring_offload"
     - "perf stat -e instructions,L1-dcache-load-misses,L1-dcache-loads
-        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../performance_benchmark.out/128/input.csv -r 40 -l 2500000"
+        ./cpu_scoring_benchmark/cpu_scoring_benchmark -i ../cpu_benchmark.out/input.csv -r 40 -l 2500000"
   artifacts:
     paths:
       - "build/cpu_scoring_benchmark/cpu_scoring_benchmark"

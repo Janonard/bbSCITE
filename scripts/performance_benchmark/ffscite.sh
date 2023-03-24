@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 
-set -e 
-
 source scripts/performance_benchmark/variables.sh
 
-VECTORLENS="64 96 128"
-
-for CELLS in $CELLS_SET
+for VECTORLEN in 64 96
 do
-    GENES=$(($CELLS-1))
-    OUT_DIR=$BASE_DIR/$CELLS
-    INPUT=$OUT_DIR/input.csv
-
-    for VECTORLEN in $VECTORLENS
+    for CELLS in $CELLS_SET
     do
+        GENES=$(($CELLS-1))
+        OUT_DIR=$BASE_DIR/$CELLS
+        INPUT=$OUT_DIR/input.csv
+
         if [ $VECTORLEN -lt $CELLS ]; then
             continue
         fi
+
+        echo "$VECTORLEN $CELLS"
 
         FFSCITE_DIR=$OUT_DIR/ffSCITE$VECTORLEN
         mkdir -p $FFSCITE_DIR
