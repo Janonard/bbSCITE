@@ -28,7 +28,7 @@ constexpr uint32_t max_n_genes = FFSCITE_VECTORLEN - 1;
 #ifdef EMULATOR
 constexpr uint32_t pipeline_capacity = 1;
 #else
-constexpr uint32_t pipeline_capacity = 24;
+constexpr uint32_t pipeline_capacity = 16;
 #endif
 
 using URNG = std::minstd_rand;
