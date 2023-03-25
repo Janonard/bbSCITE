@@ -222,7 +222,7 @@ def performance_table(args: argparse.Namespace):
     else:
         out_file = open(args.out_file, mode="w")
     
-    print(connect_fields(["input size", "throughput (SCITE)", "throughput (128 bit)", "throughput (96 bit)", "throughput (64 bit)"]), file=out_file)
+    print(connect_fields(["input size", "throughput (SCITE)", "throughput (96 bit)", "throughput (64 bit)"]), file=out_file)
     if args.style == "markdown":
         print("|-|-|-|-|-|-|-|-|-|", file=out_file)
     elif args.style == "latex":
@@ -240,11 +240,11 @@ def performance_table(args: argparse.Namespace):
             scite_makespan = None
             row += ["n/a"]
 
-        for binary in ["ffSCITE128", "ffSCITE96", "ffSCITE64"]:
+        for binary in ["ffSCITE96", "ffSCITE64"]:
             if n_cells in perf_data[binary]:
                 ffscite_makespan = perf_data[binary][n_cells]
                 ffscite_speedup = ffscite_makespan / scite_makespan
-                row += [f"{ffscite_makespan*1e-3:.2f} ksteps/s ({round(ffscite_speedup)} speedup)"]
+                row += [f"{ffscite_makespan*1e-3:.2f} ksteps/s (x{round(ffscite_speedup)} speedup)"]
             else:
                 row += ["n/a"]
 
