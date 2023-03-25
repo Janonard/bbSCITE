@@ -118,9 +118,9 @@ benchmark ffscite:
     - "./scripts/performance_benchmark/ffscite.sh"
   artifacts:
     paths:
-      - "quality_benchmark.out/*/ffSCITE64"
-      - "quality_benchmark.out/*/ffSCITE96"
-      - "performance_benchmark.out/*/ffSCITE"
+      - "quality_benchmark.out/*/ffSCITE"
+      - "performance_benchmark.out/*/ffSCITE64"
+      - "performance_benchmark.out/*/ffSCITE96"
 
 benchmark scite:
   stage: benchmark
