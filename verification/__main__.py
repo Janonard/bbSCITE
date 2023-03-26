@@ -201,32 +201,7 @@ def performance_table(args: argparse.Namespace):
     all_n_cells = list(all_n_cells)
     all_n_cells.sort()
 
-    if args.style == "markdown":
-        lead = "| "
-        sep = " | "
-        end = " |"
-    elif args.style == "latex":
-        lead = ""
-        sep = " & "
-        end = " \\\\"
-    elif args.style == "csv":
-        lead = ""
-        sep = ","
-        end = ""
-
-    def connect_fields(fields) -> str:
-        return lead + sep.join(fields) + end
-
-    if args.out_file is None:
-        out_file = sys.stdout
-    else:
-        out_file = open(args.out_file, mode="w")
-    
-    print(connect_fields(["input size", "throughput (SCITE)", "throughput (96 bit)", "throughput (64 bit)"]), file=out_file)
-    if args.style == "markdown":
-        print("|-|-|-|-|-|-|-|-|-|", file=out_file)
-    elif args.style == "latex":
-        print("\\hline", file=out_file)
+    table = [["input size", "throughput (SCITE)", "throughput (96 bit)", "throughput (64 bit)"]]
 
     for n_cells in all_n_cells:
         n_genes = n_cells - 1
@@ -248,7 +223,9 @@ def performance_table(args: argparse.Namespace):
             else:
                 row += ["n/a"]
 
-        print(connect_fields(row), file=out_file)
+        table += [row]
+
+    print_table(table, args.style, args.out_file)
 
 
 def performance_graph(args: argparse.Namespace):

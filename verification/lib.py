@@ -9,6 +9,7 @@ import numpy as np
 import lark
 import enum
 from datetime import timedelta, datetime
+import sys
 
 
 class MutationTree(nx.DiGraph):
@@ -363,3 +364,33 @@ def load_performance_data(base_dir: Path) -> Dict:
 
 def calc_expected_runtime(n_words: int, n_chains: int, n_steps: int, f: float = 252.5e6, occupancy: float = 1.0) -> float:
     return (n_words * n_chains * n_steps) / occupancy / f
+
+def print_table(table: List[List[str]], style: str, out_path = None):
+    if out_path is None:
+        out_file = sys.stdout
+    else:
+        out_file = open(out_path, mode="w")
+
+    if style == "markdown":
+        lead = "| "
+        sep = " | "
+        end = " |"
+    elif style == "latex":
+        lead = ""
+        sep = " & "
+        end = " \\\\"
+    elif style == "csv":
+        lead = ""
+        sep = ","
+        end = ""
+
+    if style == "latex":
+        table[0] = ["\\textbf{" + text + "}" for text in table[0]]
+
+    for i, line in enumerate(table):
+        print(lead + sep.join(line) + end, file=out_file)
+        if i == 0:
+            if style == "markdown":
+                print("|" + "|".join(["-"] * len(line)) + "|", file=out_file)
+            elif style == "latex":
+                print("\\hline", file=out_file)
