@@ -19,4 +19,4 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
     && apt-get -y upgrade \
-    && apt-get -y install --no-install-recommends cmake libboost-dev bash-completion python-is-python3 graphviz
+    && apt-get -y install --no-install-recommends cmake libboost-dev bash-completion python-is-python3 graphviz python3-venv
