@@ -319,7 +319,7 @@ def analyze_log(log: List[Tuple[LineType, Any]]):
                     next_power, next_instant = power_readings[i+1]
                     base_power = min(this_power, next_power)
                     triangle_power = abs(this_power - next_power)/2.0
-                    delta_time = (this_instant - next_instant).seconds
+                    delta_time = (next_instant - this_instant).seconds
                     energy += (base_power + triangle_power) * delta_time
                 delta_time = power_readings[-1][1] - power_readings[0][1]
                 mean_power = energy / delta_time.seconds
