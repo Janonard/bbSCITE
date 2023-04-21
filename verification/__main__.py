@@ -196,37 +196,14 @@ def performance_table(args: argparse.Namespace):
                 all_n_cells.add(n_cells)
             throughput[n_cells] += [(n_chains * n_steps) / runtime]
 
-        perf_data[binary] = {n_cells: mean(throughput_list) for n_cells, throughput_list in throughput.items()}
+        perf_data[binary] = {n_cells: mean(
+            throughput_list) for n_cells, throughput_list in throughput.items()}
 
     all_n_cells = list(all_n_cells)
     all_n_cells.sort()
 
-    if args.style == "markdown":
-        lead = "| "
-        sep = " | "
-        end = " |"
-    elif args.style == "latex":
-        lead = ""
-        sep = " & "
-        end = " \\\\"
-    elif args.style == "csv":
-        lead = ""
-        sep = ","
-        end = ""
-
-    def connect_fields(fields) -> str:
-        return lead + sep.join(fields) + end
-
-    if args.out_file is None:
-        out_file = sys.stdout
-    else:
-        out_file = open(args.out_file, mode="w")
-    
-    print(connect_fields(["input size", "throughput (SCITE)", "throughput (128 bit)", "throughput (96 bit)", "throughput (64 bit)"]), file=out_file)
-    if args.style == "markdown":
-        print("|-|-|-|-|-|-|-|-|-|", file=out_file)
-    elif args.style == "latex":
-        print("\\hline", file=out_file)
+    table = [
+        ["input size", "throughput (SCITE)", "throughput (96 bit)", "throughput (64 bit)"]]
 
     for n_cells in all_n_cells:
         n_genes = n_cells - 1
@@ -240,15 +217,64 @@ def performance_table(args: argparse.Namespace):
             scite_makespan = None
             row += ["n/a"]
 
-        for binary in ["ffSCITE128", "ffSCITE96", "ffSCITE64"]:
+        for binary in ["ffSCITE96", "ffSCITE64"]:
             if n_cells in perf_data[binary]:
                 ffscite_makespan = perf_data[binary][n_cells]
                 ffscite_speedup = ffscite_makespan / scite_makespan
-                row += [f"{ffscite_makespan*1e-3:.2f} ksteps/s ({round(ffscite_speedup)} speedup)"]
+                row += [
+                    f"{ffscite_makespan*1e-3:.2f} ksteps/s (x{round(ffscite_speedup)} speedup)"]
             else:
                 row += ["n/a"]
 
-        print(connect_fields(row), file=out_file)
+        table += [row]
+
+    print_table(table, args.style, args.out_file)
+
+
+def power_table(args: argparse.Namespace):
+    raw_perf_data = load_performance_data(args.basedir)
+
+    perf_data = dict()
+    for (n_cells, n_chains, n_steps), (runtime, power) in raw_perf_data["ffSCITE96"].items():
+        if n_cells not in perf_data:
+            # power of ffSCITE96, energy of ffSCITE96, power of ffSCITE64, energy of ffSCITE64
+            perf_data[n_cells] = [[], [], [], []]
+        perf_data[n_cells][0].append(power)
+        perf_data[n_cells][1].append((runtime * power) / (n_chains * n_steps))
+
+    for (n_cells, n_chains, n_steps), (runtime, power) in raw_perf_data["ffSCITE64"].items():
+        if n_cells not in perf_data:
+            # power of ffSCITE96, energy of ffSCITE96, power of ffSCITE64, energy of ffSCITE64
+            perf_data[n_cells] = [[], [], [], []]
+        perf_data[n_cells][2].append(power)
+        perf_data[n_cells][3].append((runtime * power) / (n_chains * n_steps))
+
+    table = [["input size", "mean power draw (96 bit)", "mean energy per step (96 bit)", "mean power draw (64 bit)", "mean energy per step (64 bit)"]]
+    for n_cells, (power96, energy96, power64, energy64) in perf_data.items():
+        row = [f"{n_cells} cell x {n_cells+1} genes"]
+        if len(power96) > 0:
+            row.append(f"{mean(power96):.2f} W")
+        else:
+            row.append("n/a")
+
+        if len(energy96) > 0:
+            row.append(f"{mean(energy96)*1e6:.2f} µWs")
+        else:
+            row.append("n/a")
+
+        if len(power64) > 0:
+            row.append(f"{mean(power64):.2f} W")
+        else:
+            row.append("n/a")
+
+        if len(energy64) > 0:
+            row.append(f"{mean(energy64)*1e6:.2f} µWs")
+        else:
+            row.append("n/a")
+
+        table.append(row)
+
+    print_table(table, args.style, args.out_file)
 
 
 def performance_graph(args: argparse.Namespace):
@@ -438,6 +464,16 @@ perftable_parser.add_argument("-o", "--out-file", default=None,
 perftable_parser.add_argument("-s", "--style", choices=[
                               "latex", "markdown", "csv"], default="markdown", help="Style of the output.")
 
+powertable_parser = subparsers.add_parser(
+    "powertable", help="Analyze the power draw of the performance benchmark and print a table")
+
+powertable_parser.add_argument("-d", "--basedir", default=Path(
+    "./performance_benchmark.out"), type=Path, help="Base path of the collected data")
+powertable_parser.add_argument("-o", "--out-file", default=None,
+                               type=Path, help="Path to the output file. Stdout if not given")
+powertable_parser.add_argument("-s", "--style", choices=[
+    "latex", "markdown", "csv"], default="markdown", help="Style of the output.")
+
 perfgraph_parser = subparsers.add_parser(
     "perfgraph", help="Analyze the outputs of the performance benchmark and plot a graph")
 
@@ -460,5 +496,7 @@ elif args.subcommand == "quickperf":
     quickperf(args)
 elif args.subcommand == "perftable":
     performance_table(args)
+elif args.subcommand == "powertable":
+    power_table(args)
 elif args.subcommand == "perfgraph":
     performance_graph(args)

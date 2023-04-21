@@ -11,7 +11,7 @@
             "module": "verification",
             "justMyCode": true,
             "args": [
-                "perftable"
+                "powertable"
             ]
         }
     ]

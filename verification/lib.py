@@ -9,6 +9,7 @@ import numpy as np
 import lark
 import enum
 from datetime import timedelta, datetime
+import sys
 
 
 class MutationTree(nx.DiGraph):
@@ -275,64 +276,64 @@ class LineType(enum.IntEnum):
 
 
 def analyze_log(log: List[Tuple[LineType, Any]]):
-    makespans = list()
-    mean_powers = list()
+    makespans = []
+    powers = []
 
-    power_readings: List[float] = list()
-    instants: List[datetime] = list()
+    power_readings: List[Tuple[float, datetime]] = []
     for line_type, param in log:
         if line_type == LineType.BOARD_POWER:
-            assert len(power_readings) == len(
-                instants), "Illegal log file: A power reading is missing its instant!"
-            power_readings += [param]
+            # Add a new element to the list of power readings
+            power_readings += [(param, None)]
+
         elif line_type == LineType.INSTANT:
-            assert len(power_readings) == len(
-                instants) + 1, "Illegal log file: Power reading is followed by an instant!"
-            instants += [param]
+            # Set the instant of the last power reading
+            assert len(
+                power_readings) > 0, "Illegal log file: Instant with no power reading"
+            power_readings[-1] = (power_readings[-1][0], param)
+
         elif line_type == LineType.SMARTVID_ENABLED:
             # Reset the power readings. The FPGA has just been programmed
             # and we have only measured the power consumption of the idle
             # bit stream.
-            power_readings = list()
-            instants = list()
+            power_readings = []
+
         elif line_type == LineType.KERNEL_FINISHED:
             # Append the makespan of this kernel invocation
             makespan = param / timedelta(seconds=1)
             makespans += [makespan]
 
-            # If the kernel finished message has occurred between a power reading and an instant, move the superfluous line to the next kernel instance.
-            next_instants = []
+            # If the kernel finished message has occurred between a power reading and an instant,
+            # the last power reading will contain no instant. In this case, move the power reading
+            # to the next kernel event.
             next_power_readings = []
-            if len(power_readings) > len(instants):
-                next_power_readings = power_readings[len(instants):]
-                power_readings = power_readings[:len(instants)]
-            elif len(instants) > len(power_readings):
-                next_instants = instants[len(power_readings):]
-                instants = instants[:len(power_readings)]
+            if len(power_readings) > 0 and power_readings[-1][1] is None:
+                next_power_readings = [power_readings[-1]]
+                power_readings = power_readings[:-1]
+            else:
+                next_power_readings = []
 
             if len(power_readings) > 1:
                 energy = 0.0
                 for i in range(len(power_readings)-1):
-                    base_power = power_readings[i]
-                    triangle_power = abs(
-                        power_readings[i+1] - power_readings[i])/2.0
-                    delta_time = (instants[i+1] -
-                                  instants[i]) / timedelta(seconds=1)
+                    this_power, this_instant = power_readings[i]
+                    next_power, next_instant = power_readings[i+1]
+                    base_power = min(this_power, next_power)
+                    triangle_power = abs(this_power - next_power)/2.0
+                    delta_time = (next_instant - this_instant).seconds
                     energy += (base_power + triangle_power) * delta_time
-                mean_power = energy / \
-                    ((instants[-1] - instants[0]) / timedelta(seconds=1))
+                delta_time = power_readings[-1][1] - power_readings[0][1]
+                mean_power = energy / delta_time.seconds
             elif len(power_readings) == 1:
-                mean_power = power_readings[0]
+                mean_power = power_readings[0][0]
             else:
                 mean_power = None
 
             if mean_power is not None:
-                mean_powers += [mean_power]
+                powers += [mean_power]
 
             power_readings = next_power_readings
-            instants = next_instants
 
-    return mean(makespans), (mean(mean_powers) if len(mean_powers) > 0 else None)
+    return mean(makespans), (mean(powers) if len(powers) > 0 else None)
 
 
 def load_performance_data(base_dir: Path) -> Dict:
@@ -341,7 +342,7 @@ def load_performance_data(base_dir: Path) -> Dict:
     for cell_dir in base_dir.iterdir():
         n_cells = int(cell_dir.name)
 
-        for program in "ffSCITE64", "ffSCITE96", "ffSCITE128", "SCITE":
+        for program in "ffSCITE64", "ffSCITE96", "SCITE":
             program_dir = cell_dir / Path(program)
             if not program_dir.is_dir():
                 continue
@@ -363,3 +364,33 @@ def load_performance_data(base_dir: Path) -> Dict:
 
 def calc_expected_runtime(n_words: int, n_chains: int, n_steps: int, f: float = 252.5e6, occupancy: float = 1.0) -> float:
     return (n_words * n_chains * n_steps) / occupancy / f
+
+def print_table(table: List[List[str]], style: str, out_path = None):
+    if out_path is None:
+        out_file = sys.stdout
+    else:
+        out_file = open(out_path, mode="w")
+
+    if style == "markdown":
+        lead = "| "
+        sep = " | "
+        end = " |"
+    elif style == "latex":
+        lead = ""
+        sep = " & "
+        end = " \\\\"
+    elif style == "csv":
+        lead = ""
+        sep = ","
+        end = ""
+
+    if style == "latex":
+        table[0] = ["\\textbf{" + text + "}" for text in table[0]]
+
+    for i, line in enumerate(table):
+        print(lead + sep.join(line) + end, file=out_file)
+        if i == 0:
+            if style == "markdown":
+                print("|" + "|".join(["-"] * len(line)) + "|", file=out_file)
+            elif style == "latex":
+                print("\\hline", file=out_file)
