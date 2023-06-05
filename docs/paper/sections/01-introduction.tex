@@ -1,0 +1,16 @@
+\section{Introduction}
+% Context / Motivation
+\acp{FPGA} have been used with great success for the acceleration of workloads from bioinformatics. A particular focus has been on sequence alignment~\cite{yu-kw-03a,zh-ta-07a,ja-la-08a}, where datatypes with few bits for nucleotides or amino acids allowed to create highly parallel customized datapaths. 
+% in particular short read alignment~\cite{yu-kw-03a,zh-ta-07a}
+Rapid advancements in genome sequencing technology and basic analysis techniques as the identification of genome differences in the \ac{SNP} are a foundation for ever more sophisticated analysis procedures on top of them. One such direction is reconstructing the mutation history of cancer cells based on single-cell sequencing. 
+
+% Challenge
+The software approach published as \ac{SCITE}~\cite{tree2016} is by itself again a computationally demanding workload that can profit from FPGA acceleration. However, the involved algorithms and data structures are different from the foundational components of sequence alignment. The \ac{SCITE} software reference~\cite{tree2016} maintains and modifies a tree structure representing a hypothesis for the mutation history that is regularly transformed into a matrix structure to calculate the likelihood of the current hypothesis. As the involved tree traversals and modifications generally involve a dynamic number of sequential sub-steps, it is inherently challenging to create a well-utilized computation pipeline with parallelism for them.
+
+In this work, we present the first \ac{FPGA} accelerator for \ac{SCITE} and resolve the challenge of tree data structures by reformulating the tree updates as parallel binary operations on equivalent bit-matrix representations. Our further contributions include:
+\begin{itemize}
+    \item A meta-pipeline that overlaps the evolution of several independent \acp{MCMC} to obtain full utilization of the datapath.
+    \item Support for different problem sizes at runtime with design parameterization at compile time.
+    \item End-to-end speedups of up to 80$\times$ against a sequential CPU reference and a performance model that explains the measured throughput.
+    \item A comparison with an idealized CPU performance proxy for the throughput-critical likelihood calculation step.
+\end{itemize}

@@ -1,0 +1,67 @@
+\begin{figure}
+    \begin{tikzpicture}
+        \draw[every node/.style={draw,circle}, level 1/.style={sibling distance=1.1cm, level distance=0.75cm}, level 2/.style={sibling distance=0.75cm, level distance=0.75cm}, edge from parent/.append style={-stealth}]
+            node (r1) at (-3.5,0) {$r$}
+            child {
+                node {$1$} 
+                child { node {$3$} }
+                child {
+                    node {$\mathbf{v}$}
+                    child { node {$4$} }
+                    child {
+                        node {$5$}
+                    }
+                }
+            }
+            child { node {$2$} child { node {$\mathbf{t}$} } };
+        \node[] at ($(r1) + (-1,0)$) {$T:$};
+
+        \draw node at (0,-1.5) {$\begin{matrix}
+             A & \vline & 1 & 2 & 3 & 4 & 5 & v & t & r \\
+             \hline
+             1 & \vline & 1 & 0 & 1 & 1 & 1 & 1 & 0 & 0 \\
+             2 & \vline & 0 & 1 & 0 & 0 & 0 & 0 & 1 & 0 \\
+             3 & \vline & 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+             4 & \vline & 0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 \\
+             5 & \vline & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+             v & \vline & 0 & 0 & 0 & 1 & 1 & 1 & 0 & 0 \\
+             t & \vline & 0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+             r & \vline & 1 & 1 & 1 & 1 & 1 & 1 & 1 & 1
+        \end{matrix}$};
+        
+        \draw[every node/.style={draw,circle}, level 1/.style={sibling distance=0.75cm, level distance=0.75cm}, edge from parent/.append style={-stealth}]
+            node (r2) at (4.25,0) {$r$}
+            child {
+                node {$1$} 
+                child { node {$3$} }
+            }
+            child {
+                node {$2$} child {
+                    node {$\mathbf{t}$}
+                    child {
+                        node {$\mathbf{v}$}
+                        child { node {$4$} }
+                        child { node {$5$} }
+                    }
+                }
+            };
+        \draw[dashed] ($(r2) + (-1.5,0.5)$) -- ($(r2) + (-1.5,-3.5)$);
+        \node[] at ($(r2) + (-1,0)$) {$T':$};
+
+        \draw node at (7.75,-1.5) {$\begin{matrix}
+             A'& \vline & 1 & 2 & 3 & 4 & 5 & v & t & r \\
+             \hline
+             1 & \vline & 1 & 0 & 1 & \textcolor{emph}{0} & \textcolor{emph}{0} & \textcolor{emph}{0} & 0 & 0 \\
+             2 & \vline & 0 & 1 & 0 & \textcolor{emph}{1} & \textcolor{emph}{1} & \textcolor{emph}{1} & 1 & 0 \\
+             3 & \vline & 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+             4 & \vline & 0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 \\
+             5 & \vline & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+             v & \vline & 0 & 0 & 0 & 1 & 1 & 1 & 0 & 0 \\
+             t & \vline & 0 & 0 & 0 & \textcolor{emph}{1} & \textcolor{emph}{1} & \textcolor{emph}{1} & 1 & 0 \\
+             r & \vline & 1 & 1 & 1 & 1 & 1 & 1 & 1 & 1
+        \end{matrix}$};
+        
+    \end{tikzpicture}
+    \caption{Mutation tree and ancestor matrix representations before and after exemplary ``Prune and Reattach'' move where node $v$ is pruned from node $1$ and reattached to node $t$. Changes in $A'$ are \textcolor{emph}{emphasized}.}
+    \label{fig:prune_reattach}
+\end{figure}

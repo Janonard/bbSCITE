@@ -1,0 +1,33 @@
+\begin{algorithm}
+    \begin{algorithmic}
+        \Function{LogicLogLikelihood}{$A^T \in \{0,1\}^{|V| \times |V|}$, $\mathrm{is\_known}, \mathrm{is\_mutated} \in \{0, 1\}^{|\mathrm{Cells}| \times |V|}$, $\alpha, \beta \in [0,1]$}
+            \State $\mathrm{tree\_score} \leftarrow 0$
+            \State $\mathrm{probability} \leftarrow [[\log(1-\alpha), \log(\beta)], [\log(\alpha), \log(1-\beta)], [0, 0]]$
+            \ForAll{$c \in \mathrm{Cells}$} \Comment{Pipelined sequentialy}
+                \State $\mathrm{max\_cell\_score} \leftarrow -\infty$
+                \ForAll{$v \in V$} \Comment{Parallel, i.e. unrolled completely}
+                    \State $\mathrm{cell\_score} \leftarrow 0$ 
+                    \ForAll{$\mathrm{posterior} \in \{0, 1\}$} \Comment{Unrolled completely}
+                        \ForAll{$\mathrm{prior} \in \{0, 1\}$} \Comment{Unrolled completely}
+                            \State $\mathrm{occurrences} \leftarrow \mathrm{is\_known}[c]$ \Comment{Bit-vector}
+                            \State $\mathrm{occurrences} \leftarrow \mathrm{occurrences} \wedge \begin{cases}
+                                \mathrm{is\_mutated}[c] & \text{if posterior} = 1 \\
+                                \neg \mathrm{is\_mutated}[c] & \text{if posterior} = 0 \\
+                            \end{cases}$
+                            \State $\mathrm{occurrences} \leftarrow \mathrm{occurrences} \wedge \begin{cases}
+                                A^T[v] & \text{if prior} = 1 \\
+                                \neg A^T[v] & \text{if prior} = 0 
+                            \end{cases}$
+                            \State $\mathrm{cell\_score} \leftarrow \mathrm{cell\_score} + \mathrm{probability}[\mathrm{posterior}][\mathrm{prior}] \cdot \mathrm{popcount}(\mathrm{occurrences})$
+                        \EndFor
+                    \EndFor
+                    \State $\mathrm{max\_cell\_score} \leftarrow \max\{\mathrm{cell\_score}, \mathrm{max\_cell\_score}\}$
+                \EndFor
+                \State $\mathrm{tree\_score} \leftarrow \mathrm{tree\_score} + \mathrm{max\_cell\_score}$
+            \EndFor
+            \State \Return $\mathrm{tree\_score}$
+        \EndFunction
+    \end{algorithmic}
+    \caption{Logic-based version of Algorithm \ref{alg:likelihood} as used in \ac{ffSCITE}. The mutation data matrix is split into two binary matrices is\_known and is\_mutated. $\mathrm{is\_known}[c][g]$ is true iff $d[c][g]$ is either 0 or 1, and $\mathrm{is\_mutated}[c][g]$ is true iff $d[c][g]$ is 1.}
+    \label{alg:likelihood_optimized}
+\end{algorithm}

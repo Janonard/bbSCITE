@@ -1,0 +1,61 @@
+\section{Analysis with Idealized CPU Reference}
+\label{subsec:cpu}
+
+In Subsection \ref{subsec:performance}, we have shown that \ac{ffSCITE} achieves up to 80$\times$ the throughput of the CPU reference implementation by \citeauthor{tree2016} \cite{tree2016}. 
+This is a good result, but strongly influenced by limited performance engineering done for the reference.
+%This is an achievement, but we have to be fair and admit that the reference implementation is not very well optimized. 
+In particular, it does not make use of multi-threading to parallelize the work and also uses many memory allocation calls within loop kernels. In this section, we try to assess how \ac{ffSCITE} could compare to a highly optimized CPU version, without undergoing the CPU optimization effort for the full application. Therefore, we focus on the likelihood calculation as a synthetic proxy to upper-bound the optimized CPU throughput.
+%We wanted to know how \ac{ffSCITE} would compare to an optimized version of \ac{SCITE} for CPUs, but no one has published such an implementation to the best of our knowledge. Optimizing \ac{SCITE} for CPUs was outside the scope of our work too, so we decided to create a synthetic benchmark to estimate the throughput an optimized version of \ac{SCITE} could achieve on CPUs.
+
+Our synthetic benchmark runs the log-likelihood computation (Alg.~\ref{alg:likelihood_optimized}) on mutation matrices with 128 cells and 127 genes: It first loads the mutation data matrix and prepares the initial Markov chain states like a functional implementation of \ac{SCITE}. However, it only repeatedly computes the likelihood score of these initial states and never modifies them. 
+We chose the log-likelihood function as our kernel since it is the part of the algorithm with the fastest-growing runtime and also consumes a significant resource fraction of the FPGA designs.
+%We chose the log-likelihood function as our kernel since it is the part of the algorithm with the fastest-growing runtime and since all operations inside the loop body are available as x86 instructions, even the popcount function. We therefore assume that the benchmark provides a good upper bound for the best possible performance of \ac{SCITE} on CPUs. 
+In contrast to the largest evaluated FPGA design with 96 bits, we chose 128 cells and 127 genes as the input size, since power-of-two dimensions often enable more efficient CPU execution, in particular when vector operations are used.
+%since 64 cells and 63 genes are less than what 96-bit \ac{ffSCITE} supports and 95 cells and 94 genes would be harder to implement efficiently. 
+The benchmark is also implemented in C++ using SYCL and Intel OneAPI and shares much of the non-performance-critical code with \ac{ffSCITE}.
+
+\begin{table*}[tbh]
+    \begin{tabular}{lcrrr}
+        \toprule
+        \textbf{Hardware (Design)} & \multicolumn{1}{c}{\textbf{Input Size}} & \textbf{Throughput} & \textbf{Power Draw} & \textbf{Energy Consumption}\\
+        & \textbf{[cells $\times$ genes]} & \textbf{[counted Tbit/s]} & \textbf{[W]} & \textbf{[pJ/counted bit]}\\
+        \cmidrule(r){1-1} \cmidrule(lr){2-2} \cmidrule(r){3-3} \cmidrule(r){4-4} \cmidrule(r){5-5}
+        2x AMD EPYC Milan 7763 & 128 $\times$ 127 & 18.88 & 556.05 & 29.45 \\
+        1x Stratix 10 GX 2800 (96-bit) & 95 $\times$ 94 & 10.08 & 75.17 & 7.46 \\
+        1x Stratix 10 GX 2800 (64-bit) & 64 $\times$ 63 & 4.56 & 72.42 & 15.88 \\
+        2x Intel Xeon Gold 6148 & 128 $\times$ 127 & 1.95 & \textit{*300.00} & \textit{*153.85} \\
+        \bottomrule
+    \end{tabular}
+    \Description{A table listing the throughput in counted bits per second of the AMD EPCY Milan 7763 CPU, the 96-bit and 64-bit \ac{ffSCITE} designs, and the Intel Xeon Gold 6148 CPU, as well as their power draw and energy consumption per counted bit.}
+    \caption{Comparison of synthetic log-likelihood calculation on CPU vs. full \ac{ffSCITE} on FPGA.
+    %evaluated popcount bits per second on different hardware. Note that only the throughput of a single CPU chip is listed, not the throughput of an entire node. 
+    Power and energy numbers based on measured power consumption, except for \textit{*marked} numbers based on nominal  TDP.}
+    \label{tab:counted_bits}
+\end{table*}
+
+We ran the benchmark on individual nodes of the two supercomputers Noctua~1 and Noctua~2, hosted at the Paderborn Center for Parallel Computing.
+Noctua~1 nodes, installed in 2018, contain 2 Intel Xeon Gold 6148 CPUs that are manufactured with the same 14 nm technology as the Intel Stratix 10 GX 2800 \ac{FPGA} we used for \ac{ffSCITE}. 
+Noctua~2 nodes contain 2 AMD EPYC Milan 7763 CPUs, representing a high-end server CPU platform in 2022.
+%Noctua~1 nodes have the older and smaller Intel Xeon Gold 6148 CPUs compared to Noctua~2's AMD EPYC Milan 7763 CPUs, but they are manufactured with the same 14 nm technology as the Intel Stratix 10 GX 2800 \ac{FPGA} we used for \ac{ffSCITE}. 
+Most of the operations in the loop body can be vectorized except for the popcount instruction. This means that in a vectorized implementation of the log-likelihood function, the vectors are completely unpacked for the popcount operations and are then repacked afterwards. With the 512-bit vector registers of the Noctua~1 nodes, the total number of executed instructions is reduced in comparison to a scalar implementation, but with the 256-bit vector registers of the Noctua~2 nodes, this is not the case. We have therefore decided to use the respectively faster vectorized implementation for Noctua~1 and the scalar implementation for Noctua~2. Apart from this, we have used the IntelLLVM compiler version 2022.2 for Noctua~2 and version 2022.2.1 for Noctua~1. The compiler arguments were
+\begin{center}
+    \texttt{-O3 -DNDEBUG -qactypes -std=gnu++20 -fsycl-targets=spir64\_x86\_64-unknown-unknown}
+\end{center}
+for all operations, and additionally
+\begin{center}
+    \texttt{-Xsdevice=\allowbreak cpu} \texttt{-Xsmarch=\allowbreak avx2}
+\end{center}
+for linking on Noctua~2, and 
+\begin{center}
+    \texttt{-Xsdevice=\allowbreak cpu} \texttt{-Xsmarch=\allowbreak avx512}
+\end{center}
+for linking on Noctua~1.
+
+For the $128 \times 127$ inputs, one entire Noctua~2 node achieves a throughput of 2251.02 ksteps/s and one entire Noctua~1 node achieves 233.05 ksteps/s. Both systems are utilized very well: Noctua~1 achieves an L1D miss-rate of 0.03\% and an IPC of roughly 1.87, while Noctua~2 even achieves an L1D miss-rate of 0.005\% and an IPC of roughly 5.1. We assume that there may be some more optimization possible by reducing the number of instructions, but we should also stress that this performance does not even cover the entire Markov chain step % and that every node contains two separate CPUs. 
+
+Since the throughput in ksteps/s varies on all architectures with different input sizes, as seen in Section~\ref{subsec:performance}, we also need to normalize between the synthetic CPU benchmark and the full \ac{ffSCITE} measurements. 
+%The question remains how this benchmark compares to \ac{ffSCITE}. To normalize the throughput figures for the different input sizes, 
+To this end, we introduce the metric of counted bits per second. %: An integral part of the likelihood computation is the popcount instruction. Other operations could be optimized away or implemented differently, but the popcount operation is always necessary. 
+Every chain step requires preparing and counting the $1$s in $4 \times n^3$ bits where $n$ is the number of cells and the number of bits in a bit-vector. By multiplying the number of counted bits per chain step with the measured throughput in steps per second, we obtain the performance figures in Tab.~\ref{tab:counted_bits}. When comparing individual chips, we see that 96-bit \ac{ffSCITE} performance is en-par with a single AMD EPYC Milan CPU (note that Tab.~\ref{tab:counted_bits} presents numbers for the entire node) and outperforms a single Intel Xeon Gold CPU by an order of magnitude. 
+Looking at power measurements and energy efficiency, we see that the two EPYC Milan CPU per node consume around 7.5$\times$ more power than a single FPGA board. Normalized to energy consumption per counted bit, with 7.5 pJ/bit the FPGA architecture is around 4$\times$ more energy efficient than the EPYC Milan CPU at 29.5 pJ/bit.
+%We have also measured the power draw of the Noctua~2 node during execution, and its energy consumption per counted bit is almost four times the energy consumption of 96-bit \ac{ffSCITE}. There are no power measurements available for Noctua 1, but since the measurements for Noctua 2 are constantly slightly over its TDP, we assume this for Noctua 1 too.

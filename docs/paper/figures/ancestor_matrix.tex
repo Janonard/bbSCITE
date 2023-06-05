@@ -1,0 +1,42 @@
+\documentclass[crop,tikz]{standalone}
+
+\input{figures/packages.tex}
+
+\begin{document}
+    \begin{tikzpicture}
+        \draw[every node/.style={draw}, level 1/.style={sibling distance=0.75cm, level distance=0.75cm}, edge from parent/.append style={-stealth}]
+            (0, 0) node[circle] {$r$}
+            child {
+                node[circle] {\textcolor{emph2}{3}}
+                child {
+                    node[circle] {1}
+                }
+                child {
+                    node[circle] {\textcolor{emph}{2}}
+                }
+            }
+            child {
+                node[circle] {4}
+            };
+
+        \draw(-2,-3.5) node {$\begin{matrix}
+            A & \vline & 1 & \textcolor{emph}{2} & \textcolor{emph2}{3} & 4 & r \\
+            \hline
+            1 & \vline & 1 & \textcolor{emph}{0} & 0 & 0 & 0 \\
+            2 & \vline & 0 & \textcolor{emph}{1} & 0 & 0 & 0 \\
+            3 & \vline & 1 & \textcolor{emph}{1} & 1 & 0 & 0 \\
+            4 & \vline & 0 & \textcolor{emph}{0} & 0 & 1 & 0 \\
+            $r$ & \vline & 1 & \textcolor{emph}{1} & 1 & 1 & 1 \\
+        \end{matrix}$};
+
+        \draw(2,-3.5) node {$\begin{matrix}
+            A^T & \vline & 1 & 2 & 3 & 4 & r \\
+            \hline
+            1 & \vline & 1 & 0 & 1 & 0 & 1 \\
+            \textcolor{emph}{2} & \vline & \textcolor{emph}{0} & \textcolor{emph}{1} & \textcolor{emph}{1} & \textcolor{emph}{0} & \textcolor{emph}{1} \\
+            \textcolor{emph2}{3} & \vline & 0 & 0 & 1 & 0 & 1 \\
+            4 & \vline & 0 & 0 & 0 & 1 & 1 \\
+            $r$ & \vline & 0 & 0 & 0 & 0 & 1 \\
+        \end{matrix}$};
+    \end{tikzpicture}
+\end{document}
