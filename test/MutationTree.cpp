@@ -27,7 +27,7 @@ constexpr uint32_t max_n_genes = 31;
 constexpr uint32_t max_n_nodes = max_n_genes + 1;
 constexpr uint32_t n_fuzzing_iterations = 10000;
 constexpr float hypothesis_test_alpha = 0.05;
-using Tree = ffSCITE::MutationTree<max_n_genes>;
+using Tree = bbSCITE::MutationTree<max_n_genes>;
 using ModificationParameters = Tree::ModificationParameters;
 using AncestorMatrix = Tree::AncestorMatrix;
 
@@ -422,7 +422,7 @@ TEST_CASE("MutationTree update constructor, swap nodes", "[MutationTree]") {
 
   // Identity operation
   Tree::ModificationParameters parameters{
-      .move_type = ffSCITE::MoveType::SwapNodes,
+      .move_type = bbSCITE::MoveType::SwapNodes,
       .v = 2,
       .w = 2,
       .parent_of_v = 4,
@@ -445,7 +445,7 @@ TEST_CASE("MutationTree update constructor, swap nodes", "[MutationTree]") {
 
   // Swap of unrelated nodes
   parameters = {
-      .move_type = ffSCITE::MoveType::SwapNodes,
+      .move_type = bbSCITE::MoveType::SwapNodes,
       .v = 2,
       .w = 3,
       .parent_of_v = 4,
@@ -469,7 +469,7 @@ TEST_CASE("MutationTree update constructor, swap nodes", "[MutationTree]") {
 
   // Swap of parent and child
   parameters = {
-      .move_type = ffSCITE::MoveType::SwapNodes,
+      .move_type = bbSCITE::MoveType::SwapNodes,
       .v = 0,
       .w = 3,
       .parent_of_v = 3,
@@ -508,7 +508,7 @@ TEST_CASE("MutationTree update constructor (prune and reattach)",
   Tree tree(am, dm, 7, 0.42);
 
   Tree::ModificationParameters parameters{
-      .move_type = ffSCITE::MoveType::PruneReattach,
+      .move_type = bbSCITE::MoveType::PruneReattach,
       .v = 2,
       .w = 0,
       .parent_of_v = 5,
@@ -547,7 +547,7 @@ TEST_CASE("MutationTree update constructor (swap unrelated subtrees)",
   Tree tree(am, dm, 7, 0.42);
 
   Tree::ModificationParameters parameters{
-      .move_type = ffSCITE::MoveType::SwapSubtrees,
+      .move_type = bbSCITE::MoveType::SwapSubtrees,
       .v = 2,
       .w = 6,
       .parent_of_v = 5,
@@ -586,7 +586,7 @@ TEST_CASE("MutationTree update constructor (swap related subtrees)",
   Tree tree(am, dm, 7, 0.42);
 
   Tree::ModificationParameters parameters{
-      .move_type = ffSCITE::MoveType::SwapSubtrees,
+      .move_type = bbSCITE::MoveType::SwapSubtrees,
       .v = 2,
       .w = 5,
       .parent_of_v = 5,
@@ -665,7 +665,7 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
 
   std::mt19937 rng;
   rng.seed(std::random_device()());
-  ffSCITE::RawMoveDistribution move_distribution(n_genes + 1, 0, 0.33, 0.33,
+  bbSCITE::RawMoveDistribution move_distribution(n_genes + 1, 0, 0.33, 0.33,
                                                  1.0);
 
   std::vector<uint32_t> pruefer_code =
@@ -689,8 +689,8 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
     uint32_t parent_of_w = move_params.parent_of_w;
     uint32_t descendant_of_v = move_params.descendant_of_v;
     uint32_t nondescendant_of_v = move_params.nondescendant_of_v;
-    ffSCITE::MoveType move_type = move_params.move_type;
-    if (move_type == ffSCITE::MoveType::ChangeBeta) {
+    bbSCITE::MoveType move_type = move_params.move_type;
+    if (move_type == bbSCITE::MoveType::ChangeBeta) {
       continue;
     }
 
@@ -698,7 +698,7 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
     std::vector<uint32_t> modified_vector = parent_vector;
 
     switch (move_type) {
-    case ffSCITE::MoveType::SwapNodes:
+    case bbSCITE::MoveType::SwapNodes:
       for (uint32_t i_node = 0; i_node < modified_vector.size(); i_node++) {
         if (i_node != v && i_node != w) {
           if (modified_vector[i_node] == v) {
@@ -718,10 +718,10 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
         std::swap(modified_vector[v], modified_vector[w]);
       }
       break;
-    case ffSCITE::MoveType::PruneReattach:
+    case bbSCITE::MoveType::PruneReattach:
       modified_vector[v] = nondescendant_of_v;
       break;
-    case ffSCITE::MoveType::SwapSubtrees:
+    case bbSCITE::MoveType::SwapSubtrees:
       modified_vector[v] = parent_of_w;
       if (tree.is_ancestor(w, v)) {
         modified_vector[w] = descendant_of_v;
@@ -729,7 +729,7 @@ TEST_CASE("MutationTree update constructor (fuzzing)", "[MutationTree]") {
         modified_vector[w] = parent_of_v;
       }
       break;
-    case ffSCITE::MoveType::ChangeBeta:
+    case bbSCITE::MoveType::ChangeBeta:
     default:
       break;
     }

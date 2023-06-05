@@ -25,14 +25,14 @@
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
 #include <vector>
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief Representation of a mutation tree, with relevant operations.
  *
  * A mutation tree is a tree which contains a dedicated root node and one node
  * for every gene. Then, cells are attached to a node of the tree, which is
  * equivalent to saying that this cell has a mutation at a gene iff this gene's
- * node is on the path from the root node to the gene. ffSCITE tries different
+ * node is on the path from the root node to the gene. bbSCITE tries different
  * mutation trees and keeps the one that is most-likely to be true. Therefore,
  * this class contains operations to quickly query whether there is a path in
  * the tree from one node to another and to randomly modify the tree.
@@ -866,4 +866,4 @@ private:
   uint32_t n_nodes;
   float beta;
 };
-} // namespace ffSCITE
+} // namespace bbSCITE

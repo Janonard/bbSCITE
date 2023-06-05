@@ -22,7 +22,7 @@
 #include <random>
 #include <sstream>
 
-using namespace ffSCITE;
+using namespace bbSCITE;
 using namespace cl::sycl;
 
 constexpr uint32_t n_quadwords = CPUTreeScorer::n_quadwords;

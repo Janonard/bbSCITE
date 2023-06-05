@@ -2,7 +2,7 @@ set(CMAKE_CXX_COMPILER dpcpp)
 set(CXX_STANDARD 20)
 cmake_minimum_required(VERSION 3.21)
 
-project(ffSCITE CXX)
+project(bbSCITE CXX)
 set(CMAKE_PROJECT_VERSION 0.1.0)
 
 find_package(Boost 1.79.0 REQUIRED)

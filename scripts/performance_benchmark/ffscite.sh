@@ -16,9 +16,9 @@ do
 
         echo "$VECTORLEN $CELLS"
 
-        FFSCITE_DIR=$OUT_DIR/ffSCITE$VECTORLEN
+        FFSCITE_DIR=$OUT_DIR/bbSCITE$VECTORLEN
         mkdir -p $FFSCITE_DIR
-        FFSCITE=./build/src/ffSCITE${VECTORLEN}
+        FFSCITE=./build/src/bbSCITE${VECTORLEN}
 
         for N_CHAINS in $CHAINS_SET
         do

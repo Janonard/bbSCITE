@@ -1,9 +1,9 @@
 set(FFSCITE_SOURCES main.cpp)
 
 foreach(vectorlen 64 96)
-  set(base_target ffSCITE${vectorlen})
-  set(emu_target ffSCITE${vectorlen}_emu)
-  set(report_target ffSCITE${vectorlen}_report)
+  set(base_target bbSCITE${vectorlen})
+  set(emu_target bbSCITE${vectorlen}_emu)
+  set(report_target bbSCITE${vectorlen}_report)
   set(all_targets ${base_target} ${emu_target} ${report_target})
   set(hw_targets ${base_target} ${report_target})
 

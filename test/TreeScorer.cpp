@@ -22,7 +22,7 @@ using namespace Catch;
 constexpr uint32_t n_cells = 6;
 constexpr uint32_t n_genes = 4;
 using ScorerImpl =
-    ffSCITE::TreeScorer<32, 31, cl::sycl::access::target::host_buffer>;
+    bbSCITE::TreeScorer<32, 31, cl::sycl::access::target::host_buffer>;
 using MutationTreeImpl = ScorerImpl::MutationTreeImpl;
 using AncestryVector = MutationTreeImpl::AncestryVector;
 using AncestorMatrix = MutationTreeImpl::AncestorMatrix;

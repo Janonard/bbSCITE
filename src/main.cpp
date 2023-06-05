@@ -21,7 +21,7 @@
 #include <iostream>
 #include <sstream>
 
-using namespace ffSCITE;
+using namespace bbSCITE;
 
 constexpr uint32_t max_n_cells = FFSCITE_VECTORLEN;
 constexpr uint32_t max_n_genes = FFSCITE_VECTORLEN - 1;
@@ -88,13 +88,13 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (n_cells > max_n_cells) {
-    std::cerr << "Error: This build of ffSCITE only supports up " << max_n_cells
+    std::cerr << "Error: This build of bbSCITE only supports up " << max_n_cells
               << " cells. The input data contains " << n_cells << " cells."
               << std::endl;
     return 1;
   }
   if (n_genes > max_n_genes) {
-    std::cerr << "Error: This build of ffSCITE only supports up " << max_n_genes
+    std::cerr << "Error: This build of bbSCITE only supports up " << max_n_genes
               << " genes. The input data contains " << n_genes << " genes."
               << std::endl;
     return 1;

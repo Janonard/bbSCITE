@@ -21,7 +21,7 @@
 #include <array>
 #include <random>
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief The raw source of which the move parameters are calculated.
  *
@@ -58,7 +58,7 @@ public:
    * @brief Construct a new distribution object.
    *
    * @param n_nodes The number of nodes in the tree.
-   * @param parameters The CLI parameters of ffSCITE.
+   * @param parameters The CLI parameters of bbSCITE.
    */
   RawMoveDistribution(uint32_t n_nodes, Parameters const &parameters)
       : prob_beta_change(parameters.get_prob_beta_change()),
@@ -161,4 +161,4 @@ private:
   std::uniform_real_distribution<float> unit_distribution;
   std::normal_distribution<float> normal_distribution;
 };
-} // namespace ffSCITE
+} // namespace bbSCITE

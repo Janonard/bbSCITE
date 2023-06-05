@@ -18,7 +18,7 @@
 #include <catch2/catch_all.hpp>
 #include <ext/intel/fpga_extensions.hpp>
 
-using namespace ffSCITE;
+using namespace bbSCITE;
 
 constexpr uint32_t n_cells = 15;
 constexpr uint32_t n_genes = 4;

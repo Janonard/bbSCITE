@@ -70,13 +70,13 @@ build ffscite64:
     - "mkdir -p build"
     - "cd build"
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
-    - "VERBOSE=1 make ffSCITE64"
+    - "VERBOSE=1 make bbSCITE64"
   artifacts:
     when: always
     paths:
-      - "build/src/ffSCITE64"
-      - "build/src/ffSCITE64.prj/reports"
-      - "build/src/ffSCITE64.prj/quartus_sh_compile.log"
+      - "build/src/bbSCITE64"
+      - "build/src/bbSCITE64.prj/reports"
+      - "build/src/bbSCITE64.prj/quartus_sh_compile.log"
 
 build ffscite96:
   stage: build
@@ -92,13 +92,13 @@ build ffscite96:
     - "mkdir -p build"
     - "cd build"
     - "cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 .."
-    - "VERBOSE=1 make ffSCITE96"
+    - "VERBOSE=1 make bbSCITE96"
   artifacts:
     when: always
     paths:
-      - "build/src/ffSCITE96"
-      - "build/src/ffSCITE96.prj/reports"
-      - "build/src/ffSCITE96.prj/quartus_sh_compile.log"
+      - "build/src/bbSCITE96"
+      - "build/src/bbSCITE96.prj/reports"
+      - "build/src/bbSCITE96.prj/quartus_sh_compile.log"
 
 benchmark ffscite:
   stage: benchmark
@@ -118,9 +118,9 @@ benchmark ffscite:
     - "./scripts/performance_benchmark/ffscite.sh"
   artifacts:
     paths:
-      - "quality_benchmark.out/*/ffSCITE"
-      - "performance_benchmark.out/*/ffSCITE64"
-      - "performance_benchmark.out/*/ffSCITE96"
+      - "quality_benchmark.out/*/bbSCITE"
+      - "performance_benchmark.out/*/bbSCITE64"
+      - "performance_benchmark.out/*/bbSCITE96"
 
 benchmark scite:
   stage: benchmark

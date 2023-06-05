@@ -21,7 +21,7 @@
 #include <CL/sycl.hpp>
 #include <chrono>
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief Controller class for the SCITE algorithm.
  *
@@ -506,4 +506,4 @@ private:
   Parameters parameters;
   uint32_t n_cells, n_genes;
 };
-} // namespace ffSCITE
+} // namespace bbSCITE

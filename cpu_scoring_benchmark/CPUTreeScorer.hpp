@@ -22,7 +22,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief Class that calculates the likelihood of a tree, relative to given
  * mutation data.
@@ -216,4 +216,4 @@ private:
   float log_error_probabilities[2][2];
   MutationDataAccessor is_mutated, is_known;
 };
-} // namespace ffSCITE
+} // namespace bbSCITE

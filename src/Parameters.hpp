@@ -22,7 +22,7 @@
 #include <optional>
 #include <random>
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief Container with all experiment parameters and a method to load them
  * from CLI arguments.
@@ -73,7 +73,7 @@ public:
           error = true;
         }
       } else if (strcmp(argv[i], "-t") == 0) {
-        std::cerr << "Warning: The -t parameter is not supported by ffSCITE "
+        std::cerr << "Warning: The -t parameter is not supported by bbSCITE "
                      "(yet). Ignoring the -t parameter."
                   << std::endl;
       } else if (strcmp(argv[i], "-o") == 0) {
@@ -132,14 +132,14 @@ public:
             beta_mean += atof(argv[++i]);
             std::cerr << "Warning: homo- and heterocygous mutations are not "
                          "supported by "
-                         "ffSCITE (yet). Summing false negative probabilites."
+                         "bbSCITE (yet). Summing false negative probabilites."
                       << std::endl;
           }
         }
       } else if (strcmp(argv[i], "-cc") == 0) {
         std::cerr
             << "Warning: homo- and heterocygous mutations are not supported by "
-               "ffSCITE (yet). -cc argument ignored."
+               "bbSCITE (yet). -cc argument ignored."
             << std::endl;
       } else if (strcmp(argv[i], "-e") == 0) {
         if (i + 1 < argc) {
@@ -168,15 +168,15 @@ public:
           error = true;
         }
       } else if (strcmp(argv[i], "-a") == 0) {
-        std::cerr << "Warning: The -a parameter is not supported by ffSCITE "
+        std::cerr << "Warning: The -a parameter is not supported by bbSCITE "
                      "(yet). Ignoring the -a parameter."
                   << std::endl;
       } else if (strcmp(argv[i], "-p") == 0) {
-        std::cerr << "Warning: The -p parameter is not supported by ffSCITE "
+        std::cerr << "Warning: The -p parameter is not supported by bbSCITE "
                      "(yet). Ignoring the -p parameter."
                   << std::endl;
       } else if (strcmp(argv[i], "-names") == 0) {
-        std::cerr << "The -names parameter is not supported by ffSCITE (yet). "
+        std::cerr << "The -names parameter is not supported by bbSCITE (yet). "
                      "Ignoring the -names parameter."
                   << std::endl;
       } else if (strcmp(argv[i], "-move_probs") == 0) {
@@ -218,7 +218,7 @@ public:
         }
       } else if (strcmp(argv[i], "-seed") == 0) {
         std::cerr << "Warning: The -seed parameter is not supported by "
-                     "ffSCITE (yet). Ignoring the -seed."
+                     "bbSCITE (yet). Ignoring the -seed."
                   << std::endl;
       } else if (strcmp(argv[i], "-max_treelist_size") == 0) {
         if (i + 1 < argc) {
@@ -231,15 +231,15 @@ public:
         }
       } else if (strcmp(argv[i], "-no_tree_list") == 0) {
         std::cerr << "Warning: The -no_tree_list parameter is not supported by "
-                     "ffSCITE (yet). Ignoring the -no_tree_list parameter."
+                     "bbSCITE (yet). Ignoring the -no_tree_list parameter."
                   << std::endl;
       } else if (strcmp(argv[i], "-s") == 0) {
-        std::cerr << "Warning: The -s parameter is not supported by ffSCITE "
+        std::cerr << "Warning: The -s parameter is not supported by bbSCITE "
                      "(yet). Ignoring the -s parameter."
                   << std::endl;
       } else if (strcmp(argv[i], "-transpose") == 0) {
         std::cerr << "Warning: The -transpose parameter is not supported by "
-                     "ffSCITE (yet). Ignoring the -transpose parameter."
+                     "bbSCITE (yet). Ignoring the -transpose parameter."
                   << std::endl;
       } else {
         std::cerr << "Error: Unknown parameter " << argv[i] << "." << std::endl;
@@ -622,4 +622,4 @@ private:
   float beta_jump_scaling_chi;
   float gamma;
 };
-} // namespace ffSCITE
+} // namespace bbSCITE

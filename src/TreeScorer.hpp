@@ -21,7 +21,7 @@
 #include <bit>
 #include <sycl/ext/intel/ac_types/ac_int.hpp>
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief Class that calculates the likelihood of a tree, relative to given
  * mutation data.
@@ -211,4 +211,4 @@ private:
   MutationDataMatrix &is_known;
   uint32_t n_cells, n_genes;
 };
-} // namespace ffSCITE
+} // namespace bbSCITE

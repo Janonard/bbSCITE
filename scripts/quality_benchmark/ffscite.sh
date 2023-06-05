@@ -4,8 +4,8 @@ set -e
 
 source scripts/quality_benchmark/variables.sh
 
-EXEC="./build/src/ffSCITE96"
-EXEC_ID="ffSCITE"
+EXEC="./build/src/bbSCITE96"
+EXEC_ID="bbSCITE"
 
 for input_i in `seq $N_INPUTS`
 do

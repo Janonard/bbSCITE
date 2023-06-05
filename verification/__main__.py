@@ -97,9 +97,9 @@ def quality_test(args: argparse.Namespace):
         with open(path, mode="r") as file:
             return float(file.readline())
 
-    # For every input, store the difference in the likelihood produced by ffSCITE and SCITE for that input.
+    # For every input, store the difference in the likelihood produced by bbSCITE and SCITE for that input.
     differences = [
-        get_likelihood(input_dir / Path("ffSCITE")) -
+        get_likelihood(input_dir / Path("bbSCITE")) -
         get_likelihood(input_dir / Path("SCITE"))
         for input_dir in args.basedir.iterdir()
     ]
@@ -125,20 +125,20 @@ def quality_test(args: argparse.Namespace):
     print(f"maximal p-value to reject H0 parts: {p_value_bound:.4f}")
 
     if lower_p_value < p_value_bound and upper_p_value < p_value_bound:
-        print(f"ffSCITE is non-inferior to SCITE!")
+        print(f"bbSCITE is non-inferior to SCITE!")
         return_value = 0
     else:
-        print(f"ffSCITE may not be non-inferior to SCITE!")
+        print(f"bbSCITE may not be non-inferior to SCITE!")
         return_value = 1
 
     print()
     print("# Additional statistics:")
     print(
-        f"max difference (ffSCITE better): {max(differences):.2f} ≌ {max(differences) / max_bit_flip_difference:.2f} bit flips")
+        f"max difference (bbSCITE better): {max(differences):.2f} ≌ {max(differences) / max_bit_flip_difference:.2f} bit flips")
     print(
         f"min difference (SCITE better): {min(differences):.2f} ≌ {min(differences) / max_bit_flip_difference:.2f} bit flips")
     print(
-        f"no. inputs ffSCITE better: {len([diff for diff in differences if diff > 0])}")
+        f"no. inputs bbSCITE better: {len([diff for diff in differences if diff > 0])}")
     print(
         f"no. inputs both equal: {len([diff for diff in differences if diff == 0])}")
     print(
@@ -177,7 +177,7 @@ def quickperf(args: argparse.Namespace):
                          for (ffscite_makespan, scite_makespan)
                          in zip(chain_data.values(), scite_perf_data[n_cells][n_chains].values())]
         print(f"# {n_cells} cells:")
-        print(f"ffSCITE mean throughput: {mean(throughputs):.2f} ksteps/s")
+        print(f"bbSCITE mean throughput: {mean(throughputs):.2f} ksteps/s")
         print(
             f"mean speedup: {mean(speedups):.2f}, min speedup: {min(speedups):.2f}, max speedup: {max(speedups):.2f}")
         print()
@@ -217,7 +217,7 @@ def performance_table(args: argparse.Namespace):
             scite_makespan = None
             row += ["n/a"]
 
-        for binary in ["ffSCITE96", "ffSCITE64"]:
+        for binary in ["bbSCITE96", "bbSCITE64"]:
             if n_cells in perf_data[binary]:
                 ffscite_makespan = perf_data[binary][n_cells]
                 ffscite_speedup = ffscite_makespan / scite_makespan
@@ -235,16 +235,16 @@ def power_table(args: argparse.Namespace):
     raw_perf_data = load_performance_data(args.basedir)
 
     perf_data = dict()
-    for (n_cells, n_chains, n_steps), (runtime, power) in raw_perf_data["ffSCITE96"].items():
+    for (n_cells, n_chains, n_steps), (runtime, power) in raw_perf_data["bbSCITE96"].items():
         if n_cells not in perf_data:
-            # power of ffSCITE96, energy of ffSCITE96, power of ffSCITE64, energy of ffSCITE64
+            # power of bbSCITE96, energy of bbSCITE96, power of bbSCITE64, energy of bbSCITE64
             perf_data[n_cells] = [[], [], [], []]
         perf_data[n_cells][0].append(power)
         perf_data[n_cells][1].append((runtime * power) / (n_chains * n_steps))
 
-    for (n_cells, n_chains, n_steps), (runtime, power) in raw_perf_data["ffSCITE64"].items():
+    for (n_cells, n_chains, n_steps), (runtime, power) in raw_perf_data["bbSCITE64"].items():
         if n_cells not in perf_data:
-            # power of ffSCITE96, energy of ffSCITE96, power of ffSCITE64, energy of ffSCITE64
+            # power of bbSCITE96, energy of bbSCITE96, power of bbSCITE64, energy of bbSCITE64
             perf_data[n_cells] = [[], [], [], []]
         perf_data[n_cells][2].append(power)
         perf_data[n_cells][3].append((runtime * power) / (n_chains * n_steps))
@@ -329,7 +329,7 @@ def performance_graph(args: argparse.Namespace):
                 5 * i_n_cells, (4, 5 * (len(all_n_cells) - 1) + 1))
             color = f"C{i_n_cells}"
             scite_label = f"{n_cells} x {n_genes} (SCITE)"
-            ffscite_label = f"{n_cells} x {n_genes}(ffSCITE)"
+            ffscite_label = f"{n_cells} x {n_genes}(bbSCITE)"
 
             scite_makespan_axis = [scite_m[n_steps]
                                    * 1e-3 for n_steps in all_n_steps]
@@ -378,7 +378,7 @@ def performance_graph(args: argparse.Namespace):
         ax_speedup[i_n_chains].set_title(f"Speedup, {n_chains} chains")
         ax_speedup[i_n_chains].set_xlabel("Numer of chain steps per chain")
         ax_speedup[i_n_chains].set_ylabel(
-            "Speedup (Throughput SCITE / Throughput ffSCITE)")
+            "Speedup (Throughput SCITE / Throughput bbSCITE)")
         ax_speedup[i_n_chains].legend()
         ax_speedup[i_n_chains].grid(which="both")
 
@@ -435,7 +435,7 @@ score_parser.add_argument("-x", "--compact", default=False, required=False,
                           action="store_true", help="Only emit log-likelihood, no explanatory text.")
 
 test_parser = subparsers.add_parser(
-    "tost", help="Execute a hypothesis test to show the non-inferiority of ffSCITE.")
+    "tost", help="Execute a hypothesis test to show the non-inferiority of bbSCITE.")
 
 test_parser.add_argument("-d", "--basedir", default=Path(
     "./quality_benchmark.out"), type=Path, help="Base path of the collected data.")

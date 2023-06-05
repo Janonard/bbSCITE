@@ -16,7 +16,7 @@
  */
 #pragma once
 
-namespace ffSCITE {
+namespace bbSCITE {
 /**
  * @brief The different move types that the proposer may propose.
  */
@@ -40,4 +40,4 @@ enum class MoveType {
    */
   SwapSubtrees,
 };
-} // namespace ffSCITE
+} // namespace bbSCITE
