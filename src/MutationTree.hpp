@@ -310,6 +310,16 @@ public:
   MutationTree<max_n_genes> &
   operator=(MutationTree<max_n_genes> const &other) = default;
 
+  /**
+   * @brief Analyze the mutation tree and realize the raw move sample.
+   *
+   * This includes finding the parents of v and w and selecting the descendant
+   * and nondescendant of v for the move.s
+   *
+   * @param raw_move_sample The raw move sample to realize
+   * @return The realized modification parameters that can be used in the next
+   * move.
+   */
   ModificationParameters
   realize_raw_move_sample(RawMoveSample raw_move_sample) const {
     uint32_t v = raw_move_sample.raw_v;
@@ -663,10 +673,31 @@ public:
     return n_descendants;
   }
 
+  /**
+   * @brief Return the node index of the given node's descendant
+   *
+   * This method collects the descendants of node_i and returns the index of the
+   * i_descendant-th descendant.
+   *
+   * @param node_i The node who's descendants should be evaluated.
+   * @param i_descendant The index within the list of descendants to return.
+   * @return The i_descendant-th descendant of node_i.
+   */
   uint32_t get_descendant(uint32_t node_i, uint32_t i_descendant) const {
     return get_descendant_or_nondescendant(node_i, i_descendant, true);
   }
 
+  /**
+   * @brief Return the node index of the given node's non-descendant
+   *
+   * This method collects the non-descendants of node_i and returns the index of
+   * the i_nondescendant-th non-descendant.
+   *
+   * @param node_i The node who's non-descendants should be evaluated.
+   * @param i_nondescendant The index within the list of non-descendants to
+   * return.
+   * @return The i_nondescendant-th non-descendant of node_i.
+   */
   uint32_t get_nondescendant(uint32_t node_i, uint32_t i_nondescendant) const {
     return get_descendant_or_nondescendant(node_i, i_nondescendant, false);
   }

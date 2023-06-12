@@ -66,6 +66,9 @@ public:
       cl::sycl::accessor<AncestryVector, 1, cl::sycl::access::mode::read,
                          access_target>;
 
+  /**
+   * @brief The counter type for the error counts.
+   */
   using popcount_t = ac_int<std::bit_width(max_n_genes), false>;
 
   /**
@@ -167,9 +170,11 @@ public:
                 (i_prior == 1 ? is_ancestor : is_ancestor.bit_complement());
             popcount_t n_occurrences = 0;
 
-            #pragma unroll
-            for (uint32_t bit_offset = 0; bit_offset < max_n_genes+1; bit_offset += 64) {
-              n_occurrences += std::popcount(occurrence_vector.template slc<64>(bit_offset).to_uint64());
+#pragma unroll
+            for (uint32_t bit_offset = 0; bit_offset < max_n_genes + 1;
+                 bit_offset += 64) {
+              n_occurrences += std::popcount(
+                  occurrence_vector.template slc<64>(bit_offset).to_uint64());
             }
 
             individual_score += float(n_occurrences) *

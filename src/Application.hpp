@@ -264,6 +264,13 @@ private:
     float score;
   };
 
+  /**
+   * @brief The value type that is sent over the pipes between the IO and the
+   * working kernel.
+   *
+   * Discriminating the type of the union is not necessay since the kernels can
+   * deduct the type by counting the sent/received packets.
+   */
   union PipeValue {
     PipeValue() : ancestry_vector{0, 0} {}
     PipeValue(ChainMeta meta) : meta(meta) {}
@@ -380,7 +387,7 @@ private:
 
       uint32_t n_cells = this->n_cells;
       uint32_t n_genes = this->n_genes;
-      uint32_t n_nodes = n_genes+1;
+      uint32_t n_nodes = n_genes + 1;
       float alpha_mean = parameters.get_alpha_mean();
       float beta_mean = parameters.get_beta_mean();
       float beta_sd = parameters.get_beta_sd();
@@ -470,7 +477,7 @@ private:
                   .score = accept_move ? proposed_score : current_score,
               };
             }
-            
+
             OutputPipe::write(out_pipe_value);
           }
 
