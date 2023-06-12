@@ -8,7 +8,7 @@ stages:
 
 default:
   before_script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "ml fpga devel intel/oneapi/22.3.0 bittware/520n Boost CMake"
     - "python3 -m venv .venv"
     - "source .venv/bin/activate"
     - "pip install --upgrade pip"
@@ -159,7 +159,7 @@ benchmark cpu scoring on noctua2:
     SCHEDULER_PARAMETERS: "-A hpc-lco-kenter -p normal -t 00:20:00 --exclusive"
     DPCPP_CPU_NUM_CUS: 128
   before_script:
-    - "ml fpga devel intel/oneapi bittware/520n Boost CMake"
+    - "ml fpga devel intel/oneapi/22.3.0 bittware/520n Boost CMake"
   script:
     - "mkdir -p build"
     - "cd build"

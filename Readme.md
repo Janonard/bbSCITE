@@ -4,55 +4,72 @@ Welcome to bbSCITE. bbSCITE (short for "bit-based SCITE") is an FPGA-accelerated
 
 The SCITE algorithm is particularly designed for reconstructing mutation histories of tumors based on mutation profiles obtained from single-cell exome sequencing experiments, but is in principle applicable to any type of (noisy) mutation profiles for which the infinite sites assumption can be made.
  
-This implementation in particular has been developed as part of the Bachelor's Thesis "Accelerating Single-Cell Inference of Tumor Evolution with FPGAs" by Jan-Oliver Opdenhövel, with the goal of providing an implementation of the same algorithm with a higher throughput, while maintaining the solution quality. The LaTeX code of the thesis is found in [`docs/thesis/thesis.tex`](docs/thesis/thesis.tex) and it can be built using a full [TeX-Live](https://tug.org/texlive/) installation.
+This implementation has been developed as part of the Bachelor's Thesis "Accelerating Single-Cell Inference of Tumor Evolution with FPGAs" by Jan-Oliver Opdenhövel and the research paper "Mutation Tree Reconstruction of Tumor Cells on FPGAs Using a Bit-Level Matrix Representation" by Jan-Oliver Opdenhövel, Christian Plessl, and Tobias Kenter. It provids an implementation of the same algorithm as SCITE with a higher throughput while maintaining the solution quality. The LaTeX code of the thesis is found in [`docs/thesis/thesis.tex`](docs/thesis/thesis.tex) and it can be built using a full [TeX-Live](https://tug.org/texlive/) installation. The research paper is found in [`docs/paper.pdf`](docs/paper.pdf). 
 
 bbSCITE is open source software and available under the GPL3 license.
+
+##### Citation:
+
+_Jan-Oliver Opdenhövel, Christian Plessl, and Tobias Kenter. 2023. Mutation Tree Reconstruction of Tumor Cells on FPGAs Using a Bit-Level Matrix Representation. In The International Symposium on Highly Efficient Accelerators and Reconfigurable Technologies 2023 (HEART 2023), June 14–16, 2023, Kusatsu, Japan. ACM, New York, NY, USA, 8 pages. https://doi.org/10.1145/3597031.3597050_
 
 ## Building
 
 bbSCITE is written in Data Parallel C++ using [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/overview.html#gs.e40rfk), targeting Intel datacenter FPGAs like the Stratix 10 family. Additionally, both the tests and the application use certain [Boost](https://www.boost.org/) libraries as well as CMake. The exact software requirements are:
 
-* Intel oneAPI Base Toolkit, version 22.3.0 or higher
+* Intel oneAPI Base Toolkit, version 22.3.0
 * Intel FPGA Add-on for oneAPI Base Toolkit, together with the BSP for your FPGA board
-* Boost, version 1.79.0
-* CMake, version 3.23.1 or higher
+* Boost, version 1.81.0
+* CMake, version 3.23.1
 
-Some newer versions of Boost have lead to certain problems during compilation, but future release may be unaffected. On the Noctua 2 supercomputer, the required modules to target the Bittware 520N cards can be loaded with the command
-
-``` bash
-module load fpga devel intel/oneapi bittware/520n Boost/1.79.0-GCC CMake
-```
-
-### Hardware
-
-bbSCITE with a final FPGA image is built with the command
+On the Noctua 2 supercomputer, the required modules to target the Bittware 520N cards can be loaded with the command
 
 ``` bash
-dpcpp -fintelfpga -qactypes -DHARDWARE \
-    -Xshardware -Xsv -Xsparallel=8 -Xsprofile -Xshigh-effort -Xsseed=1 \
-    -reuse-exe=./bbSCITE src/main.cpp -o bbSCITE
+module load fpga devel intel/oneapi/22.3.0 bittware/520n Boost CMake
 ```
 
-There is also the script [`scripts/synthesis.sh`](scripts/synthesis.sh) which can be submitted to `sbatch` and builds the final image.
-
-### Emulation & Unit Tests
-
-Building bbSCITE with the hardware emulation image, as well as building the unit tests and SCITE itself is managed with CMake. First, make sure that the SCITE module is checked out:
-
-``` bash
-git submodule init
-git submodule update
-```
-
-Then, create the `build` directory and generate the build files:
+Since bbSCITE is managed by CMake, you need to configure the build directory before building:
 
 ``` bash
 mkdir build
 cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
-Then, the emulation version of bbSCITE is the target `bbSCITE_emu`, the unit tests are the target `unit_test`, and SCITE is the target `scite`. The unit tests (found in `./build/test/unit_test`) are simply an executable that can be run.
+### Emuation & Hardware
+
+There are two variants of bbSCITE available that accept different maximum input sizes. `bbSCITE64` accepts up to 63 genes and 64 cells, and `bbSCITE96` theoretically accepts up to 95 genes and 96 cells. However, there are known issues when using full input sizes for `bbSCITE96`, so it is encouraged to use only up to 94 genes and 95 cells for `bbSCITE96`.
+
+The emulation executables for the two designs can be build with the commands
+
+``` bash
+make bbSCITE64_emu
+make bbSCITE96_emu
+```
+
+The synthesis reports can be generated with the commands
+
+``` bash
+make bbSCITE64_report
+make bbSCITE96_report
+```
+
+and the final FPGA hardware image can be built with the commands
+
+``` bash
+make bbSCITE64
+make bbSCITE96
+```
+
+Note however that building the hardware images can require up to a day of raw computation time and up to 100GB of main memory.
+
+### Unit Tests
+
+There are also unit tests available that test the individual components of the application. These can be built and run using the commands
+
+``` bash
+make unit_test -j$(nproc)
+./test/unit_test
+```
 
 ## Using bbSCITE
 
@@ -64,10 +81,10 @@ bbSCITE is CLI-compatible with SCITE and [SCITE's readme page](https://github.co
 * `-fd <prob>`: Assume that false positives (a mutation is reported that does not exist) occur with the given probability.
 * `-ad <prob>`: Assume that false negatives (a mutation is not reported that does exist) occur with the given probability.
 
-This means that an invocation of bbSCITE may look like this:
+This means that an invocation of bbSCITE96 may look like this:
 
 ```
-./bbSCITE -i SCITE/dataHou18.csv -r 1 -l 900000 -fd 6.04e-5 -ad 0.4309
+./build/src/bbSCITE96 -i SCITE/dataHou18.csv -r 1 -l 900000 -fd 6.04e-5 -ad 0.4309
 ```
 
 bbSCITE will then load the the given input and execute the requested number of chains and steps to find the most likely mutation trees. The found trees are then written to files prefixed by the name of the input file. However, there are some differences between bbSCITE and SCITE, as well as some unsupported features:
@@ -85,22 +102,18 @@ bbSCITE will then load the the given input and execute the requested number of c
 
 ## Performance and Quality benchmarks
 
-The following section describes the execution of the performance and quality benchmarks referenced in the thesis. First of all, all scripts assume that a valid bbSCITE binary found under the path `build/bbSCITE` and that a valid SCITE binary is found under the path `build/scite`. The scripts are also specifically tailored to the environment of the Noctua 2 supercomputer, the targeted Bittware 520N cards, and one specific user accounts. Running the benchmarks on other systems, for other cards, or other other user accounts may require changes.
+The following section describes the execution of the performance and quality benchmarks. First of all, all scripts assume that a valid bbSCITE binary found under the path `build/src/bbSCITE(64|96)` and that a valid SCITE binary is found under the path `build/scite`.
 
 The performance benchmark is prepared and submitted as follows:
 ``` bash
-./scripts/performance_benchmark/generate_inputs.sh
-sbatch scripts/performance_benchmark/ffscite.sh
-sbatch scripts/performance_benchmark/scite.sh
+./scripts/performance_benchmark/generate_inputs.sh # Prepare the input data, should be run on a login node
+./scripts/performance_benchmark/ffscite.sh # This should be run on an FPGA node
+./scripts/performance_benchmark/scite.sh # This may be run on any node
 ```
 This creates the output directory `performance_benchmark.out` with different inputs and submits the execution jobs to the workload manager: One for the FPGA-based bbSCITE and one for the single-threaded SCITE. After these jobs are finished, the outputs can be analyzed with the verification tool:
 ``` bash
-module load fpga intel/oneapi # Load oneAPI, which contains a Python distribution with all required libraries installed.
-./tool.py quickperf # Print some quick information of the performance data
 ./tool.py perftable # Print a markdown table with performance data
-./tool.py perfgraph # Visualize the performance data with Matplotlib
 ```
-These subcommands have multiple options which can be found by executing them with the `-h` option.
 
 The quality benchmark works similarly. Preparation and submission is done with the following commands:
 ``` bash
@@ -110,6 +123,21 @@ sbatch scripts/quality_benchmark/scite.sh
 ```
 Once these jobs are completed, the results can be retrieved with the following command:
 ``` bash
-module load fpga intel/oneapi # Load oneAPI, which contains a Python distribution with all required libraries installed.
 ./tool.py tost # Execute the "Two One-Sided t-Tests" procedure on the sampled quality data.
 ```
+
+## Performance proxy
+
+The original SCITE application does not fully utilize the available CPU computation power. However, we wanted to get an estimate how bbSCITE would compare to a fully optimized CPU version of SCITE. We therefore implemented an optimized performance proxy that only computes likelihood scores. It can be built with the command
+
+``` bash
+make cpu_scoring_benchmark
+```
+
+Note that the CMake build system accepts the `PC2_SYSTEM` argument to target the two supercomputers Noctua 1 and 2 at the Paderborn Center for Parallel Computing. For example, the command 
+
+``` bash
+cmake -DCMAKE_BUILD_TYPE=Release -DPC2_SYSTEM=Noctua2 ..
+```
+
+configures the build system to use the benchmark version that is optimized for the AVX-2 processors for Noctua 2.

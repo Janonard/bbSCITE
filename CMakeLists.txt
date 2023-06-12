@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.21)
 project(bbSCITE CXX)
 set(CMAKE_PROJECT_VERSION 0.1.0)
 
-find_package(Boost 1.79.0 REQUIRED)
+find_package(Boost 1.81.0 REQUIRED)
 
 add_subdirectory(cpu_scoring_benchmark)
 add_subdirectory(test)
